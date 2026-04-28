@@ -1,12 +1,43 @@
 # OpenEMR System Audit (CI/CD Excluded)
 
-Date: 2026-04-28  
-Scope: repository-level static audit of current OpenEMR codebase (application/runtime design, data model, APIs, modules).  
-Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sql/`, `portal/`, and docs; no live penetration testing or production telemetry sampling.
+## Summary
 
-## Security audit
 
-### Authentication and authorization risks
+The audit found that OpenEMR has a mature but mixed architecture: modern services and APIs coexist with a large legacy codebase. This provides flexibility and broad functionality, but it also creates security, performance, and data-governance risks that require focused hardening.
+
+
+### Security and Access Control
+- Two high-priority authorization issues were identified: potentially incorrect route-skip matching and incomplete patient-level access checks in bearer-token flows. Together, these could allow broader-than-intended API access in some scenarios.
+- Additional medium-risk concerns include permissive ACL behavior under certain misconfigurations and legacy session cookie defaults that increase impact if XSS or weak TLS configurations are present.
+- The MFA/login flow still carries plaintext password state between steps, which enlarges credential exposure risk even if temporary.
+
+### PHI Exposure and Logging
+- Logging capabilities are strong, but current patterns can capture sensitive request/response payloads, SQL bind values, and audit comments containing PHI.
+- Encryption support exists, but key material storage in database tables raises separation-of-duties and key-management concerns if the database is compromised.
+- External/custom modules (fax, SMS, telehealth, connectors) increase potential PHI egress paths and require tighter centralized governance.
+
+### Performance and Scalability
+- Main bottlenecks are report-heavy legacy paths with N+1 query behavior, unbounded data pulls, expensive in-memory processing, and index-unfriendly query patterns.
+- Hybrid request flow across modern and legacy layers adds overhead and complicates optimization.
+- Some long-running tasks are asynchronous, but many expensive operations still run synchronously and can impact responsiveness.
+
+### Architecture and Data Quality
+- Core architecture is hybrid, with critical bridges between modern and legacy systems.
+- Data quality controls are uneven: strong validation exists in some domains, but broad foreign-key enforcement is limited, increasing orphan/consistency risks.
+- Heavy reliance on status flags and soft-delete patterns can produce stale or inconsistent reporting if filters are missed.
+
+### Compliance and Regulatory Readiness
+- Audit logging framework is robust, but coverage is configuration-dependent and therefore variable by deployment.
+- No single, clearly enforced retention/disposal framework was found for PHI-bearing logs and related operational data.
+- Breach-notification workflow support appears operationally underdefined in code.
+- For LLM/AI use, centralized PHI egress policy and BAA-aligned controls are not yet platform-wide.
+
+
+## Details 
+
+### Security audit
+
+#### Authentication and authorization risks
 
 1. **High — route-skip authorization logic appears inverted and can over-match**
    - In `src/RestControllers/Authorization/SkipAuthorizationStrategy.php`, skip checks use `str_starts_with($route, $pathInfo)` instead of checking whether request path starts with configured skip route.
@@ -28,7 +59,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
    - Existing login/MFA flow (seen in `interface/main/main_screen.php`) carries `clearPass` between steps.
    - Even if later zeroed, this creates avoidable credential exposure surface in browser memory/DOM.
 
-### Data exposure vectors
+#### Data exposure vectors
 
 1. **API request/response payload logging can capture PHI**
    - `src/RestControllers/Subscriber/ApiResponseLoggerListener.php` stores request URL and body/response content into audit structures when enabled.
@@ -41,7 +72,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 3. **Large legacy + module surface increases exfiltration paths**
    - Custom modules under `interface/modules/custom_modules/` (fax/SMS/telehealth/connectors) create additional data egress vectors that depend on vendor-specific controls.
 
-### PHI handling observations
+#### PHI handling observations
 
 1. **Positive controls present**
    - Password hashing via `password_hash`/`password_verify` in `src/Common/Auth/AuthHash.php`.
@@ -52,7 +83,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
    - Encryption key material in `sql` table `keys` (`sql/database.sql`) and legacy retrieval path in `src/Encryption/Storage/PlaintextKeyInDbKeysTableQueryUtils.php`.
    - Centralized but database-resident key storage can weaken separation-of-duties if DB compromise occurs.
 
-### HIPAA-relevant security gaps
+#### HIPAA-relevant security gaps
 
 1. **Need stronger least-privilege guarantees around patient-scoped API authorization.**
 2. **Need explicit hardening defaults for secure cookies and strict TLS-only operations.**
@@ -61,7 +92,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 
 ---
 
-## Performance audit
+### Performance audit
 
 ### Where the system is slow / likely bottlenecks
 
@@ -99,7 +130,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 
 ---
 
-## Architecture audit
+### Architecture audit
 
 ### System organization
 
@@ -146,7 +177,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 
 ---
 
-## Data Quality audit
+### Data Quality audit
 
 ### Completeness and consistency
 
@@ -183,7 +214,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 
 ---
 
-## Compliance & Regulatory audit
+### Compliance & Regulatory audit
 
 ### Audit logging requirements (HIPAA Security Rule)
 
@@ -231,7 +262,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
 
 ---
 
-## Prioritized remediation roadmap
+### Prioritized remediation roadmap
 
 1. **Immediate (0-30 days)**
    - Fix `SkipAuthorizationStrategy` route matching logic.
@@ -251,7 +282,7 @@ Method: architectural/source inspection of `src/`, `library/`, `interface/`, `sq
    - Consolidate migration strategy (legacy SQL + Doctrine) to reduce schema drift.
    - Introduce centralized PHI egress governance for all external AI/communications integrations.
 
-## Audit confidence and limitations
+### Audit confidence and limitations
 
 - Confidence: **medium-high** for architectural, code-path, and control-surface findings.
 - Limitations: no runtime load tests, no production configuration inspection, no live exploit testing, no legal determination.
