@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+.cursor
+node_modules
+vendor
+tests
+docker
+Documentation
+agent-transcripts
+mcps
+*.log
