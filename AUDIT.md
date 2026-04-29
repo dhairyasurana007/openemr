@@ -1,9 +1,9 @@
-# OpenEMR System Audit (CI/CD Excluded)
+# OpenEMR System Audit
 
 ## Summary
 
 
-The audit found that OpenEMR has a mature but mixed architecture: modern services and APIs coexist with a large legacy codebase. This provides flexibility and broad functionality, but it also creates security, performance, and data-governance risks that require focused hardening.
+OpenEMR's architecture is a mix of modern services/APIs and a large legacy codebase. This provides flexibility, but it also creates security, performance, and data-governance risks that require focused hardening.
 
 
 ### Security and Access Control
