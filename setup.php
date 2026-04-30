@@ -449,7 +449,7 @@ function cloneClicked() {
 <body>
     <nav class="navbar navbar-expand navbar-light bg-light">
        <div class="container">
-        <a class="navbar-brand" href="#">OpenEMR Setujfa;lsfj;asldfkjasd;lfjadsl;fjkadslddp</a>
+        <a class="navbar-brand" href="#">OpenEMR</a>
             <div class="collapse navbar-collapse justify-content-end">
                 <ul class="navbar-nav">
                     <li class="nav-item active">
