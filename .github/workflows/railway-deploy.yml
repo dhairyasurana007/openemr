@@ -1,0 +1,56 @@
+# Deploy to Railway on pushes to the default integration branches.
+#
+# GitHub: Settings → Secrets and variables → Actions
+#   RAILWAY_TOKEN (secret, required)
+#     Railway → Project → Settings → Tokens → create a project token.
+#   Optional repository Variables (same settings → Variables tab):
+#     RAILWAY_SERVICE_NAME   default: openemr
+#     RAILWAY_ENVIRONMENT    default: production
+#     RAILWAY_PROJECT_ID     Railway project UUID if the CLI cannot resolve the project from the token alone.
+
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  railway:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Deploy
+        env:
+          RAILWAY_SERVICE_NAME: ${{ vars.RAILWAY_SERVICE_NAME }}
+          RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+        run: |
+          set -e
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "Missing Actions secret RAILWAY_TOKEN."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          SERVICE="${RAILWAY_SERVICE_NAME:-openemr}"
+          ENV_NAME="${RAILWAY_ENVIRONMENT:-production}"
+          if [ -n "$RAILWAY_PROJECT_ID" ]; then
+            railway up --ci --project "$RAILWAY_PROJECT_ID" --environment "$ENV_NAME" --service "$SERVICE"
+          else
+            railway up --ci --environment "$ENV_NAME" --service "$SERVICE"
+          fi
