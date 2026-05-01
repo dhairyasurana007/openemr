@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clinical Co-Pilot</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4d;
+      --text: #e8eef7;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --accent-soft: rgba(61, 139, 253, 0.18);
+      --today: #2a3f5c;
+      --appt: #1e4d3a;
+      --appt-border: #3ecf8e;
+      --bubble-user: #243a5c;
+      --bubble-assistant: #1e2a1e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15, 20, 25, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.65rem 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem 1.25rem;
+    }
+    .brand { font-weight: 600; font-size: 1.05rem; }
+    .nav-tabs {
+      display: flex;
+      gap: 0.25rem;
+      flex: 1;
+      min-width: 200px;
+    }
+    .nav-tabs button {
+      padding: 0.45rem 1rem;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .nav-tabs button:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-tabs button.active {
+      color: var(--text);
+      background: var(--accent-soft);
+      border-color: var(--border);
+    }
+    .app-header a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+    .app-header a:hover { text-decoration: underline; }
+    main { max-width: 960px; margin: 0 auto; padding: 1rem 1rem 2rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* LLM */
+    .llm-wrap { display: flex; flex-direction: column; gap: 0.75rem; min-height: calc(100vh - 120px); }
+    .chat-log {
+      flex: 1;
+      min-height: 280px;
+      max-height: 55vh;
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .bubble {
+      max-width: 92%;
+      padding: 0.65rem 0.85rem;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bubble.user { align-self: flex-end; background: var(--bubble-user); border: 1px solid var(--border); }
+    .bubble.assistant { align-self: flex-start; background: var(--bubble-assistant); border: 1px solid #2d4a2d; }
+    .bubble.system { align-self: center; font-size: 0.8rem; color: var(--muted); background: transparent; border: 1px dashed var(--border); }
+    .composer {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .composer textarea {
+      flex: 1;
+      min-height: 72px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #121920;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.92rem;
+    }
+    .composer button {
+      padding: 0.65rem 1.1rem;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-bar {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.65rem 0.85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+    .auth-bar label { color: var(--muted); }
+    .auth-bar input {
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #121920;
+      color: var(--text);
+      width: 110px;
+    }
+    .auth-bar button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .err { color: #f88; font-size: 0.85rem; }
+
+    /* Calendar (same visual language as before) */
+    .cal-wrap-inner { max-width: 920px; }
+    .appt-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid var(--appt-border);
+    }
+    .appt-card h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+    .appt-card .time { font-size: 1.15rem; font-weight: 600; color: #7dffb3; }
+    .appt-card .meta { color: var(--muted); font-size: 0.88rem; margin-top: 0.5rem; }
+    .cal-shell {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .cal-head { margin-bottom: 0.75rem; }
+    .cal-head strong { font-size: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dow {
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.35rem 0;
+    }
+    .cell {
+      aspect-ratio: 1;
+      min-height: 0;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0.35rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .cell.pad { visibility: hidden; }
+    .cell.day { background: rgba(255,255,255,0.03); color: var(--text); }
+    .cell.day.today { background: var(--today); border-color: var(--border); }
+    .cell.day.has-appt {
+      background: var(--appt);
+      border-color: var(--appt-border);
+      color: #dfffea;
+      font-weight: 600;
+    }
+    .cell .num { font-size: 0.9rem; }
+    .cell .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--appt-border);
+      margin-top: 4px;
+      opacity: 0;
+    }
+    .cell.day.has-appt .dot { opacity: 1; }
+
+    /* Dashboard */
+    .dash-patient {
+      background: linear-gradient(135deg, var(--panel) 0%, #152030 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid var(--accent);
+    }
+    .dash-patient h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+    .dash-patient .sub {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin: 0;
+    }
+    .dash-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .dash-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.15rem;
+    }
+    .dash-card h3 { margin: 0 0 0.35rem; font-size: 0.85rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .dash-card .stat { font-size: 1.75rem; font-weight: 700; color: var(--accent); }
+    .dash-card p { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted); }
+    .dash-two {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .dash-block {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.15rem;
+    }
+    .dash-block h3 {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .vitals-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.65rem 1rem;
+    }
+    .vital {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .vital .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+    .vital .value { font-size: 1.05rem; font-weight: 600; }
+    .vital .value.warn { color: #ffb86b; }
+    .cc-text {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: #dce6f2;
+    }
+    .dash-list {
+      margin: 0;
+      padding-left: 1.15rem;
+      font-size: 0.9rem;
+      color: #dce6f2;
+    }
+    .dash-list li { margin-bottom: 0.35rem; }
+    .dash-list.muted { color: var(--muted); font-size: 0.86rem; }
+    .allergy-tag {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      background: rgba(255, 100, 100, 0.12);
+      border: 1px solid rgba(255, 120, 120, 0.35);
+      color: #ffb4b4;
+      font-size: 0.82rem;
+    }
+    .dash-foot {
+      margin-top: 1rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <span class="brand">Clinical Co-Pilot</span>
+    <nav class="nav-tabs" role="tablist" aria-label="Workspace">
+      <button type="button" role="tab" data-tab="llm" aria-selected="true" class="active">LLM</button>
+      <button type="button" role="tab" data-tab="calendar" aria-selected="false">Calendar</button>
+      <button type="button" role="tab" data-tab="dashboard" aria-selected="false">Dashboard</button>
+    </nav>
+    <a href="/docs">API docs</a>
+  </header>
+
+  <main>
+    <section id="panel-llm" class="panel active" role="tabpanel" aria-labelledby="tab-llm">
+      <div class="llm-wrap">
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <p class="err" id="chat-err" hidden></p>
+        <div class="composer">
+          <textarea id="chat-input" placeholder="Ask a chart question (e.g. summarize vitals trend)…" rows="3"></textarea>
+          <button type="button" id="chat-send">Send</button>
+        </div>
+        <div class="auth-bar">
+          <span>Chat uses HTTP Basic (same as API).</span>
+          <label>User <input type="text" id="auth-user" value="admin" autocomplete="username" /></label>
+          <label>Pass <input type="password" id="auth-pass" value="pass" autocomplete="current-password" /></label>
+          <button type="button" class="secondary" id="auth-save">Save session</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-calendar" class="panel" role="tabpanel" aria-labelledby="tab-calendar">
+      <div class="cal-wrap-inner">
+        <section class="appt-card">
+          <h2>Upcoming appointment</h2>
+          <p class="time" id="appt-time"></p>
+          <p class="meta"><strong id="appt-name"></strong> — <span>Office visit</span></p>
+        </section>
+        <div class="cal-shell">
+          <div class="cal-head"><strong id="cal-label"></strong></div>
+          <div class="grid" id="dow-row"></div>
+          <div class="grid" id="cal-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-dashboard" class="panel" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="dash-patient">
+        <h2>Patricia Owens</h2>
+        <p class="sub">
+          DOB 14 Mar 1968 (58y) · Female · MRN PO-88421 · PCP Dr. Jordan Ellis ·
+          Last visit 18 Mar 2026
+        </p>
+      </div>
+
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h3>Today</h3>
+          <div class="stat">1</div>
+          <p>Scheduled visits</p>
+        </div>
+        <div class="dash-card">
+          <h3>Queue</h3>
+          <div class="stat">0</div>
+          <p>Patients waiting</p>
+        </div>
+        <div class="dash-card">
+          <h3>Open charts</h3>
+          <div class="stat">2</div>
+          <p>Encounters in progress</p>
+        </div>
+        <div class="dash-card">
+          <h3>A1C (last)</h3>
+          <div class="stat" style="color:#ffb86b">7.4%</div>
+          <p>Lab 04 Feb 2026 · goal &lt;7.0</p>
+        </div>
+      </div>
+
+      <div class="dash-two">
+        <div class="dash-block">
+          <h3>Vitals (nurse intake — today)</h3>
+          <div class="vitals-grid">
+            <div class="vital">
+              <span class="label">Blood pressure</span>
+              <span class="value warn">148 / 92 mmHg</span>
+            </div>
+            <div class="vital">
+              <span class="label">Heart rate</span>
+              <span class="value">82 bpm</span>
+            </div>
+            <div class="vital">
+              <span class="label">Weight</span>
+              <span class="value">184 lb (83.5 kg)</span>
+            </div>
+            <div class="vital">
+              <span class="label">Height</span>
+              <span class="value">5′6″ (168 cm)</span>
+            </div>
+            <div class="vital">
+              <span class="label">BMI</span>
+              <span class="value warn">29.6</span>
+            </div>
+            <div class="vital">
+              <span class="label">Temperature</span>
+              <span class="value">98.2 °F (36.8 °C)</span>
+            </div>
+            <div class="vital">
+              <span class="label">SpO₂</span>
+              <span class="value">97% (room air)</span>
+            </div>
+            <div class="vital">
+              <span class="label">Resp. rate</span>
+              <span class="value">16 / min</span>
+            </div>
+          </div>
+          <span class="allergy-tag">Allergy: Penicillin — rash (moderate)</span>
+        </div>
+
+        <div class="dash-block">
+          <h3>Chief complaint</h3>
+          <p class="cc-text">
+            “Blood pressure has been running high on the home cuff for two weeks. Also short of breath
+            when I walk a full block — it eases when I rest. I ran out of metformin five days ago.”
+          </p>
+          <h3 style="margin-top:1rem">Active problems</h3>
+          <ul class="dash-list">
+            <li>Essential hypertension (I10)</li>
+            <li>Type 2 diabetes mellitus (E11.9)</li>
+            <li>Mixed hyperlipidemia (E78.2)</li>
+            <li>Obesity, class I (E66.9)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dash-two">
+        <div class="dash-block">
+          <h3>Current medications</h3>
+          <ul class="dash-list">
+            <li>Metformin 1000 mg PO BID (last refill picked up 12 Jan 2026)</li>
+            <li>Lisinopril 20 mg PO daily</li>
+            <li>Atorvastatin 40 mg PO at bedtime</li>
+            <li>Fluticasone propionate nasal spray 1 spray each nostril daily PRN congestion</li>
+            <li>Aspirin 81 mg PO daily (self-reported OTC)</li>
+          </ul>
+        </div>
+        <div class="dash-block">
+          <h3>Past / discontinued medications</h3>
+          <ul class="dash-list muted">
+            <li>Hydrochlorothiazide 25 mg daily — stopped Mar 2019 (hypokalemia)</li>
+            <li>Ibuprofen 400 mg PRN — stopped Nov 2024 (dyspepsia)</li>
+            <li>Glipizide 5 mg BID — stopped Jan 2022 (per hypoglycemia concern)</li>
+            <li>Simvastatin 20 mg HS — switched to atorvastatin Sep 2023</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="dash-block">
+        <h3>Recent labs (snapshot)</h3>
+        <ul class="dash-list">
+          <li>LDL-C 118 mg/dL (06 Mar 2026) — above goal</li>
+          <li>eGFR 72 mL/min/1.73m² (06 Mar 2026)</li>
+          <li>Creatinine 1.05 mg/dL (06 Mar 2026)</li>
+          <li>Spot glucose 168 mg/dL fingerstick in office today (non-fasting)</li>
+        </ul>
+      </div>
+
+      <p class="dash-foot">
+        Demo dashboard: values for Patricia Owens are hardcoded for UI review only — not linked to live chart data.
+      </p>
+    </section>
+  </main>
+
+  <script>
+(function () {
+  var VALID = { llm: true, calendar: true, dashboard: true };
+  var params = new URLSearchParams(window.location.search);
+  var initial = params.get("tab");
+  if (!VALID[initial]) initial = "llm";
+
+  var tabs = document.querySelectorAll(".nav-tabs [data-tab]");
+  var panels = {
+    llm: document.getElementById("panel-llm"),
+    calendar: document.getElementById("panel-calendar"),
+    dashboard: document.getElementById("panel-dashboard"),
+  };
+
+  function selectTab(name) {
+    tabs.forEach(function (btn) {
+      var on = btn.getAttribute("data-tab") === name;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    Object.keys(panels).forEach(function (key) {
+      panels[key].classList.toggle("active", key === name);
+    });
+    var url = new URL(window.location.href);
+    url.searchParams.set("tab", name);
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }
+
+  tabs.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      selectTab(btn.getAttribute("data-tab"));
+    });
+  });
+  selectTab(initial);
+
+  /* Calendar: Patricia Owens, +3 min */
+  function initCalendar() {
+    var PATIENT = "Patricia Owens";
+    var OFFSET_MS = 3 * 60 * 1000;
+    var appt = new Date(Date.now() + OFFSET_MS);
+    document.getElementById("appt-name").textContent = PATIENT;
+    var fmt = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    document.getElementById("appt-time").textContent = fmt.format(appt);
+    var y = appt.getFullYear();
+    var m = appt.getMonth();
+    var apptDay = appt.getDate();
+    var today = new Date();
+    document.getElementById("cal-label").textContent = new Intl.DateTimeFormat(undefined, {
+      month: "long",
+      year: "numeric",
+    }).format(new Date(y, m, 1));
+    var dows = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    var dowRow = document.getElementById("dow-row");
+    dowRow.innerHTML = "";
+    dows.forEach(function (d) {
+      var el = document.createElement("div");
+      el.className = "dow";
+      el.textContent = d;
+      dowRow.appendChild(el);
+    });
+    var first = new Date(y, m, 1);
+    var startPad = first.getDay();
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var grid = document.getElementById("cal-grid");
+    grid.innerHTML = "";
+    for (var i = 0; i < startPad; i++) {
+      var c = document.createElement("div");
+      c.className = "cell pad";
+      grid.appendChild(c);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      var cell = document.createElement("div");
+      cell.className = "cell day";
+      var num = document.createElement("span");
+      num.className = "num";
+      num.textContent = String(d);
+      cell.appendChild(num);
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      cell.appendChild(dot);
+      var cellDate = new Date(y, m, d);
+      if (
+        cellDate.getDate() === today.getDate() &&
+        cellDate.getMonth() === today.getMonth() &&
+        cellDate.getFullYear() === today.getFullYear()
+      ) {
+        cell.classList.add("today");
+      }
+      if (d === apptDay) {
+        cell.classList.add("has-appt");
+        cell.title = PATIENT + " — " + appt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      }
+      grid.appendChild(cell);
+    }
+  }
+  initCalendar();
+
+  /* LLM chat */
+  var STORAGE_KEY = "copilot_basic_auth";
+  function getAuthHeader() {
+    var raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw) return "Basic " + raw;
+    var u = document.getElementById("auth-user").value.trim();
+    var p = document.getElementById("auth-pass").value;
+    if (!u) return null;
+    return "Basic " + btoa(unescape(encodeURIComponent(u + ":" + p)));
+  }
+
+  document.getElementById("auth-save").addEventListener("click", function () {
+    var u = document.getElementById("auth-user").value.trim();
+    var p = document.getElementById("auth-pass").value;
+    sessionStorage.setItem(STORAGE_KEY, btoa(unescape(encodeURIComponent(u + ":" + p))));
+    pushBubble("system", "Session saved. You can use Send for chat.");
+  });
+
+  var chatLog = document.getElementById("chat-log");
+  var messages = [];
+
+  function pushBubble(role, text) {
+    var div = document.createElement("div");
+    div.className = "bubble " + role;
+    div.textContent = text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  pushBubble(
+    "assistant",
+    "Co-Pilot is ready. Ask a question in natural language. If Send returns 401, confirm admin credentials and click Save session."
+  );
+
+  function setErr(msg) {
+    var el = document.getElementById("chat-err");
+    if (msg) {
+      el.textContent = msg;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  }
+
+  async function sendChat() {
+    var input = document.getElementById("chat-input");
+    var text = input.value.trim();
+    if (!text) return;
+    setErr("");
+    var auth = getAuthHeader();
+    if (!auth) {
+      setErr("Enter username and password, then Save session.");
+      return;
+    }
+    input.value = "";
+    pushBubble("user", text);
+    messages.push({ role: "user", content: text });
+    var btn = document.getElementById("chat-send");
+    btn.disabled = true;
+    try {
+      var res = await fetch("/api/v1/llm/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: auth,
+        },
+        body: JSON.stringify({ messages: messages }),
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        setErr("Unauthorized — check credentials and Save session again.");
+        messages.pop();
+        chatLog.removeChild(chatLog.lastChild);
+        return;
+      }
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        setErr(data.detail || "Request failed (" + res.status + ")");
+        messages.pop();
+        chatLog.removeChild(chatLog.lastChild);
+        return;
+      }
+      var reply = data.reply || "(no reply)";
+      messages.push({ role: "assistant", content: reply });
+      pushBubble("assistant", reply);
+    } catch (e) {
+      setErr(String(e.message || e));
+      messages.pop();
+      if (chatLog.lastChild) chatLog.removeChild(chatLog.lastChild);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("chat-send").addEventListener("click", sendChat);
+  document.getElementById("chat-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+})();
+  </script>
+</body>
+</html>
