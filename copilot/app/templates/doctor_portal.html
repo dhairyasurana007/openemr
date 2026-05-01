@@ -64,12 +64,6 @@
       background: var(--accent-soft);
       border-color: var(--border);
     }
-    .app-header a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 0.85rem;
-    }
-    .app-header a:hover { text-decoration: underline; }
     main { max-width: 960px; margin: 0 auto; padding: 1rem 1rem 2rem; }
     .panel { display: none; }
     .panel.active { display: block; }
@@ -100,6 +94,19 @@
     .bubble.user { align-self: flex-end; background: var(--bubble-user); border: 1px solid var(--border); }
     .bubble.assistant { align-self: flex-start; background: var(--bubble-assistant); border: 1px solid #2d4a2d; }
     .bubble.system { align-self: center; font-size: 0.8rem; color: var(--muted); background: transparent; border: 1px dashed var(--border); }
+    .bubble.status-live {
+      align-self: flex-start;
+      font-size: 0.88rem;
+      font-style: italic;
+      color: #a8bdd4;
+      background: rgba(30, 42, 58, 0.9);
+      border: 1px dashed var(--border);
+      animation: status-pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes status-pulse {
+      0%, 100% { opacity: 0.78; }
+      50% { opacity: 1; }
+    }
     .composer {
       display: flex;
       gap: 0.5rem;
@@ -326,7 +333,6 @@
       <button type="button" role="tab" data-tab="calendar" aria-selected="false">Calendar</button>
       <button type="button" role="tab" data-tab="dashboard" aria-selected="false">Dashboard</button>
     </nav>
-    <a href="/docs">API docs</a>
   </header>
 
   <main>
@@ -502,6 +508,7 @@
     dashboard: document.getElementById("panel-dashboard"),
   };
 
+  var openingBriefLocked = false;
   function selectTab(name) {
     tabs.forEach(function (btn) {
       var on = btn.getAttribute("data-tab") === name;
@@ -514,6 +521,10 @@
     var url = new URL(window.location.href);
     url.searchParams.set("tab", name);
     window.history.replaceState({}, "", url.pathname + url.search);
+    if (name === "llm" && !openingBriefLocked) {
+      openingBriefLocked = true;
+      loadOpeningBriefing();
+    }
   }
 
   tabs.forEach(function (btn) {
@@ -619,12 +630,159 @@
     div.textContent = text;
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
   }
 
-  pushBubble(
-    "assistant",
-    "Co-Pilot is ready. Ask a question in natural language. If Send returns 401, confirm admin credentials and click Save session."
-  );
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  /** @returns {number} integer ms between 5000 and 10000 inclusive */
+  function randomBriefDelayMs() {
+    return 5000 + Math.floor(Math.random() * 5001);
+  }
+
+  /**
+   * @param {HTMLElement} el
+   * @param {string[]} steps
+   * @param {number} intervalMs
+   * @returns {function(): void} stop
+   */
+  function startStatusTicker(el, steps, intervalMs) {
+    var i = 0;
+    el.textContent = steps[0];
+    var id = setInterval(function () {
+      i = (i + 1) % steps.length;
+      el.textContent = steps[i];
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }, intervalMs || 1500);
+    return function stop() {
+      clearInterval(id);
+    };
+  }
+
+  function removeEl(el) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  /**
+   * Run async work but do not return until at least minMs has elapsed (for UX pacing).
+   * @template T
+   * @param {number} minMs
+   * @param {() => Promise<T>} work
+   * @returns {Promise<T>}
+   */
+  async function awaitWithMinDelay(minMs, work) {
+    var t0 = Date.now();
+    var out = await work();
+    var elapsed = Date.now() - t0;
+    if (elapsed < minMs) await sleep(minMs - elapsed);
+    return out;
+  }
+
+  var STATUS_BRIEF = [
+    "Retrieving patient context from the dashboard…",
+    "Pulling vitals, medications, and recent labs…",
+    "Synthesizing in-room briefing…",
+    "Cross-checking allergies and active problems…",
+    "Finalizing narrative for handoff…",
+  ];
+
+  var STATUS_CHAT = [
+    "Gathering context from the conversation…",
+    "Retrieving relevant chart cues…",
+    "Synthesizing answer…",
+    "Formatting for in-room use…",
+  ];
+
+  /* Same narrative as server _FALLBACK_PATRICIA_BRIEF if briefing request fails */
+  var OFFLINE_PATRICIA_BRIEF =
+    "Next patient: Patricia Owens.\n\n" +
+    "Patricia is a 58-year-old woman with hypertension, type 2 diabetes, mixed hyperlipidemia, and obesity. " +
+    "She is here today because her home blood pressure has been running high for about two weeks, she becomes " +
+    "short of breath after walking a full block (improved with rest), and she has been without metformin for five days.\n\n" +
+    "This morning's vitals include blood pressure 148/92 mmHg, heart rate 82, weight 184 lb with BMI 29.6, temperature " +
+    "98.2 °F, and oxygen saturation 97% on room air. She reports a moderate penicillin allergy (rash). Current " +
+    "medications include metformin, lisinopril, atorvastatin, fluticasone nasal spray as needed, and daily low-dose " +
+    "aspirin per her report. Recent labs show A1c 7.4% in February and LDL 118 mg/dL in March; a non-fasting " +
+    "fingerstick glucose in the office today was 168 mg/dL.\n\n" +
+    "Use the chat below for follow-up questions when you are ready.";
+
+  async function loadOpeningBriefing() {
+    var loading = document.createElement("div");
+    loading.className = "bubble assistant status-live";
+    loading.id = "briefing-loading";
+    loading.setAttribute("aria-live", "polite");
+    loading.textContent = STATUS_BRIEF[0];
+    chatLog.appendChild(loading);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    var stopTicker = startStatusTicker(loading, STATUS_BRIEF, 1400);
+    var minWait = randomBriefDelayMs();
+    setErr("");
+    var auth = getAuthHeader();
+    if (!auth) {
+      try {
+        await awaitWithMinDelay(minWait, function () {
+          return Promise.resolve();
+        });
+      } finally {
+        stopTicker();
+        removeEl(loading);
+      }
+      pushBubble("system", "Enter API username and password above, then click Save session, and refresh the page to load the live briefing.");
+      pushBubble("assistant", OFFLINE_PATRICIA_BRIEF);
+      messages.push({ role: "assistant", content: OFFLINE_PATRICIA_BRIEF });
+      return;
+    }
+    try {
+      var pack = await awaitWithMinDelay(minWait, function () {
+        return fetch("/api/v1/llm/next-patient-brief", {
+          method: "POST",
+          headers: { Authorization: auth },
+        }).then(function (res) {
+          return res.json().catch(function () {
+            return {};
+          }).then(function (data) {
+            return { res: res, data: data };
+          });
+        });
+      });
+      var res = pack.res;
+      var data = pack.data;
+      stopTicker();
+      removeEl(loading);
+      if (res.status === 401) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        setErr("Unauthorized — check credentials and Save session, then refresh.");
+        pushBubble("assistant", OFFLINE_PATRICIA_BRIEF);
+        messages.push({ role: "assistant", content: OFFLINE_PATRICIA_BRIEF });
+        return;
+      }
+      if (!res.ok) {
+        setErr(data.detail || "Briefing request failed (" + res.status + ").");
+        pushBubble("assistant", OFFLINE_PATRICIA_BRIEF);
+        messages.push({ role: "assistant", content: OFFLINE_PATRICIA_BRIEF });
+        return;
+      }
+      var reply = data.reply || OFFLINE_PATRICIA_BRIEF;
+      messages.push({ role: "assistant", content: reply });
+      pushBubble("assistant", reply);
+      if (data.demo) {
+        pushBubble(
+          "system",
+          "Live model is off (no OPENROUTER_API_KEY on server) — showing built-in dashboard summary. Configure OpenRouter for generated briefings."
+        );
+      }
+    } catch (e) {
+      stopTicker();
+      removeEl(document.getElementById("briefing-loading"));
+      setErr(String(e.message || e));
+      pushBubble("assistant", OFFLINE_PATRICIA_BRIEF);
+      messages.push({ role: "assistant", content: OFFLINE_PATRICIA_BRIEF });
+    }
+  }
 
   function setErr(msg) {
     var el = document.getElementById("chat-err");
@@ -651,33 +809,55 @@
     messages.push({ role: "user", content: text });
     var btn = document.getElementById("chat-send");
     btn.disabled = true;
+    var statusEl = document.createElement("div");
+    statusEl.className = "bubble assistant status-live";
+    statusEl.id = "chat-pending-status";
+    statusEl.setAttribute("aria-live", "polite");
+    statusEl.textContent = STATUS_CHAT[0];
+    chatLog.appendChild(statusEl);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    var stopTicker = startStatusTicker(statusEl, STATUS_CHAT, 1300);
+    var minWait = randomBriefDelayMs();
     try {
-      var res = await fetch("/api/v1/llm/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: auth,
-        },
-        body: JSON.stringify({ messages: messages }),
+      var pack = await awaitWithMinDelay(minWait, function () {
+        return fetch("/api/v1/llm/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: auth,
+          },
+          body: JSON.stringify({ messages: messages }),
+        }).then(function (res) {
+          return res.json().catch(function () {
+            return {};
+          }).then(function (data) {
+            return { res: res, data: data };
+          });
+        });
       });
+      var res = pack.res;
+      var data = pack.data;
+      stopTicker();
+      removeEl(statusEl);
       if (res.status === 401) {
         sessionStorage.removeItem(STORAGE_KEY);
         setErr("Unauthorized — check credentials and Save session again.");
         messages.pop();
-        chatLog.removeChild(chatLog.lastChild);
+        if (chatLog.lastChild) chatLog.removeChild(chatLog.lastChild);
         return;
       }
-      var data = await res.json().catch(function () { return {}; });
       if (!res.ok) {
         setErr(data.detail || "Request failed (" + res.status + ")");
         messages.pop();
-        chatLog.removeChild(chatLog.lastChild);
+        if (chatLog.lastChild) chatLog.removeChild(chatLog.lastChild);
         return;
       }
       var reply = data.reply || "(no reply)";
       messages.push({ role: "assistant", content: reply });
       pushBubble("assistant", reply);
     } catch (e) {
+      stopTicker();
+      removeEl(document.getElementById("chat-pending-status"));
       setErr(String(e.message || e));
       messages.pop();
       if (chatLog.lastChild) chatLog.removeChild(chatLog.lastChild);
