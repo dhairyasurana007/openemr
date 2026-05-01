@@ -26,5 +26,7 @@ require_once "sites/$site_id/sqlconf.php";
 if ($config == 1) {
     header("Location: interface/login/login.php?site=$site_id");
 } else {
-    header("Location: setup.php?site=$site_id");
+    // TEMPORARY: skip installer wizard on redeploy — uncomment next line to restore setup flow.
+    // header("Location: setup.php?site=$site_id");
+    header("Location: interface/login/login.php?site=$site_id");
 }
