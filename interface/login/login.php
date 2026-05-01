@@ -62,7 +62,12 @@ $secondaryLogo = $logoService->getLogo("core/login/secondary");
 $smallLogoOne = $logoService->getLogo("core/login/small_logo_1");
 $smallLogoTwo = $logoService->getLogo("core/login/small_logo_2");
 
+// Default must match library/globals.inc.php; value can be missing/null after a
+// partial install or bad globals row, which would otherwise TypeError in TemplatePageEvent.
 $layout = $globalsBag->get('login_page_layout');
+if (!is_string($layout) || trim($layout) === '') {
+    $layout = 'login/layouts/vertical_band.html.twig';
+}
 
 // mdsupport - Add 'App' functionality for user interfaces without standard menu and frames
 // If this script is called with app parameter, validate it without showing other apps.
