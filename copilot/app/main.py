@@ -17,7 +17,8 @@ _PORTAL_HTML = (Path(__file__).resolve().parent / "templates" / "doctor_portal.h
 
 _SYSTEM_PROMPT = (
     "You are Clinical Co-Pilot for physicians using an EHR. "
-    "Be concise and practical. Do not invent patient-specific facts unless the user pasted chart context. "
+    "Be concise and practical. Ground patient-specific answers in the dashboard snapshot below; "
+    "if something is not listed there, say you do not have that detail in the current snapshot rather than guessing. "
     "If asked for diagnoses or prescribing, remind them you surface information only and they must exercise clinical judgment."
 )
 
@@ -69,6 +70,13 @@ Recent labs:
 - eGFR 72 mL/min/1.73m²; creatinine 1.05 mg/dL on 2026-03-06
 - Office fingerstick glucose 168 mg/dL today (non-fasting)
 """
+
+# Injected on every chat completion so follow-up questions (not just the opening brief) see dashboard data.
+_CHAT_SYSTEM_WITH_DASHBOARD = (
+    _SYSTEM_PROMPT
+    + "\n\n### Dashboard snapshot (Patricia Owens — same facts as the Dashboard tab)\n"
+    + _PATRICIA_DOSSIER
+)
 
 _BRIEFING_SYSTEM = (
     "You summarize for a physician who just opened the co-pilot before walking into the room. "
@@ -180,7 +188,7 @@ async def next_patient_brief(_user: str = Depends(require_admin)) -> dict[str, o
 @app.post("/api/v1/llm/chat")
 async def llm_chat(req: ChatRequest, _user: str = Depends(require_admin)) -> dict[str, object]:
     """Chat completion via OpenRouter when OPENROUTER_API_KEY is set; otherwise a demo string."""
-    outbound: list[dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+    outbound: list[dict[str, str]] = [{"role": "system", "content": _CHAT_SYSTEM_WITH_DASHBOARD}]
     for m in req.messages:
         outbound.append({"role": m.role, "content": m.content})
 
@@ -189,11 +197,13 @@ async def llm_chat(req: ChatRequest, _user: str = Depends(require_admin)) -> dic
         snippet = (last_user[:180] + "…") if len(last_user) > 180 else last_user
         return {
             "reply": (
-                "[Demo mode: OPENROUTER_API_KEY is not set on the server] "
-                "Add your OpenRouter key in Railway (or your host) and optionally "
-                "OPENROUTER_MODEL (e.g. openai/gpt-4o-mini), OPENROUTER_HTTP_REFERER, OPENROUTER_TITLE. "
-                "Your message: "
+                "[Demo mode: OPENROUTER_API_KEY is not set — no model is called. "
+                "Your question was: "
                 + repr(snippet)
+                + "\n\nBelow is the same Patricia Owens dashboard snapshot the live model receives with every message "
+                "(vitals, meds, labs, CC). Answer your own clinical question from it, or configure OpenRouter for "
+                "generated replies.\n\n"
+                + _PATRICIA_DOSSIER
             ),
             "demo": True,
         }
