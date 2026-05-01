@@ -404,7 +404,7 @@ var page = {
             'sex': $('select#sex').val(),
             'referrer': $('input#referrer').val(),
             'referrerid': $('input#referrerid').val(),
-            'providerid': $('select#providerid').val(),
+            'providerid': $('select#providerid').val() || 0,
             'refProviderid': $('select#refProviderid').val() || 0,
             'email': $('input#email').val(),
             'emailDirect': $('input#emailDirect').val(),

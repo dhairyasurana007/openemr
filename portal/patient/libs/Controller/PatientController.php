@@ -304,7 +304,7 @@ class PatientController extends AppBasePortalController
             $patient->Validate();
             $errors = $patient->GetValidationErrors();
             if (count($errors) > 0) {
-                $this->RenderErrorJSON('Please check the form for errors' . $errors, $errors);
+                $this->RenderErrorJSON('Please check the form for errors', $errors);
             } else {
                 $patient->Save(true);
                 $this->RenderJSON($patient, $this->JSONPCallback(), true, $this->SimpleObjectParams());
