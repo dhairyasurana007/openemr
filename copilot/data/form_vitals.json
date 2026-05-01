@@ -1,0 +1,33 @@
+[
+  {
+    "id": 3001,
+    "uuid": null,
+    "date": "2026-04-30 09:05:00",
+    "pid": 1,
+    "user": "admin",
+    "groupname": "Default",
+    "authorized": 1,
+    "activity": 1,
+    "bps": "152",
+    "bpd": "94",
+    "weight": "82.500000",
+    "height": "165.000000",
+    "temperature": "36.700000",
+    "temp_method": "oral",
+    "pulse": "78.000000",
+    "respiration": "16.000000",
+    "note": "Nurse intake — patient states good adherence to meds",
+    "BMI": "30.300000",
+    "BMI_status": "Obese",
+    "waist_circ": "0.000000",
+    "head_circ": "0.000000",
+    "oxygen_saturation": "97.00",
+    "oxygen_flow_rate": "0.000000",
+    "external_id": null,
+    "ped_weight_height": "0.00",
+    "ped_bmi": "0.00",
+    "ped_head_circ": "0.00",
+    "inhaled_oxygen_concentration": "0.00",
+    "last_updated": "2026-04-30 09:05:00"
+  }
+]

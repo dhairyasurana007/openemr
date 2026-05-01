@@ -1,21 +1,21 @@
-# Deploy to Railway on pushes to the default integration branches.
+# Deploy to Railway only on push to branch early-submission.
 #
 # GitHub: Settings → Secrets and variables → Actions
 #   RAILWAY_TOKEN (secret, required)
 #     Railway → Project → Settings → Tokens → create a project token.
 #   Optional repository Variables (same settings → Variables tab):
-#     RAILWAY_SERVICE_NAME   default: openemr
+#     RAILWAY_SERVICE_NAME   default: copilot (Clinical Co-Pilot JSON API under copilot/)
 #     RAILWAY_ENVIRONMENT    default: production
 #     RAILWAY_PROJECT_ID     Railway project UUID if the CLI cannot resolve the project from the token alone.
+#
+#   Deploy uploads only the copilot/ directory (--path-as-root) so Railway builds from copilot/Dockerfile.
 
 name: Deploy to Railway
 
 on:
   push:
     branches:
-      - main
-      - master
-  workflow_dispatch:
+      - early-submission
 
 permissions:
   contents: read
@@ -47,10 +47,10 @@ jobs:
             echo "Add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
-          SERVICE="${RAILWAY_SERVICE_NAME:-openemr}"
+          SERVICE="${RAILWAY_SERVICE_NAME:-copilot}"
           ENV_NAME="${RAILWAY_ENVIRONMENT:-production}"
           if [ -n "$RAILWAY_PROJECT_ID" ]; then
-            railway up --ci --project "$RAILWAY_PROJECT_ID" --environment "$ENV_NAME" --service "$SERVICE"
+            railway up ./copilot --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$ENV_NAME" --service "$SERVICE"
           else
-            railway up --ci --environment "$ENV_NAME" --service "$SERVICE"
+            railway up ./copilot --path-as-root --ci --environment "$ENV_NAME" --service "$SERVICE"
           fi

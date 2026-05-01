@@ -1,0 +1,38 @@
+[
+  {
+    "procedure_result_id": 11001,
+    "uuid": null,
+    "procedure_report_id": 8001,
+    "result_data_type": "N",
+    "result_code": "4548-4",
+    "result_text": "Hemoglobin A1c/Hemoglobin.total in Blood",
+    "date": "2026-03-06 10:00:00",
+    "facility": "",
+    "units": "%",
+    "result": "7.2",
+    "range": "<5.7",
+    "abnormal": "high",
+    "comments": null,
+    "document_id": 0,
+    "result_status": "final",
+    "date_end": null
+  },
+  {
+    "procedure_result_id": 11002,
+    "uuid": null,
+    "procedure_report_id": 8001,
+    "result_data_type": "N",
+    "result_code": "13457-7",
+    "result_text": "LDL Cholesterol",
+    "date": "2026-03-06 10:00:00",
+    "facility": "",
+    "units": "mg/dL",
+    "result": "118",
+    "range": "<100",
+    "abnormal": "high",
+    "comments": null,
+    "document_id": 0,
+    "result_status": "final",
+    "date_end": null
+  }
+]

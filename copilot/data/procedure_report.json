@@ -1,0 +1,17 @@
+[
+  {
+    "procedure_report_id": 8001,
+    "uuid": null,
+    "procedure_order_id": 7001,
+    "procedure_order_seq": 1,
+    "date_collected": "2026-03-05 08:00:00",
+    "date_collected_tz": "",
+    "date_report": "2026-03-06 10:00:00",
+    "date_report_tz": "",
+    "source": 1,
+    "specimen_num": "LAB-7001",
+    "report_status": "complete",
+    "review_status": "reviewed",
+    "report_notes": null
+  }
+]
