@@ -4,7 +4,8 @@
 #   RAILWAY_TOKEN (secret, required)
 #     Railway → Project → Settings → Tokens → create a project token.
 #   Optional repository Variables (same settings → Variables tab):
-#     RAILWAY_SERVICE_NAME   default: copilot (Clinical Co-Pilot JSON API under copilot/)
+#     RAILWAY_SERVICE_NAME   must match the Railway service *slug* exactly (case-sensitive).
+#                            Defaults to openemr if unset — set this if your service is named differently.
 #     RAILWAY_ENVIRONMENT    default: production
 #     RAILWAY_PROJECT_ID     Railway project UUID if the CLI cannot resolve the project from the token alone.
 #
@@ -47,8 +48,9 @@ jobs:
             echo "Add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
-          SERVICE="${RAILWAY_SERVICE_NAME:-copilot}"
+          SERVICE="${RAILWAY_SERVICE_NAME:-openemr}"
           ENV_NAME="${RAILWAY_ENVIRONMENT:-production}"
+          echo "Railway deploy: service=${SERVICE} environment=${ENV_NAME}"
           if [ -n "$RAILWAY_PROJECT_ID" ]; then
             railway up ./copilot --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$ENV_NAME" --service "$SERVICE"
           else
