@@ -1,0 +1,65 @@
+# Render Blueprint: OpenEMR web + private MariaDB on the same private network.
+# Deploy: connect this repo in Render → Blueprint → apply (or "New" → Blueprint).
+#
+# Requirements:
+# - Private services are not on the free tier; the DB service needs a paid instance type.
+# - All services must stay in the same region for internal hostnames to resolve.
+#
+# This replaces ad-hoc env: MYSQL_HOST is injected from the MariaDB service (not "openemr-mysql").
+# The Dockerfile CMD runs docker/render-openemr-bootstrap.sh so sqlconf.php picks up MYSQL_HOST
+# even if an older deploy left a Docker-Compose hostname on disk.
+
+services:
+  - type: pserv
+    name: openemr-mysql
+    runtime: image
+    region: oregon
+    plan: starter
+    image:
+      url: docker.io/mariadb:11.8
+    disk:
+      name: mariadb-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_ROOT_PASSWORD
+        generateValue: true
+      - key: MYSQL_DATABASE
+        value: openemr
+      - key: MYSQL_USER
+        value: openemr
+      - key: MYSQL_PASSWORD
+        generateValue: true
+
+  - type: web
+    # Use the same name as your existing Render web service so the Blueprint updates it in place.
+    name: openemr-copilot-agent
+    runtime: docker
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: MYSQL_HOST
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          property: host
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_ROOT_PASS
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          envVarKey: MYSQL_ROOT_PASSWORD
+      - key: MYSQL_USER
+        value: openemr
+      - key: MYSQL_PASS
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+      - key: MANUAL_SETUP
+        value: "no"
+      # Optional: override public site URL. If unset, bootstrap uses RENDER_EXTERNAL_URL when present.
+      - key: OPENEMR_SETTING_site_addr_oath
+        sync: false

@@ -22,4 +22,10 @@ RUN mkdir -p sites/default \
     && mkdir -p sites/default/documents/temp \
     && chmod -R 777 sites/default/documents
 
+# Render: sync sqlconf.php $host from MYSQL_HOST before openemr.sh (fixes stale openemr-mysql).
+COPY docker/render-openemr-bootstrap.sh /usr/local/bin/render-openemr-bootstrap.sh
+RUN chmod 500 /usr/local/bin/render-openemr-bootstrap.sh
+
+CMD ["/usr/local/bin/render-openemr-bootstrap.sh"]
+
 EXPOSE 80
