@@ -2,6 +2,8 @@
 # Render / any host: OpenEMR reads DB host from sites/default/sqlconf.php. If a prior
 # deploy wrote a Docker-only hostname (e.g. openemr-mysql), override it from MYSQL_HOST
 # before openemr.sh runs. Also default site URL from Render when unset.
+#
+# Lives under contrib/render/ (not docker/) because .dockerignore excludes the docker/ tree.
 set -eu
 
 OE_ROOT="/var/www/localhost/htdocs/openemr"
