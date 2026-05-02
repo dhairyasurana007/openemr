@@ -22,6 +22,10 @@
 # `sites/default/sqlconf.php` → `$config`. If `$config` is 0, it runs
 # `auto_configure.php` when MYSQL_HOST and MYSQL_ROOT_PASS are non-empty and
 # MANUAL_SETUP is not "yes". OPENEMR_SETTING_* does NOT replace that step.
+# Custom images built from this repo (Dockerfile + COPY) should use
+# `contrib/render/render-openemr-bootstrap.sh`, which runs
+# `contrib/render/openemr-auto-install.php` before `openemr.sh` when the same
+# env vars are set (so setup.php is not required when auto_configure is absent).
 # If you still see setup.php: check logs for "Running quick setup!" / errors;
 # verify DB is reachable at MYSQL_HOST:3306 from the openemr-web container;
 # remove stale volumes (`docker compose down -v`) if a prior install half-failed.

@@ -27,6 +27,9 @@ RUN mkdir -p sites/default \
 COPY contrib/render/render-openemr-bootstrap.sh /usr/local/bin/render-openemr-bootstrap.sh
 RUN chmod 500 /usr/local/bin/render-openemr-bootstrap.sh
 
+# First boot: render-openemr-bootstrap.sh runs contrib/render/openemr-auto-install.php
+# (same Installer as setup.php) when MYSQL_HOST is set and MANUAL_SETUP is not "yes".
+# Set OPENEMR_SKIP_AUTO_INSTALL=1 to force the web installer instead.
 CMD ["/usr/local/bin/render-openemr-bootstrap.sh"]
 
 EXPOSE 80

@@ -98,5 +98,10 @@ if (file_put_contents($f, $c2) === false) {
 PHP
 fi
 
+# Repo-based images (COPY . .) may not ship /var/www/localhost/htdocs/auto_configure.php.
+# Run the same Installer::quick_install() path as setup.php when env matches flex/docker conventions.
+echo "render-openemr-bootstrap: openemr-auto-install.php (no-op if already configured or MANUAL_SETUP=yes)..."
+php "${OE_ROOT}/contrib/render/openemr-auto-install.php" || exit $?
+
 cd "$OE_ROOT"
 exec ./openemr.sh
