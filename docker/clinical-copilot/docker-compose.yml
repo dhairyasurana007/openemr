@@ -7,7 +7,7 @@
 # Usage (from this directory):
 #   docker compose up --build --detach
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
-#   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/health
+#   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
 #
 # Optional Redis (5th container) for agent replicas / job queues:
 #   docker compose --profile redis up --build --detach
@@ -60,6 +60,7 @@ services:
     volumes:
       - openemr_logs:/var/log
       - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+    # Bootstrap in custom images may derive CLINICAL_COPILOT_AGENT_BASE_URL from *_PRIVATE_HOSTPORT on PaaS.
     environment:
       MYSQL_HOST: openemr-mysql
       MYSQL_ROOT_PASS: ${MYSQL_ROOT_PASSWORD:-root}
@@ -71,6 +72,8 @@ services:
       MANUAL_SETUP: ${MANUAL_SETUP:-no}
       # Match the public URL browsers use (nginx TLS port). Adjust for real deployments.
       OPENEMR_SETTING_site_addr_oath: ${OPENEMR_SITE_ADDR:-https://localhost:8443}
+      # Private agent URL on the Compose network (mirrors Render CLINICAL_COPILOT_AGENT_BASE_URL).
+      CLINICAL_COPILOT_AGENT_BASE_URL: ${CLINICAL_COPILOT_AGENT_BASE_URL:-http://copilot-agent:8000}
     depends_on:
       openemr-mysql:
         condition: service_healthy
@@ -107,6 +110,9 @@ services:
     restart: unless-stopped
     build:
       context: ./copilot-agent
+    depends_on:
+      openemr-web:
+        condition: service_healthy
     ports:
       - '${COPILOT_AGENT_PORT:-8000}:8000'
     environment:
@@ -116,6 +122,9 @@ services:
       LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-clinical-copilot}
       REDIS_URL: ${REDIS_URL:-}
+      # Agent → OpenEMR REST (internal HTTP to app container).
+      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-openemr-web:80}
+      CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
 
   redis:
     container_name: copilot-redis

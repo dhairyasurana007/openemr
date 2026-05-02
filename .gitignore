@@ -25,6 +25,10 @@ ccdaservice/node_modules
 .project
 .settings
 
+# Python (e.g. clinical-copilot agent)
+__pycache__/
+*.py[cod]
+
 # testing
 .phpunit.result.cache
 

@@ -1,21 +1,32 @@
-# Render Blueprint — OpenEMR web + private MariaDB (internal DNS wired for you).
+# Render Blueprint — clinical-copilot topology: private MariaDB + OpenEMR web + copilot-agent.
+# Aligns with docker/clinical-copilot/docker-compose.yml (minus nginx/TLS edge on PaaS).
 #
 # ## Apply this (first time or switching from manual services)
 #
 # 1. Commit and push this file to the branch Render builds from (often `main`).
 # 2. Dashboard → Blueprints → **New Blueprint** → select this GitHub/GitLab repo.
 # 3. Render detects `render.yaml` at the repo root (or set **Blueprint Path** if you moved it).
-# 4. Review the **preview**: it will create/update **two** services:
+# 4. Review the **preview**: it creates/updates **three** services:
 #    - `openemr-mysql` — private MariaDB (not on the public internet).
-#    - `openemr-copilot-agent` — public web app (your Dockerfile).
-# 5. **Create / update** the Blueprint. First apply can take several minutes (DB disk + image pull).
-# 6. After deploy: open the web URL; bootstrap runs `openemr-auto-install.php` (no setup.php if env is correct).
+#    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
+#    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); readiness `/meta/health/readyz`.
+# 5. **Create / update** the Blueprint. First apply can take several minutes (DB disk + image pulls).
+# 6. After deploy: open the **openemr-web** public URL; bootstrap runs `openemr-auto-install.php` when env is correct.
+#
+# ## Secrets (Dashboard: set on each service, same value where noted)
+#
+# - **copilot-agent:** `OPENROUTER_API_KEY` (required for LLM calls). Optional: LangSmith keys, `REDIS_URL`.
+# - **Both web services:** `CLINICAL_COPILOT_INTERNAL_SECRET` — optional shared secret for server-to-server auth
+#   (set the same value on `openemr-web` and `copilot-agent` when you enforce it in the agent module).
+# - **openemr-web:** `CLINICAL_COPILOT_AGENT_PUBLIC_URL` — optional; public agent URL if the browser calls the
+#   agent directly (PHP→agent uses private mesh via `CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT` / derived
+#   `CLINICAL_COPILOT_AGENT_BASE_URL` from `contrib/render/render-openemr-bootstrap.sh`).
+# - **openemr-web:** `OE_PASS`, `OPENEMR_SETTING_site_addr_oath` as needed (see envVars below).
 #
 # ## Names and regions
 #
-# - Edit **region** on both services if you do not use Oregon (web + DB must match).
-# - Edit **name** under `web` to match an *existing* web service if you want the Blueprint to
-#   adopt that service instead of creating a new one.
+# - Edit **region** on all services if you do not use Oregon (they must match for private networking).
+# - Edit **name** under each service to adopt an existing Render service instead of creating a new one.
 #
 # ## Billing / plans
 #
@@ -27,6 +38,8 @@
 # - `MYSQL_HOST` is injected as the **private hostname** of `openemr-mysql` (not a Docker Compose name).
 # - If a previous manual deploy failed, clear the web service **persistent disk** (if any) or fix `sites/`.
 # - See `contrib/render/render-openemr-bootstrap.sh` for MySQL wait / install order.
+# - Renaming: older blueprints used `openemr-copilot-agent` for the OpenEMR image only. Adopt or rename
+#   that service to `openemr-web` in the Dashboard if you are migrating this file onto an existing stack.
 
 services:
   - type: pserv
@@ -52,12 +65,12 @@ services:
         generateValue: true
 
   - type: web
-    name: openemr-copilot-agent
+    name: openemr-web
     runtime: docker
     region: oregon
     dockerfilePath: ./Dockerfile
     plan: starter
-    healthCheckPath: /
+    healthCheckPath: /meta/health/readyz
     envVars:
       - key: PORT
         value: "80"
@@ -84,9 +97,47 @@ services:
         value: openemr
       - key: MANUAL_SETUP
         value: "no"
+      - key: CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT
+        fromService:
+          name: copilot-agent
+          type: web
+          property: hostport
+      - key: CLINICAL_COPILOT_AGENT_PUBLIC_URL
+        sync: false
+      - key: CLINICAL_COPILOT_INTERNAL_SECRET
+        sync: false
       # Set in Dashboard after first deploy if you need a fixed public OAuth URL.
       - key: OPENEMR_SETTING_site_addr_oath
         sync: false
       # Optional: set a strong initial OpenEMR admin password (otherwise default is weak).
       - key: OE_PASS
+        sync: false
+
+  - type: web
+    name: copilot-agent
+    runtime: docker
+    region: oregon
+    dockerfilePath: ./docker/clinical-copilot/copilot-agent/Dockerfile
+    dockerContext: ./docker/clinical-copilot/copilot-agent
+    plan: starter
+    healthCheckPath: /meta/health/readyz
+    envVars:
+      - key: OPENEMR_INTERNAL_HOSTPORT
+        fromService:
+          name: openemr-web
+          type: web
+          property: hostport
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "false"
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_ENDPOINT
+        value: https://api.smith.langchain.com
+      - key: LANGCHAIN_PROJECT
+        value: clinical-copilot
+      - key: REDIS_URL
+        sync: false
+      - key: CLINICAL_COPILOT_INTERNAL_SECRET
         sync: false
