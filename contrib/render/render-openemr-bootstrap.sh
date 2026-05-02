@@ -92,7 +92,7 @@ declare(strict_types=1);
 
 $host = getenv('MYSQL_HOST');
 if ($host === false || $host === '') {
-    return;
+    exit(0);
 }
 $f = '/var/www/localhost/htdocs/openemr/sites/default/sqlconf.php';
 $c = file_get_contents($f);
@@ -101,7 +101,8 @@ if ($c === false) {
     exit(1);
 }
 $escaped = str_replace(["\\", "'"], ["\\\\", "\\'"], $host);
-$replacement = '$host   = \'' . $escaped . '\'';
+// Match includes trailing ';' — replacement must end with ';' or PHP errors on the next line ($port).
+$replacement = '$host   = \'' . $escaped . '\';';
 $c2 = preg_replace('/^\$host\s*=\s*[^;]+;/m', $replacement, $c, 1);
 if ($c2 === null) {
     fwrite(STDERR, "render-openemr-bootstrap: preg_replace failed\n");
@@ -109,6 +110,13 @@ if ($c2 === null) {
 }
 if (file_put_contents($f, $c2) === false) {
     fwrite(STDERR, "render-openemr-bootstrap: cannot write sqlconf.php\n");
+    exit(1);
+}
+$lint = shell_exec('php -l ' . escapeshellarg($f) . ' 2>&1');
+if ($lint === null || !str_contains($lint, 'No syntax errors')) {
+    fwrite(STDERR, "render-openemr-bootstrap: sqlconf.php failed PHP lint after host patch; restoring backup.\n");
+    file_put_contents($f, $c);
+    fwrite(STDERR, (string) $lint);
     exit(1);
 }
 PHP
