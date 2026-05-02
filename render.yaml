@@ -44,6 +44,10 @@ services:
     dockerfilePath: ./Dockerfile
     plan: starter
     envVars:
+      # Render defaults PORT=10000; OpenEMR’s Apache image listens on 80. Without this,
+      # deploy logs show “No open ports detected” even when the app is healthy.
+      - key: PORT
+        value: "80"
       - key: MYSQL_HOST
         fromService:
           name: openemr-mysql

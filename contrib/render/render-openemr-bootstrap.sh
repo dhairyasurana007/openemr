@@ -42,6 +42,16 @@ PHP
             break
         fi
         if [ "$elapsed" -gt 0 ] && [ $((elapsed % 30)) -eq 0 ]; then
+            php <<'PHP'
+<?php
+declare(strict_types=1);
+$host = getenv('MYSQL_HOST') ?: '';
+$port = (int) (getenv('MYSQL_PORT') ?: '3306');
+$errno = 0;
+$errstr = '';
+@fsockopen($host, $port, $errno, $errstr, 2);
+fwrite(STDOUT, "render-openemr-bootstrap: TCP probe to {$host}:{$port} -> errno={$errno} errstr=" . str_replace(["\r", "\n"], ' ', (string) $errstr) . "\n");
+PHP
             echo "render-openemr-bootstrap: still waiting (${elapsed}s elapsed)..."
         fi
         sleep 2
@@ -101,7 +111,9 @@ fi
 # Repo-based images (COPY . .) may not ship /var/www/localhost/htdocs/auto_configure.php.
 # Run the same Installer::quick_install() path as setup.php when env matches flex/docker conventions.
 echo "render-openemr-bootstrap: openemr-auto-install.php (no-op if already configured or MANUAL_SETUP=yes)..."
-php "${OE_ROOT}/contrib/render/openemr-auto-install.php" || exit $?
+if ! php "${OE_ROOT}/contrib/render/openemr-auto-install.php"; then
+    echo "render-openemr-bootstrap: WARNING: openemr-auto-install.php failed. Starting Apache anyway so you can use setup.php or read logs. Fix MYSQL_* / credentials and redeploy." >&2
+fi
 
 cd "$OE_ROOT"
 exec ./openemr.sh
