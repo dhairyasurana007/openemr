@@ -25,16 +25,15 @@ if (OEGlobalsBag::getInstance()->get('full_new_patient_form')) {
 // Determine if the registration date should be requested.
 $regstyle = getLayoutUOR('DEM', 'regdate') ? "" : " style='display:none'";
 
-$form_pubpid    = $_POST['pubpid'   ] ? trim((string) $_POST['pubpid'   ]) : '';
-$form_title     = $_POST['title'    ] ? trim((string) $_POST['title'    ]) : '';
-$form_fname     = $_POST['fname'    ] ? trim((string) $_POST['fname'    ]) : '';
-$form_mname     = $_POST['mname'    ] ? trim((string) $_POST['mname'    ]) : '';
-$form_lname     = $_POST['lname'    ] ? trim((string) $_POST['lname'    ]) : '';
-$form_refsource = $_POST['refsource'] ? trim((string) $_POST['refsource']) : '';
-$form_sex       = $_POST['sex'      ] ? trim((string) $_POST['sex'      ]) : '';
-$form_refsource = $_POST['refsource'] ? trim((string) $_POST['refsource']) : '';
-$form_dob       = $_POST['DOB'      ] ? trim((string) $_POST['DOB'      ]) : '';
-$form_regdate   = $_POST['regdate'  ] ? trim((string) $_POST['regdate'  ]) : date('Y-m-d');
+$form_pubpid    = !empty($_POST['pubpid']) ? trim((string) $_POST['pubpid']) : '';
+$form_title     = !empty($_POST['title']) ? trim((string) $_POST['title']) : '';
+$form_fname     = !empty($_POST['fname']) ? trim((string) $_POST['fname']) : '';
+$form_mname     = !empty($_POST['mname']) ? trim((string) $_POST['mname']) : '';
+$form_lname     = !empty($_POST['lname']) ? trim((string) $_POST['lname']) : '';
+$form_refsource = !empty($_POST['refsource']) ? trim((string) $_POST['refsource']) : '';
+$form_sex       = !empty($_POST['sex']) ? trim((string) $_POST['sex']) : '';
+$form_dob       = !empty($_POST['DOB']) ? trim((string) $_POST['DOB']) : '';
+$form_regdate   = !empty($_POST['regdate']) ? trim((string) $_POST['regdate']) : date('Y-m-d');
 
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
 ?>
