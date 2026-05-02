@@ -27,6 +27,11 @@ RUN mkdir -p sites/default \
 COPY contrib/render/render-openemr-bootstrap.sh /usr/local/bin/render-openemr-bootstrap.sh
 RUN chmod 500 /usr/local/bin/render-openemr-bootstrap.sh
 
+# openemr.sh does `chmod 600` on app files then `chown apache:apache` only when
+# /var/www/localhost/htdocs/auto_configure.php exists (upstream flex layout). This image
+# often lacks that file, so code stays root:root + 600 and httpd cannot read index.php.
+RUN chown -R apache:apache /var/www/localhost/htdocs/openemr
+
 # First boot: render-openemr-bootstrap.sh runs contrib/render/openemr-auto-install.php
 # (same Installer as setup.php) when MYSQL_HOST is set and MANUAL_SETUP is not "yes".
 # Set OPENEMR_SKIP_AUTO_INSTALL=1 to force the web installer instead.
