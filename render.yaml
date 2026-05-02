@@ -8,6 +8,11 @@
 # This replaces ad-hoc env: MYSQL_HOST is injected from the MariaDB service (not "openemr-mysql").
 # The Dockerfile CMD runs contrib/render/render-openemr-bootstrap.sh so sqlconf.php picks up MYSQL_HOST
 # even if an older deploy left a Docker-Compose hostname on disk.
+#
+# If you stay on setup.php after deploy: (1) Check web logs for "Running quick setup" / errors.
+# (2) Redeploy after the bootstrap waits for MySQL (see contrib/render/render-openemr-bootstrap.sh).
+# (3) Clear the web service's persistent disk if a previous failed install left $config=0 on disk.
+# (4) Or finish setup.php once using the same DB host Render shows for openemr-mysql (private hostname).
 
 services:
   - type: pserv

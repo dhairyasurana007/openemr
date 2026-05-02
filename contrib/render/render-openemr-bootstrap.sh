@@ -10,6 +10,64 @@ OE_ROOT="/var/www/localhost/htdocs/openemr"
 SQLCONF="${OE_ROOT}/sites/default/sqlconf.php"
 
 export OPENEMR_SETTING_site_addr_oath="${OPENEMR_SETTING_site_addr_oath:-${RENDER_EXTERNAL_URL:-}}"
+export MYSQL_PORT="${MYSQL_PORT:-3306}"
+
+# Render starts the web and DB services in parallel; openemr.sh runs "quick setup" immediately.
+# If MySQL is not listening yet, auto_configure fails and you stay on setup.php forever.
+# Wait until TCP to MYSQL_HOST succeeds (default up to 10 minutes).
+MYSQL_WAIT_MAX_SECONDS="${MYSQL_WAIT_MAX_SECONDS:-600}"
+if [ -n "${MYSQL_HOST:-}" ]; then
+    echo "render-openemr-bootstrap: waiting for MySQL at ${MYSQL_HOST}:${MYSQL_PORT} (max ${MYSQL_WAIT_MAX_SECONDS}s)..."
+    elapsed=0
+    while [ "$elapsed" -lt "$MYSQL_WAIT_MAX_SECONDS" ]; do
+        if php <<'PHP'
+<?php
+declare(strict_types=1);
+$host = getenv('MYSQL_HOST') ?: '';
+$port = (int) (getenv('MYSQL_PORT') ?: '3306');
+if ($host === '') {
+    exit(1);
+}
+$errno = 0;
+$errstr = '';
+$fp = @fsockopen($host, $port, $errno, $errstr, 2);
+if ($fp !== false) {
+    fclose($fp);
+    exit(0);
+}
+exit(1);
+PHP
+        then
+            echo "render-openemr-bootstrap: MySQL is accepting connections."
+            break
+        fi
+        if [ "$elapsed" -gt 0 ] && [ $((elapsed % 30)) -eq 0 ]; then
+            echo "render-openemr-bootstrap: still waiting (${elapsed}s elapsed)..."
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    if ! php <<'PHP'
+<?php
+declare(strict_types=1);
+$host = getenv('MYSQL_HOST') ?: '';
+$port = (int) (getenv('MYSQL_PORT') ?: '3306');
+if ($host === '') {
+    exit(1);
+}
+$errno = 0;
+$errstr = '';
+$fp = @fsockopen($host, $port, $errno, $errstr, 2);
+if ($fp !== false) {
+    fclose($fp);
+    exit(0);
+}
+exit(1);
+PHP
+    then
+        echo "render-openemr-bootstrap: WARNING: MySQL still not reachable after ${MYSQL_WAIT_MAX_SECONDS}s; openemr.sh may fail quick setup. Check DB service and MYSQL_HOST." >&2
+    fi
+fi
 
 if [ -n "${MYSQL_HOST:-}" ] && [ -f "$SQLCONF" ]; then
     php <<'PHP'
