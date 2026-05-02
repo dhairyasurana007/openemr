@@ -25,7 +25,9 @@
 #
 # ## Names and regions
 #
-# - Edit **region** on all services if you do not use Oregon (they must match for private networking).
+# - **Region:** All services use `virginia` (US East). They must match for private networking.
+#   If Virginia is unavailable for your workspace or instance type, set every `region` below to
+#   `ohio` (Render’s other US region east of Oregon). Do not mix regions across services.
 # - Edit **name** under each service to adopt an existing Render service instead of creating a new one.
 #
 # ## Billing / plans
@@ -45,7 +47,7 @@ services:
   - type: pserv
     name: openemr-mysql
     runtime: image
-    region: oregon
+    region: virginia
     plan: starter
     # Use library/ + patch tag — Render rejects some short tags (e.g. mariadb:11.8).
     image:
@@ -67,7 +69,7 @@ services:
   - type: web
     name: openemr-web
     runtime: docker
-    region: oregon
+    region: virginia
     dockerfilePath: ./Dockerfile
     plan: starter
     healthCheckPath: /meta/health/readyz
@@ -116,7 +118,7 @@ services:
   - type: web
     name: copilot-agent
     runtime: docker
-    region: oregon
+    region: virginia
     dockerfilePath: ./docker/clinical-copilot/copilot-agent/Dockerfile
     dockerContext: ./docker/clinical-copilot/copilot-agent
     plan: starter

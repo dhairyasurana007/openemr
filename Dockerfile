@@ -6,6 +6,12 @@ WORKDIR /var/www/localhost/htdocs/openemr
 # Railway deploys this workspace state instead of the upstream image code.
 COPY . .
 
+# ccdaservice/node_modules is omitted from the Docker build context (.dockerignore). Reinstall so
+# flex `openemr.sh` permission passes and nested paths (e.g. oe-schematron-service) exist.
+RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \
+    cd ccdaservice && npm install --unsafe-perm --omit=dev && cd /var/www/localhost/htdocs/openemr; \
+    fi
+
 # OpenEMR installer expects this file to be writable during first-time setup.
 RUN mkdir -p sites/default \
     && touch sites/default/sqlconf.php \
