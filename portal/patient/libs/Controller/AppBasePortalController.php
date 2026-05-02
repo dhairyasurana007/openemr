@@ -81,10 +81,19 @@ class AppBasePortalController extends PortalController
     }
 
     /**
-     * Helper utility that calls RenderErrorJSON
-     * @param Exception
+     * Portal forms can submit optional numeric selects as empty strings.
      */
-    protected function RenderExceptionJSON(Exception $exception)
+    protected function SafeGetOptionalIntVal($json, $prop, $default = 0)
+    {
+        $value = $this->SafeGetVal($json, $prop, $default);
+        return ($value === '' || $value === null) ? $default : $value;
+    }
+
+    /**
+     * Helper utility that calls RenderErrorJSON
+     * @param \Throwable
+     */
+    protected function RenderExceptionJSON(\Throwable $exception)
     {
         $this->RenderErrorJSON($exception->getMessage(), null, $exception);
     }
@@ -103,7 +112,10 @@ class AppBasePortalController extends PortalController
 
         if ($errors != null) {
             foreach ($errors as $key => $val) {
-                $err->errors[lcfirst((string) $key)] = $val;
+                if (is_array($val)) {
+                    $val = implode(', ', array_map('strval', $val));
+                }
+                $err->errors[lcfirst((string) $key)] = (string) $val;
             }
         }
 

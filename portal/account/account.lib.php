@@ -346,7 +346,6 @@ function doCredentials($pid, $resetPass = false, $resetPassEmail = ''): bool
     $session = SessionWrapperFactory::getInstance()->getActiveSession();
     $globalsBag = OEGlobalsBag::getInstance();
     $newpd = sqlQuery("SELECT id,fname,mname,lname,email,email_direct, providerID FROM `patient_data` WHERE `pid` = ?", [$pid]);
-    $user = sqlQueryNoLog("SELECT users.username FROM users WHERE authorized = 1 And id = ?", [$newpd['providerID']]);
 
     // ensure pid exists
     if (empty($newpd)) {
@@ -359,6 +358,7 @@ function doCredentials($pid, $resetPass = false, $resetPassEmail = ''): bool
             return false;
         }
     }
+    $user = sqlQueryNoLog("SELECT users.username FROM users WHERE authorized = 1 And id = ?", [$newpd['providerID']]);
 
     // ensure email is valid
     if ($resetPass) {

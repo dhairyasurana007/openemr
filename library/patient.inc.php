@@ -1044,26 +1044,45 @@ function newPatientData(
     $hipaa_message = "",
     $regdate = ""
 ) {
+    $optionalInt = static function ($value, $default = null) {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+        return ($validated === false) ? $default : (int) $validated;
+    };
+
+    $optionalDate = static function ($value) {
+        return empty($value) ? null : $value;
+    };
 
     $fitness = 0;
     $referral_source = '';
     if ($pid) {
         $rez = sqlQuery("select id, fitness, referral_source from patient_data where pid = ?", [$pid]);
         // Check for brain damage:
-        if ($db_id != $rez['id']) {
+        if ($rez && $db_id != $rez['id']) {
             $errmsg = "Internal error: Attempt to change patient_data.id from '" .
               text($rez['id']) . "' to '" . text($db_id) . "' for pid '" . text($pid) . "'";
             die($errmsg);
         }
 
-        $fitness = $rez['fitness'];
-        $referral_source = $rez['referral_source'];
+        if ($rez) {
+            $fitness = $rez['fitness'];
+            $referral_source = $rez['referral_source'];
+        }
     }
 
     // Get the default price level.
     $lrow = sqlQuery("SELECT option_id FROM list_options WHERE " .
       "list_id = 'pricelevel' AND activity = 1 ORDER BY is_default DESC, seq ASC LIMIT 1");
     $pricelevel = empty($lrow['option_id']) ? '' : $lrow['option_id'];
+    $DOB = $optionalDate($DOB);
+    $financial_review = $optionalDate($financial_review);
+    $regdate = $optionalDate($regdate);
+    $providerID = $optionalInt($providerID);
+    $pharmacy_id = $optionalInt($pharmacy_id, 0);
 
     $id = QueryUtils::sqlInsert(
         "REPLACE INTO patient_data SET

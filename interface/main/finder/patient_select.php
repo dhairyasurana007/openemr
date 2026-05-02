@@ -259,9 +259,9 @@ if ($popup) {
         $result = collectItemizedPatientsCdrReport($report_id, $itemized_test_id, $pass_id, $numerator_label, false, $sqllimit, $fstart);
     }
 } else {
-    $patient = $_REQUEST['patient'];
-    $findBy  = $_REQUEST['findBy'];
-    $searchFields = $_REQUEST['searchFields'];
+    $patient = $_REQUEST['patient'] ?? '';
+    $findBy  = $_REQUEST['findBy'] ?? '';
+    $searchFields = $_REQUEST['searchFields'] ?? '';
 
     echo "<input type='hidden' name='patient' value='" . attr($patient) . "' />\n";
     echo "<input type='hidden' name='findBy'  value='" . attr($findBy) . "' />\n";

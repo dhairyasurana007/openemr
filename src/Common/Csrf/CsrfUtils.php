@@ -50,13 +50,6 @@ class CsrfUtils
     {
         $privateKey = $session->get('csrf_private_key', null);
         if ($privateKey === null || $privateKey === '') {
-            // Same lazy init as OAuth2AuthorizationListener: authenticated requests may
-            // reach interface scripts without having loaded main_screen.php (e.g. new tab,
-            // reverse proxy, or multi-instance session stores that did not persist the key).
-            self::setupCsrfKey($session);
-            $privateKey = $session->get('csrf_private_key', null);
-        }
-        if ($privateKey === null || $privateKey === '') {
             throw new RuntimeException("OpenEMR is potentially not secure because CSRF key is empty.");
         }
         return substr(hash_hmac('sha256', $subject, (string) $privateKey), 0, 40);
