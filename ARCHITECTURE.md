@@ -9,24 +9,24 @@ It supports three main use cases:
 - **In-room follow-up question:** during the visit, answer pointed chart questions quickly (for example, lab trends, current dose, referral status).
 - **Critical flag surfacing:** highlight high-risk items such as possible medication interactions, unaddressed abnormal labs, and overdue preventive care.
 
-Production deployment runs on **AWS** (BAA-backed account) in a private VPC with HTTPS-only ingress. The default production footprint is **6 containers**:
+Production deployment runs on **AWS** (BAA-backed account) in a private VPC with HTTPS-only ingress. The default **in-VPC** footprint is **4 containers**:
 - `openemr-web` (PHP/Laminas app)
 - `openemr-mysql` (clinical database)
-- `copilot-agent` (Python/FastAPI orchestration service)
+- `copilot-agent` (Python/FastAPI HTTP service with LangChain orchestration)
 - `nginx` (reverse proxy/TLS termination)
-- `langfuse` (LLM observability UI/API)
-- `langfuse-postgres` (Langfuse metadata store)
 
-Redis is added as a seventh container when scaling to multi-instance agent replicas or queued pre-generation jobs.
+**LangSmith** (managed, LangChain-native tracing and evals) is used for LLM observability; it is **not** part of that container count—the agent sends **metadata-only** traces (no PHI payloads) to LangSmith per your configuration and contractual posture.
+
+Redis is added as a **fifth** container when scaling to multi-instance agent replicas or queued pre-generation jobs.
 
 
 Stack choices were made to fit OpenEMR realities and clinical risk constraints:
 - **OpenEMR Laminas/Zend custom module (UI integration):** chosen to mount the panel inside the existing encounter workflow without forking core OpenEMR screens. This keeps deployment and upgrades cleaner while preserving native auth/session context.
-- **Python + FastAPI agent service (orchestration layer):** chosen for mature LLM tooling, clean async request handling, and quick iteration on retrieval/verification logic. Keeping the agent as a separate service also isolates AI complexity from core OpenEMR PHP code.
+- **Python + FastAPI agent service with LangChain (orchestration layer):** LangChain supplies chains, tool binding, and structured model calls; FastAPI exposes a small async HTTP surface. Together they support rapid iteration on retrieval and verification while isolating AI complexity from core OpenEMR PHP code.
 - **OpenEMR REST API + service-layer access (data retrieval):** chosen over ad-hoc SQL so retrieval uses established OpenEMR domain paths, reducing schema-coupling risk and helping enforce consistent record filtering and structure.
 - **Two-stage verification (pre-LLM context bounds + post-LLM source checks):** chosen to minimize hallucination risk by constraining what the model can claim and then auditing response claims against retrieved evidence.
-- **Claude Haiku/Sonnet model path (synthesis):** chosen for strong summarization and instruction-following quality, with model tiering to balance latency/cost (faster path for routine synthesis, stronger path for harder Q&A).
-- **Langfuse self-hosted + OpenEMR `ai_audit_log` (observability/audit):** chosen to maintain operational visibility (latency, tool traces, failures, token usage) while keeping PHI governance tighter and audit trails inside controlled infrastructure.
+- **OpenRouter (synthesis and Q&A):** chosen as a single integration point to multiple vetted models via OpenRouter’s API, with LangChain’s chat model bindings. Model IDs and policies (latency, cost, zero-data retention where required) are selected explicitly—for example faster models for routine briefing and stronger models for harder Q&A.
+- **LangSmith + OpenEMR `ai_audit_log` (observability/audit):** LangSmith integrates directly with LangChain for runs, tool spans, latency, and token usage. Clinical audit evidence remains in OpenEMR; LangSmith must receive only non-PHI trace fields, with enterprise agreements and project settings aligned to your compliance requirements.
 
 Design priorities:
 - Fast retrieval over broad chat behavior
@@ -68,7 +68,7 @@ Design priorities:
                 v
   +-----------------------------+
   | Agent Service               |
-  | (Python + FastAPI)          |
+  | (FastAPI + LangChain)       |
   | starts pre-generation       |
   +-----------------------------+
                 |
@@ -93,7 +93,7 @@ Design priorities:
                 v
   +-----------------------------+
   | AI Synthesis Engine         |
-  | (Claude Haiku/Sonnet API)   |
+  | (LangChain + OpenRouter)    |
   | creates pre-visit summary   |
   +-----------------------------+
                 |
@@ -124,7 +124,7 @@ Design priorities:
                 v
   +-----------------------------+
   | Agent Q&A Path              |
-  | (Python + FastAPI)          |
+  | (FastAPI + LangChain)       |
   +-----------------------------+
                 |
                 v
@@ -148,7 +148,7 @@ Design priorities:
                 v
   +-----------------------------+
   | AI Synthesis Engine         |
-  | (Claude Haiku/Sonnet API)   |
+  | (LangChain + OpenRouter)    |
   | direct grounded answer      |
   +-----------------------------+
                 |
@@ -170,7 +170,7 @@ Design priorities:
                 v
   +-----------------------------+
   | Agent Service               |
-  | (Python + FastAPI)          |
+  | (FastAPI + LangChain)       |
   | flag detection path         |
   +-----------------------------+
                 |
@@ -217,7 +217,7 @@ Design priorities:
   (Laminas/Zend custom module)
 2. **Agent Service**  
    Runs retrieval orchestration, guardrails, synthesis, and response shaping.
-  (Python + FastAPI)
+  (Python + FastAPI + LangChain; LLM calls via OpenRouter)
 
 3. **Auth Guard**  
    Verifies physician-patient access before data fetch.
@@ -229,7 +229,7 @@ Design priorities:
   (pre-LLM context bounding + post-LLM source checks)
 6. **Audit/Observability**  
    Records traces, latency, and outcomes without PHI field values.
-  (Langfuse self-hosted + OpenEMR ai_audit_log)
+  (LangSmith + OpenEMR ai_audit_log)
 
 
 ---
@@ -272,8 +272,8 @@ If a dependency exceeds budget, return partial output with explicit gap disclosu
 ## 7. PHI, Audit, and Safety
 
 - PHI egress is controlled and minimized.
-- BAA with model provider is required before production PHI use.
-- Traces store metadata (timing, tool path, verification status), not PHI values.
+- Written compliance posture with **OpenRouter**, each **routed model provider** you enable, and **LangSmith** (and BAAs or equivalents where PHI-adjacent or PHI-containing workflows are involved) is required before production PHI use; treat gateways and trace hosts as part of the regulated data path.
+- Traces store metadata (timing, tool path, verification status), not PHI values; disable or redact inputs/outputs in LangSmith where needed so payloads never contain identifiable clinical content.
 - Audit log records request metadata and response integrity hash.
 - Session context is isolated per physician-patient encounter.
 
@@ -282,7 +282,8 @@ If a dependency exceeds budget, return partial output with explicit gap disclosu
 ## 8. Production Deployment and Operations
 
 - **Environment model:** separate staging and production environments with config parity; production runs only with approved PHI controls.
-- **Runtime topology:** OpenEMR app, MySQL, agent service, and observability stack run as isolated services behind HTTPS with private network boundaries.
+- **Runtime topology:** OpenEMR app, MySQL, agent service, and edge proxy run in the private VPC behind HTTPS. LangSmith is a managed dependency outside the VPC boundary; network egress and trace content policies must reflect that split.
+- **Reference Compose (dev / bring-up):** a Docker Compose stack matching the four in-VPC containers plus an optional Redis profile (`--profile redis`) is maintained at [`docker/clinical-copilot/`](docker/clinical-copilot/). It uses a self-signed edge certificate and pinned upstream images suitable for local integration—not a substitute for production TLS, secrets management, or AWS hardening.
 - **Reliability:** health checks, restart policies, and rollback-ready versioned deploys are required for every release.
 - **Data protection:** encryption in transit and at rest, routine backups, and tested restore procedures are mandatory.
 - **Secrets management:** API keys and credentials are managed through a secrets manager and rotated on a defined schedule.
@@ -347,7 +348,7 @@ If a dependency exceeds budget, return partial output with explicit gap disclosu
 ## 11. Preconditions for Real Clinical Use
 
 1. Patient-scoping and authorization hardening are deployed and validated.
-2. PHI governance controls (including BAA) are in place.
+2. PHI governance controls are in place (including agreements covering OpenRouter, selected upstream models, and LangSmith trace handling).
 3. Audit logging and encryption at rest are verified.
 4. Adversarial and missing-data evals pass with no unsafe failures.
 5. Physician review confirms outputs are accurate and useful in real workflow.

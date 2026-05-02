@@ -1,0 +1,121 @@
+# Clinical Co-Pilot — container stack aligned with ARCHITECTURE.md (repo root).
+#
+# Usage (from this directory):
+#   docker compose up --build --detach
+#   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
+#   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/health
+#
+# Optional Redis (5th container) for agent replicas / job queues:
+#   docker compose --profile redis up --build --detach
+#
+# Secrets: copy values into a local `.env` (never commit). LangSmith / OpenRouter are external.
+#   OPENROUTER_API_KEY=...
+#   LANGCHAIN_API_KEY=...   # LangSmith
+#   LANGCHAIN_TRACING_V2=true
+
+name: clinical-copilot
+
+services:
+  openemr-mysql:
+    container_name: openemr-mysql
+    restart: unless-stopped
+    image: mariadb:11.8.6@sha256:78a5047d3ba33975f183f183c2464cc7f1eab13ec8667e57cc9a5821d6da7577
+    command: ['mariadbd', '--character-set-server=utf8mb4']
+    volumes:
+      - openemr_database:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/healthcheck.sh', '--su-mysql', '--connect', '--innodb_initialized']
+      start_period: 1m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+
+  openemr-web:
+    container_name: openemr-web
+    restart: unless-stopped
+    image: openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+    expose:
+      - '80'
+      - '443'
+    volumes:
+      - openemr_logs:/var/log
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+    environment:
+      MYSQL_HOST: openemr-mysql
+      MYSQL_ROOT_PASS: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: ${MYSQL_USER:-openemr}
+      MYSQL_PASS: ${MYSQL_PASS:-openemr}
+      OE_USER: ${OE_USER:-admin}
+      OE_PASS: ${OE_PASS:-pass}
+      # Match the public URL browsers use (nginx TLS port). Adjust for real deployments.
+      OPENEMR_SETTING_site_addr_oath: ${OPENEMR_SITE_ADDR:-https://localhost:8443}
+    depends_on:
+      openemr-mysql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/curl
+        - --fail
+        - --insecure
+        - --location
+        - --show-error
+        - --silent
+        - https://localhost/meta/health/readyz
+      start_period: 3m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    build:
+      context: ./nginx
+    ports:
+      - '${COPILOT_HTTP_PORT:-8080}:80'
+      - '${COPILOT_HTTPS_PORT:-8443}:443'
+    depends_on:
+      openemr-web:
+        condition: service_healthy
+
+  copilot-agent:
+    container_name: copilot-agent
+    restart: unless-stopped
+    build:
+      context: ./copilot-agent
+    ports:
+      - '${COPILOT_AGENT_PORT:-8000}:8000'
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-clinical-copilot}
+      REDIS_URL: ${REDIS_URL:-}
+
+  redis:
+    container_name: copilot-redis
+    profiles: [redis]
+    restart: unless-stopped
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - copilot_redis:/data
+    expose:
+      - '6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  openemr_database: {}
+  openemr_logs: {}
+  openemr_sites: {}
+  copilot_redis: {}
