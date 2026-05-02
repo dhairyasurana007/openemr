@@ -116,6 +116,11 @@ if ($siteAddr !== false && $siteAddr !== '') {
 
 $installer = new Installer($installSettings, new OpenEMR\Common\Logging\SystemLogger());
 
+fwrite(STDOUT, "openemr-auto-install: running quick_install (schema load can take several minutes; Render may log \"No open ports\" until Apache starts after this).\n");
+if (\function_exists('fflush')) {
+    @fflush(STDOUT);
+}
+
 if (!$installer->quick_install()) {
     fwrite(STDERR, 'openemr-auto-install: ERROR: ' . $installer->error_message . "\n");
     exit(1);
