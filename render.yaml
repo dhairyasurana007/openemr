@@ -1,18 +1,32 @@
-# Render Blueprint: OpenEMR web + private MariaDB on the same private network.
-# Deploy: connect this repo in Render → Blueprint → apply (or "New" → Blueprint).
+# Render Blueprint — OpenEMR web + private MariaDB (internal DNS wired for you).
 #
-# Requirements:
-# - Private services are not on the free tier; the DB service needs a paid instance type.
-# - All services must stay in the same region for internal hostnames to resolve.
+# ## Apply this (first time or switching from manual services)
 #
-# This replaces ad-hoc env: MYSQL_HOST is injected from the MariaDB service (not "openemr-mysql").
-# The Dockerfile CMD runs contrib/render/render-openemr-bootstrap.sh so sqlconf.php picks up MYSQL_HOST
-# even if an older deploy left a Docker-Compose hostname on disk.
+# 1. Commit and push this file to the branch Render builds from (often `main`).
+# 2. Dashboard → Blueprints → **New Blueprint** → select this GitHub/GitLab repo.
+# 3. Render detects `render.yaml` at the repo root (or set **Blueprint Path** if you moved it).
+# 4. Review the **preview**: it will create/update **two** services:
+#    - `openemr-mysql` — private MariaDB (not on the public internet).
+#    - `openemr-copilot-agent` — public web app (your Dockerfile).
+# 5. **Create / update** the Blueprint. First apply can take several minutes (DB disk + image pull).
+# 6. After deploy: open the web URL; bootstrap runs `openemr-auto-install.php` (no setup.php if env is correct).
 #
-# If you stay on setup.php after deploy: (1) Check web logs for "Running quick setup" / errors.
-# (2) Redeploy after the bootstrap waits for MySQL (see contrib/render/render-openemr-bootstrap.sh).
-# (3) Clear the web service's persistent disk if a previous failed install left $config=0 on disk.
-# (4) Or finish setup.php once using the same DB host Render shows for openemr-mysql (private hostname).
+# ## Names and regions
+#
+# - Edit **region** on both services if you do not use Oregon (web + DB must match).
+# - Edit **name** under `web` to match an *existing* web service if you want the Blueprint to
+#   adopt that service instead of creating a new one.
+#
+# ## Billing / plans
+#
+# - Private services need a **paid** instance type on Render (see Render pricing).
+# - `plan: starter` must be valid for your workspace; change if the sync UI errors.
+#
+# ## Troubleshooting
+#
+# - `MYSQL_HOST` is injected as the **private hostname** of `openemr-mysql` (not a Docker Compose name).
+# - If a previous manual deploy failed, clear the web service **persistent disk** (if any) or fix `sites/`.
+# - See `contrib/render/render-openemr-bootstrap.sh` for MySQL wait / install order.
 
 services:
   - type: pserv
@@ -20,8 +34,9 @@ services:
     runtime: image
     region: oregon
     plan: starter
+    # Use library/ + patch tag — Render rejects some short tags (e.g. mariadb:11.8).
     image:
-      url: docker.io/mariadb:11.8
+      url: docker.io/library/mariadb:11.8.6
     disk:
       name: mariadb-data
       mountPath: /var/lib/mysql
@@ -37,15 +52,13 @@ services:
         generateValue: true
 
   - type: web
-    # Use the same name as your existing Render web service so the Blueprint updates it in place.
     name: openemr-copilot-agent
     runtime: docker
     region: oregon
     dockerfilePath: ./Dockerfile
     plan: starter
+    healthCheckPath: /
     envVars:
-      # Render defaults PORT=10000; OpenEMR’s Apache image listens on 80. Without this,
-      # deploy logs show “No open ports detected” even when the app is healthy.
       - key: PORT
         value: "80"
       - key: MYSQL_HOST
@@ -67,8 +80,13 @@ services:
           name: openemr-mysql
           type: pserv
           envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: openemr
       - key: MANUAL_SETUP
         value: "no"
-      # Optional: override public site URL. If unset, bootstrap uses RENDER_EXTERNAL_URL when present.
+      # Set in Dashboard after first deploy if you need a fixed public OAuth URL.
       - key: OPENEMR_SETTING_site_addr_oath
+        sync: false
+      # Optional: set a strong initial OpenEMR admin password (otherwise default is weak).
+      - key: OE_PASS
         sync: false

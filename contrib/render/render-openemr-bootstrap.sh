@@ -50,7 +50,13 @@ $port = (int) (getenv('MYSQL_PORT') ?: '3306');
 $errno = 0;
 $errstr = '';
 @fsockopen($host, $port, $errno, $errstr, 2);
-fwrite(STDOUT, "render-openemr-bootstrap: TCP probe to {$host}:{$port} -> errno={$errno} errstr=" . str_replace(["\r", "\n"], ' ', (string) $errstr) . "\n");
+$errOneLine = str_replace(["\r", "\n"], ' ', (string) $errstr);
+fwrite(STDOUT, "render-openemr-bootstrap: TCP probe to {$host}:{$port} -> errno={$errno} errstr={$errOneLine}\n");
+$e = (string) $errstr;
+if ($e !== '' && (str_contains($e, 'getaddrinfo') || str_contains($e, 'Name does not resolve') || str_contains($e, 'Temporary failure in name resolution'))) {
+    fwrite(STDERR, "render-openemr-bootstrap: HINT: MYSQL_HOST must resolve inside this container. "
+        . "On Render use the Internal Hostname from your private MariaDB/MySQL service (not Docker Compose names like openemr-mysql).\n");
+}
 PHP
             echo "render-openemr-bootstrap: still waiting (${elapsed}s elapsed)..."
         fi
