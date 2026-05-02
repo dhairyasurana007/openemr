@@ -1,5 +1,9 @@
 # Clinical Co-Pilot — container stack aligned with ARCHITECTURE.md (repo root).
 #
+# If you use setup.php "Server Host": use the MySQL hostname or IP only (no https://).
+# From inside this Compose network that is: openemr-mysql (port 3306 in the separate field).
+# Hosted DB examples look like mysql.example.internal — still a hostname, not a full URL.
+#
 # Usage (from this directory):
 #   docker compose up --build --detach
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
@@ -12,6 +16,15 @@
 #   OPENROUTER_API_KEY=...
 #   LANGCHAIN_API_KEY=...   # LangSmith
 #   LANGCHAIN_TRACING_V2=true
+#
+# Skipping setup.php (automatic install):
+# The official `openemr/openemr` image runs `openemr.sh` on start. It reads
+# `sites/default/sqlconf.php` → `$config`. If `$config` is 0, it runs
+# `auto_configure.php` when MYSQL_HOST and MYSQL_ROOT_PASS are non-empty and
+# MANUAL_SETUP is not "yes". OPENEMR_SETTING_* does NOT replace that step.
+# If you still see setup.php: check logs for "Running quick setup!" / errors;
+# verify DB is reachable at MYSQL_HOST:3306 from the openemr-web container;
+# remove stale volumes (`docker compose down -v`) if a prior install half-failed.
 
 name: clinical-copilot
 
@@ -50,6 +63,8 @@ services:
       MYSQL_PASS: ${MYSQL_PASS:-openemr}
       OE_USER: ${OE_USER:-admin}
       OE_PASS: ${OE_PASS:-pass}
+      # Must be absent or "no" for the image entrypoint to run auto_configure (skip web setup).
+      MANUAL_SETUP: ${MANUAL_SETUP:-no}
       # Match the public URL browsers use (nginx TLS port). Adjust for real deployments.
       OPENEMR_SETTING_site_addr_oath: ${OPENEMR_SITE_ADDR:-https://localhost:8443}
     depends_on:
