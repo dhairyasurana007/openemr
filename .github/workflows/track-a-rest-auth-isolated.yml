@@ -3,7 +3,7 @@
 # skip-route matching, and API response logging gates — no database.
 #
 # Complements the full `isolated-tests.yml` matrix with a single fast job (PHP 8.2) for branch protection
-# or quick signal on PRs. Script: `composer phpunit-track-a-isolated`.
+# or quick signal on PRs. Runs `composer phpunit-track-a-isolated` (see composer.json scripts).
 
 name: Track A REST auth (isolated)
 
