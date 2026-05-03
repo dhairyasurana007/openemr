@@ -47,11 +47,21 @@ def _invoke_llm_sync(message: str, settings: Settings) -> str:
             "X-Title": settings.openrouter_app_title,
         },
     )
+    # RunnableConfig: tags/metadata only (no user message). Run content still follows LangSmith project data rules.
+    trace_config: dict[str, object] = {
+        "tags": ["clinical-copilot", "v1-chat"],
+        "metadata": {
+            "surface": "v1_chat",
+            "openrouter_model": settings.openrouter_model,
+            "langsmith_project": settings.langchain_project,
+        },
+    }
     response = llm.invoke(
         [
             SystemMessage(content=SUMMARIZER_SYSTEM_PROMPT),
             HumanMessage(content=message),
-        ]
+        ],
+        config=trace_config,
     )
     content = response.content
     if not isinstance(content, str):

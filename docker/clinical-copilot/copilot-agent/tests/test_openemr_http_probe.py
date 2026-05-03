@@ -27,6 +27,10 @@ def _minimal_settings() -> Settings:
         openemr_max_concurrent_requests=2,
         readyz_probe_openemr=False,
         copilot_max_inflight=0,
+        langchain_api_key="",
+        langchain_tracing_v2=False,
+        langchain_project="clinical-copilot",
+        langchain_endpoint="",
     )
 
 

@@ -1,0 +1,37 @@
+##
+# Clinical co-pilot FastAPI agent: Python tests + Docker image build (offline §11-style gates in pytest).
+# Kept separate from PHP isolated tests so agent changes stay visible in Actions without coupling to the PHP matrix.
+
+name: Clinical Copilot Agent
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  copilot-agent:
+    name: Agent (pytest + Docker build)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install agent dependencies and pytest
+      working-directory: docker/clinical-copilot/copilot-agent
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt pytest
+
+    - name: Run copilot-agent tests (includes offline safety gates)
+      working-directory: docker/clinical-copilot/copilot-agent
+      run: python -m pytest tests -v
+
+    - name: Build copilot-agent Docker image (context matches Render)
+      run: docker build -t openemr-copilot-agent:ci -f docker/clinical-copilot/copilot-agent/Dockerfile docker/clinical-copilot/copilot-agent
