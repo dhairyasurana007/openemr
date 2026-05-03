@@ -22,6 +22,7 @@ $core_modules = [
     'FHIR', // Handles FHIR mapped uuid population and other FHIR utility functions
     'CodeTypes', // Handles CodeType mappings and anything else to do with the system of dealing with code types
     'PatientFlowBoard', // Handle any functionality needed for the patient flow board
+    'ClinicalCopilot', // Clinical Co-Pilot panel shell (agent handoff, encounter/schedule hooks)
 ];
 
 // $zendConfigurationPath is loaded using ModulesApplication.php from globals.php

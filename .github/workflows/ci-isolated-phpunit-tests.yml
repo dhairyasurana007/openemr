@@ -96,3 +96,6 @@ jobs:
     - name: Run copilot-agent unit tests
       working-directory: docker/clinical-copilot/copilot-agent
       run: python -m pytest tests
+
+    - name: Build copilot-agent Docker image (context matches Render)
+      run: docker build -t openemr-copilot-agent:ci -f docker/clinical-copilot/copilot-agent/Dockerfile docker/clinical-copilot/copilot-agent
