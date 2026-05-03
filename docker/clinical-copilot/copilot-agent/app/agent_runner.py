@@ -43,11 +43,13 @@ def _default_llm_factory(settings: Settings) -> BaseChatModel:
 
 
 _TOOL_LOOP_INSTRUCTION = (
-    "**Mandatory tool-first behavior:** for **patient chart** questions, call patient-scoped tools "
+    "**Mandatory tool-first behavior:** use **only** the seven registered tools by **exact** name "
+    "(see system prompt); names like ``get`` are invalid. For **patient chart** questions with a "
+    "``patient_uuid``, call patient-scoped tools "
     "(get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
-    "get_referrals_orders_care_gaps) as needed. For **schedule / day / column** questions, call "
-    "list_schedule_slots. For **calendar** views, blocks, and calendar events (not only appointment "
-    "slots), call get_calendar with an appropriate start/end date window. "
+    "get_referrals_orders_care_gaps) as needed. Without a patient UUID, do **not** call those. For "
+    "**schedule / day / column** questions, call list_schedule_slots. For **calendar** views, call "
+    "get_calendar with an appropriate start/end date window. "
     "Call the **minimal** set that covers the question. If a tool returns retrieval_status.ok=false, "
     "do not invent replacements—stop or try a different read. "
     "**No assumptions** in this phase—retrieve facts via tools only."
@@ -127,6 +129,7 @@ def run_chat_with_tools(
             break
 
         name_to_tool = {t.name: t for t in tools}
+        allowed = sorted(name_to_tool.keys())
         for call in tcalls:
             name = call.get("name")
             raw_args = call.get("args") or {}
@@ -144,7 +147,12 @@ def run_chat_with_tools(
                         "status": "unknown_tool",
                     }
                 )
-                err = {"error": "unknown_tool", "tool": name}
+                err = {
+                    "error": "unknown_tool",
+                    "tool": name,
+                    "allowed_tools": allowed,
+                    "hint": "Use an exact tool name from allowed_tools; there is no list-all-patients or generic get.",
+                }
                 messages.append(ToolMessage(content=json.dumps(err), tool_call_id=tool_call_id))
                 continue
             try:

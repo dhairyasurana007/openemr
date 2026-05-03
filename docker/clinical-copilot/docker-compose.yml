@@ -7,6 +7,11 @@
 # Usage (from this directory):
 #   docker compose up --build --detach
 #   First run builds ``openemr-web`` from the repo root Dockerfile (can take several minutes).
+#   Demo physician/clinician users: set ``OPENEMR_AUTO_SEED_STANDARD_ROLES=false`` to disable, or clear
+#   ``OE_SEED_*_USERNAME`` to skip one role (clear clinician username to skip). Two physicians: ``physician1`` / ``physician2``.
+#   ACL titles are English defaults. Per-role ``users`` prefs:
+#   ``OE_SEED_PHYSICIAN_SEE_AUTH`` (default 2), ``OE_SEED_PHYSICIAN_CALENDAR`` (default 1), ``OE_SEED_*_FACILITY_ID``, etc.
+#   See docblock in ``contrib/render/openemr-seed-standard-role-users.php`` for semantics.
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
 #   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
 #   (liveness: /meta/health/livez — cheap; readiness defaults to process-only unless
@@ -98,6 +103,27 @@ services:
       CLINICAL_COPILOT_AGENT_BASE_URL: ${CLINICAL_COPILOT_AGENT_BASE_URL:-http://copilot-agent:8000}
       # Same value as on copilot-agent when set: PHP proxy → agent and agent → OpenEMR retrieval.
       CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
+      # OpenEMR username for ACL on retrieval when using CLINICAL_COPILOT_INTERNAL_SECRET (match ``OE_USER`` in practice).
+      CLINICAL_COPILOT_SERVICE_USERNAME: ${CLINICAL_COPILOT_SERVICE_USERNAME:-admin}
+      # Optional idempotent seed users (Physicians / Clinicians built-in ACL groups). Demo passwords — change for real use.
+      OPENEMR_AUTO_SEED_STANDARD_ROLES: ${OPENEMR_AUTO_SEED_STANDARD_ROLES:-true}
+      OE_SEED_PHYSICIAN1_USERNAME: ${OE_SEED_PHYSICIAN1_USERNAME:-physician1}
+      OE_SEED_PHYSICIAN2_USERNAME: ${OE_SEED_PHYSICIAN2_USERNAME:-physician2}
+      OE_SEED_PHYSICIAN_PASSWORD: ${OE_SEED_PHYSICIAN_PASSWORD:-pass}
+      # Shared defaults for both physicians; override per user with OE_SEED_PHYSICIAN1_* / OE_SEED_PHYSICIAN2_*.
+      OE_SEED_PHYSICIAN_SEE_AUTH: ${OE_SEED_PHYSICIAN_SEE_AUTH:-2}
+      OE_SEED_PHYSICIAN_CALENDAR: ${OE_SEED_PHYSICIAN_CALENDAR:-1}
+      OE_SEED_PHYSICIAN_CAL_UI: ${OE_SEED_PHYSICIAN_CAL_UI:-3}
+      OE_SEED_PHYSICIAN_FACILITY_ID: ${OE_SEED_PHYSICIAN_FACILITY_ID:-}
+      OE_SEED_CLINICIAN_USERNAME: ${OE_SEED_CLINICIAN_USERNAME:-clinician}
+      OE_SEED_CLINICIAN_PASSWORD: ${OE_SEED_CLINICIAN_PASSWORD:-pass}
+      OE_SEED_CLINICIAN_FNAME: ${OE_SEED_CLINICIAN_FNAME:-Clinician}
+      OE_SEED_CLINICIAN_LNAME: ${OE_SEED_CLINICIAN_LNAME:-Demo}
+      # Default 3 (All) for schedulers; calendar 0=not a listed provider (still schedule via ACL).
+      OE_SEED_CLINICIAN_SEE_AUTH: ${OE_SEED_CLINICIAN_SEE_AUTH:-3}
+      OE_SEED_CLINICIAN_CALENDAR: ${OE_SEED_CLINICIAN_CALENDAR:-0}
+      OE_SEED_CLINICIAN_CAL_UI: ${OE_SEED_CLINICIAN_CAL_UI:-3}
+      OE_SEED_CLINICIAN_FACILITY_ID: ${OE_SEED_CLINICIAN_FACILITY_ID:-}
     depends_on:
       openemr-mysql:
         condition: service_healthy
