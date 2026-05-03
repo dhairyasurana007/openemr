@@ -11,9 +11,20 @@
 
 namespace ClinicalCopilot;
 
+use Laminas\Mvc\MvcEvent;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotMenuSubscriber;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
 class Module
 {
     public const NAMESPACE_NAME = 'ClinicalCopilot';
+
+    public function onBootstrap(MvcEvent $e): void
+    {
+        $serviceManager = $e->getApplication()->getServiceManager();
+        $dispatcher = $serviceManager->get(EventDispatcherInterface::class);
+        $dispatcher->addSubscriber($serviceManager->get(ClinicalCopilotMenuSubscriber::class));
+    }
 
     /**
      * @return array<string, mixed>

@@ -11,13 +11,16 @@
 
 namespace OpenEMR\ZendModules\ClinicalCopilot;
 
+use Laminas\ServiceManager\Factory\InvokableFactory;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoffFactory;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotMenuSubscriber;
 
 return [
     'service_manager' => [
         'factories' => [
             AgentRuntimeHandoff::class => AgentRuntimeHandoffFactory::class,
+            ClinicalCopilotMenuSubscriber::class => InvokableFactory::class,
         ],
     ],
 ];
