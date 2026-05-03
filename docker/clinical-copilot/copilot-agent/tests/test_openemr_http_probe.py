@@ -14,7 +14,7 @@ from app.settings import Settings
 def _minimal_settings() -> Settings:
     return Settings(
         openrouter_api_key="",
-        openrouter_model="openai/gpt-4o-mini",
+        openrouter_model="anthropic/claude-3.5-haiku",
         openrouter_http_timeout_s=30.0,
         openrouter_http_referer="https://www.open-emr.org/",
         openrouter_app_title="OpenEMR Clinical Co-Pilot",
