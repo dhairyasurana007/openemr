@@ -6,6 +6,35 @@ WORKDIR /var/www/localhost/htdocs/openemr
 # Railway deploys this workspace state instead of the upstream image code.
 COPY . .
 
+# Track A isolated REST auth tests (no DB). Fails the image build on regressions (`composer phpunit-track-a-isolated`).
+# Skip for a faster local build: docker build --build-arg OPENEMR_RUN_TRACK_A_TESTS=0 .
+ARG OPENEMR_RUN_TRACK_A_TESTS=1
+RUN if [ "$OPENEMR_RUN_TRACK_A_TESTS" != "1" ]; then exit 0; fi; \
+    set -eux; \
+    if command -v apt-get >/dev/null 2>&1; then \
+      export DEBIAN_FRONTEND=noninteractive; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends ca-certificates curl git unzip; \
+    elif command -v apk >/dev/null 2>&1; then \
+      apk add --no-cache ca-certificates curl git unzip; \
+    else \
+      echo "OPENEMR_RUN_TRACK_A_TESTS=1 but no apt-get or apk; install curl and Composer prerequisites." >&2; \
+      exit 1; \
+    fi; \
+    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; \
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --ignore-platform-reqs --no-interaction --prefer-dist --no-scripts; \
+    COMPOSER_ALLOW_SUPERUSER=1 composer phpunit-track-a-isolated; \
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --ignore-platform-reqs --no-interaction --no-dev --prefer-dist --no-scripts; \
+    rm -f /usr/local/bin/composer; \
+    rm -rf /root/.composer; \
+    if command -v apt-get >/dev/null 2>&1; then \
+      apt-get purge -y git unzip; \
+      apt-get autoremove -y; \
+      rm -rf /var/lib/apt/lists/*; \
+    elif command -v apk >/dev/null 2>&1; then \
+      apk del git unzip; \
+    fi
+
 # ccdaservice/node_modules is omitted from the Docker build context (.dockerignore). Reinstall so
 # flex `openemr.sh` permission passes and nested paths (e.g. oe-schematron-service) exist.
 RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \

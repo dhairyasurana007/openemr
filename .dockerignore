@@ -4,7 +4,7 @@
 .cursor
 node_modules
 vendor
-tests
+# tests/ must stay in the build context so the Dockerfile can run `composer phpunit-track-a-isolated`.
 docker
 Documentation
 agent-transcripts
