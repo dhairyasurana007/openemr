@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.llm_prompts import SUMMARIZER_SYSTEM_PROMPT
 from app.settings import Settings
 
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -32,7 +33,7 @@ def _verify_internal_secret(settings: Settings, header_value: str | None) -> Non
 
 
 def _invoke_llm_sync(message: str, settings: Settings) -> str:
-    from langchain_core.messages import HumanMessage
+    from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(
@@ -46,7 +47,12 @@ def _invoke_llm_sync(message: str, settings: Settings) -> str:
             "X-Title": settings.openrouter_app_title,
         },
     )
-    response = llm.invoke([HumanMessage(content=message)])
+    response = llm.invoke(
+        [
+            SystemMessage(content=SUMMARIZER_SYSTEM_PROMPT),
+            HumanMessage(content=message),
+        ]
+    )
     content = response.content
     if not isinstance(content, str):
         return str(content)
