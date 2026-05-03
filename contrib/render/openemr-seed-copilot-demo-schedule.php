@@ -1,9 +1,10 @@
 <?php
 
 /**
- * First-boot seeding of **40 demo patients** (20 for ``physician1``, 20 for ``physician2``) and **back-to-back**
- * calendar appointments on one day (idempotent via ``pubpid`` prefixes ``CCSEED-P1-`` / ``CCSEED-P2-`` and
- * ``pc_hometext`` marker ``CCSEED_DEMO_APPT``).
+ * First-boot seeding of **up to 40 demo patients** (20 per configured calendar provider by default:
+ * ``physician1`` and ``physician2``) and **back-to-back** calendar appointments on one day (idempotent via
+ * ``pubpid`` prefixes such as ``CCSEED-P1-``, ``CCSEED-P2-``, ``CCSEED-ADMIN-`` and ``pc_hometext`` marker
+ * ``CCSEED_DEMO_APPT``).
  *
  * Runs after the database is configured whenever this script executes, including flex ``auto_configure.php``
  * first boot. Set ``OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE`` to ``false``, ``no``, ``off``, or ``0`` to skip.
@@ -12,6 +13,9 @@
  *
  * - ``OE_SEED_COPILOT_PROVIDER_USERNAME`` — first calendar provider (``users.username``); default ``physician1``.
  * - ``OE_SEED_COPILOT_PHYSICIAN2_USERNAME`` — second provider; default ``physician2``.
+ * - ``OE_SEED_COPILOT_SKIP_SECOND_PROVIDER`` — ``true`` / ``yes`` / ``1`` / ``on`` to seed **only** the first provider
+ *   (for example 20 patients + back-to-back slots on ``admin`` when combined with
+ *   ``OE_SEED_COPILOT_PROVIDER_USERNAME=admin``).
  * - ``OE_SEED_COPILOT_SCHEDULE_DATE`` — ``YYYY-MM-DD``; empty = **today** (PHP ``date('Y-m-d')`` in container TZ).
  * - ``OE_SEED_COPILOT_FIRST_START`` — first appointment start ``HH:MM:SS``; default ``09:00:00``.
  * - ``OE_SEED_COPILOT_SLOT_SECONDS`` — duration per slot in seconds; default ``900`` (15 minutes).
@@ -182,6 +186,41 @@ function copilotResolveDefaultFacilityId(): int
     return 3;
 }
 
+/**
+ * Stable segment for ``pubpid`` (``CCSEED-{segment}-NN``). Keeps ``P1`` / ``P2`` for the stock demo usernames.
+ */
+function copilotPubpidSegmentForUsername(string $username): string
+{
+    $u = strtolower(trim($username));
+    if ($u === 'physician1') {
+        return 'P1';
+    }
+    if ($u === 'physician2') {
+        return 'P2';
+    }
+    if ($u === 'admin') {
+        return 'ADMIN';
+    }
+
+    $cleaned = preg_replace('/[^a-z0-9]+/i', '', $u);
+    $slug = strtoupper(is_string($cleaned) ? $cleaned : '');
+    if ($slug === '') {
+        return 'USR';
+    }
+
+    return strlen($slug) > 12 ? substr($slug, 0, 12) : $slug;
+}
+
+function copilotSkipSecondProviderBlock(): bool
+{
+    $raw = getenv('OE_SEED_COPILOT_SKIP_SECOND_PROVIDER');
+    if ($raw === false) {
+        return false;
+    }
+
+    return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
+}
+
 function copilotResolveProviderUserId(string $username): int
 {
     $u = trim($username);
@@ -313,19 +352,24 @@ $noRecur = copilotNoRecurrspec();
 $locSpec = serialize(copilotEmptyLocationSpec());
 $recSerialized = serialize($noRecur);
 
+$firstProviderUsername = trim((string) (getenv('OE_SEED_COPILOT_PROVIDER_USERNAME') ?: 'physician1'));
+$secondProviderUsername = trim((string) (getenv('OE_SEED_COPILOT_PHYSICIAN2_USERNAME') ?: 'physician2'));
+
 /** @var list<array{username:string, defs:list<array{fname:string,lname:string,sex:string,dob:string}>, physicianLabel:string}> */
 $providerBlocks = [
     [
-        'username' => trim((string) (getenv('OE_SEED_COPILOT_PROVIDER_USERNAME') ?: 'physician1')),
+        'username' => $firstProviderUsername,
         'defs' => copilotDemoPatientDefsPhysician1(),
-        'physicianLabel' => 'P1',
-    ],
-    [
-        'username' => trim((string) (getenv('OE_SEED_COPILOT_PHYSICIAN2_USERNAME') ?: 'physician2')),
-        'defs' => copilotDemoPatientDefsPhysician2(),
-        'physicianLabel' => 'P2',
+        'physicianLabel' => copilotPubpidSegmentForUsername($firstProviderUsername),
     ],
 ];
+if (!copilotSkipSecondProviderBlock()) {
+    $providerBlocks[] = [
+        'username' => $secondProviderUsername,
+        'defs' => copilotDemoPatientDefsPhysician2(),
+        'physicianLabel' => copilotPubpidSegmentForUsername($secondProviderUsername),
+    ];
+}
 
 foreach ($providerBlocks as $block) {
     $providerUsername = $block['username'];
