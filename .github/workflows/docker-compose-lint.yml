@@ -1,0 +1,56 @@
+##
+# Lint docker compose files (clinical-copilot stack, ci compose, etc.).
+# Transferred from .github/future-workflows/docker-compose-lint.yml
+
+name: Docker Compose Linting
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dclint:
+    name: Docker Compose Linting
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Get changed docker compose files
+      id: changed-files
+      continue-on-error: true
+      uses: tj-actions/changed-files@v47
+      with:
+        files: |
+          **/*compose*.yml
+          **/*compose*.yaml
+        files_ignore: |
+          .github/**
+
+    - name: Determine files to check
+      id: files-to-check
+      run: |
+        set -x
+        if [[ "${{ steps.changed-files.outcome }}" = success && "${{ steps.changed-files.outputs.any_changed }}" = true ]]; then
+          echo "mode=files" >> "$GITHUB_OUTPUT"
+          echo "files=${{ steps.changed-files.outputs.all_changed_files }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "mode=recursive" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run dclint on changed files
+      if: steps.files-to-check.outputs.mode == 'files'
+      run: |
+        docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ${{ steps.files-to-check.outputs.files }} --exclude .github
+
+    - name: Run dclint recursively
+      if: steps.files-to-check.outputs.mode == 'recursive'
+      run: |
+        docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ci/ docker/ --recursive --exclude .github

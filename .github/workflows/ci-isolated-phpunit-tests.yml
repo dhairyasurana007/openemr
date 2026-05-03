@@ -38,14 +38,22 @@ jobs:
       uses: ./.github/actions/setup-php-composer
       with:
         php-version: ${{ matrix.php-version }}
-        coverage: xdebug
+        # PCOV is much faster than Xdebug for coverage. Only 8.3 collects clover to cut wall-clock on the matrix.
+        coverage: ${{ matrix.php-version == '8.3' && 'pcov' || 'none' }}
 
-    - name: Run isolated tests with coverage
+    - name: Run isolated tests (coverage on PHP 8.3 only)
       run: |
-        vendor/bin/phpunit -c phpunit-isolated.xml \
-                           --testsuite=isolated,unit-isolated \
-                           --coverage-clover=clover.xml \
-                           --log-junit=junit.xml
+        if [ "${{ matrix.php-version }}" = "8.3" ]; then
+          vendor/bin/phpunit -c phpunit-isolated.xml \
+                             --testsuite=isolated,unit-isolated \
+                             --coverage-clover=clover.xml \
+                             --log-junit=junit.xml
+        else
+          vendor/bin/phpunit -c phpunit-isolated.xml \
+                             --testsuite=isolated,unit-isolated \
+                             --no-coverage \
+                             --log-junit=junit.xml
+        fi
 
     - name: Upload test results to Codecov
       if: ${{ !cancelled() }}

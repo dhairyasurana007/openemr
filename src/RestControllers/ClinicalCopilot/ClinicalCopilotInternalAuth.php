@@ -5,8 +5,10 @@
  *
  * When the environment variable CLINICAL_COPILOT_INTERNAL_SECRET is non-empty,
  * every request to co-pilot retrieval routes must include the same value in
- * X-Clinical-Copilot-Internal-Secret (timing-safe compare). When unset or empty,
- * only the normal OAuth/API ACL checks apply (useful for local development).
+ * X-Clinical-Copilot-Internal-Secret (timing-safe compare). The REST kernel runs
+ * ``ClinicalCopilotRetrievalAuthorizationStrategy`` before Bearer auth so these
+ * routes succeed without an OAuth access token. When unset or empty, only the
+ * normal OAuth/API ACL checks apply (useful for local development).
  *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
@@ -24,6 +26,14 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 final class ClinicalCopilotInternalAuth
 {
     public const HEADER_NAME = 'X-Clinical-Copilot-Internal-Secret';
+
+    /**
+     * True when ``CLINICAL_COPILOT_INTERNAL_SECRET`` is set (internal server-to-server mode).
+     */
+    public static function isSecretConfigured(): bool
+    {
+        return self::readConfiguredSecret() !== '';
+    }
 
     /**
      * Enforce optional shared secret between agent (or PHP proxy) and OpenEMR.

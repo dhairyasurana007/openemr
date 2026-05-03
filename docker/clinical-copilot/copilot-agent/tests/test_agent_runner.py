@@ -21,12 +21,15 @@ def _minimal_settings() -> Settings:
         openrouter_app_title="OpenEMR Clinical Co-Pilot",
         clinical_copilot_internal_secret="",
         openemr_internal_hostport="openemr-web:80",
+        openemr_standard_api_path_prefix="/apis/default/api",
+        openemr_http_verify=True,
         openemr_http_timeout_connect_s=1.0,
         openemr_http_timeout_read_s=2.0,
         openemr_http_max_connections=4,
         openemr_http_max_keepalive=2,
         openemr_max_concurrent_requests=2,
         readyz_probe_openemr=False,
+        use_openemr_retrieval=False,
         copilot_max_inflight=0,
         langchain_api_key="",
         langchain_tracing_v2=False,
@@ -65,7 +68,9 @@ def test_two_phase_retrieval_then_grounded_summary() -> None:
         ],
     )
     msg_planner = AIMessage(content="", tool_calls=[])
-    msg_final = AIMessage(content="From retrieved records: glucose 118 mg/dL (structured vitals).")
+    msg_final = AIMessage(
+        content="RETRIEVED_JSON has no vitals or laboratory rows; nothing numeric to report."
+    )
     base = _configure_two_phase_mock(msg_tools=msg_tools, msg_planner_no_tools=msg_planner, msg_final=msg_final)
 
     def factory(_s: Settings) -> BaseChatModel:
@@ -78,7 +83,7 @@ def test_two_phase_retrieval_then_grounded_summary() -> None:
         llm_factory=factory,
     )
 
-    assert "118 mg/dL" in text
+    assert "no vitals" in text.lower() or "nothing" in text.lower() or "empty" in text.lower()
     assert diag["tool_payload_count"] >= 1
     assert diag["verification"]["grounding_ok"] is True
     assert diag.get("summarization_mode") == "json_only_two_phase"

@@ -6,18 +6,18 @@ Clinical Co-Pilot is an agent built into OpenEMR for **family physicians** in **
 
 **Agent scope (see [`USERS.md`](USERS.md)):** the agent is **informative only** — it summarizes and surfaces facts from the record (and, where applicable, schedule or task context). It does **not** write to the chart, orders, problem or medication lists, or patient messages, and does not send communications. It gives **no recommendations**: it does not advise what to prescribe, order, refer, or document, nor operational “what to do next.” It presents what is on file; **plain-language drafts** appear only where a use case explicitly allows them (**UC5**), for the physician to edit. Individual use cases add tighter limits.
 
-**Clinical workflow the architecture supports:** start-of-day and post-lunch **schedule-wide** scans (**UC1**, **UC6**); **nurse pre-visit intake** documented in OpenEMR (vitals, meds, chief complaint, symptoms); **~90 seconds between patients** when the physician opens the encounter and receives the **pre-visit briefing** (**UC2**); **in-room** chart lookups (**UC4**); optional **post-visit patient message draft** from the official record (**UC5**); end-of-day **no-show / missed-appointment sweep** (**UC7**). **UC3** (critical flags) is bundled with **UC2** or available on demand.
+**Clinical workflow the architecture supports:** start-of-day and post-lunch **schedule-wide** scans (**UC1**, **UC6**); **clinician pre-visit intake** documented in OpenEMR (vitals, meds, chief complaint, symptoms); **~90 seconds between patients** when the physician opens the encounter and receives the **pre-visit briefing** (**UC2**); **in-room** chart lookups (**UC4**); optional **post-visit patient message draft** from the official record (**UC5**); end-of-day **no-show / missed-appointment sweep** (**UC7**). **UC3** (critical flags) is bundled with **UC2** or available on demand.
 
 It supports **seven** use cases, numbered **chronologically** by typical clinical day in [`USERS.md`](USERS.md). In brief:
 - **UC1 — Early-morning day summary:** shallow, schedule-wide orientation before the column starts (~20 slots, wide and shallow factual lines per slot).
-- **UC2 — Pre-visit briefing:** on encounter open, synthesis of **today’s nurse intake** and **chart history** in a scannable shape (chief-complaint–led, not a generic dump).
+- **UC2 — Pre-visit briefing:** on encounter open, synthesis of **today’s clinician intake** and **chart history** in a scannable shape (chief-complaint–led, not a generic dump).
 - **UC3 — Critical flag surfacing:** possible medication interactions, unaddressed abnormal labs, overdue preventive care, long-pending referrals; part of UC2, UC1/UC6 “scan hints” when the product surfaces them, or on demand.
 - **UC4 — In-room follow-up question:** during the visit, pointed chart questions (lab trends, dose, referral status) — **values and facts**, not clinical interpretation.
 - **UC5 — Post-appointment patient message:** optional patient-facing **draft** grounded only in **documented** encounter and associated structured data; physician reviews, edits, and sends; optional physician-only “chart recap” line for verification.
 - **UC6 — Post-lunch schedule summary:** same **shape** as UC1 for **remaining** (and add-on) slots; optional factual session counts when derivable from schedule/EHR without inference.
 - **UC7 — No-show sweep:** compact, facts-only blocks per missed or same-day-cancelled slot the physician did not see; time-sensitive chart signals only — **no** callback or workup recommendations.
 
-The **diagrams** in **Section 2** below cover **UC2**, **UC3**, and **UC4** (the encounter-scoped retrieval paths). **UC1**, **UC6**, and **UC7** reuse the same agent stack with **schedule- or list-scoped** retrieval and stricter “wide and shallow” response shaping; **UC5** reuses encounter-scoped retrieval with **documentation-bound** synthesis and no direct patient send. **Section 3** defines **six JSON-schema tools** the LLM calls for retrieval (no deterministic application-level tool chain).
+The **diagrams** in **Section 2** below cover **UC2**, **UC3**, and **UC4** (the encounter-scoped retrieval paths). **UC1**, **UC6**, and **UC7** reuse the same agent stack with **schedule- or list-scoped** retrieval and stricter “wide and shallow” response shaping; **UC5** reuses encounter-scoped retrieval with **documentation-bound** synthesis and no direct patient send. **Section 3** defines **seven JSON-schema tools** the LLM calls for retrieval (no deterministic application-level tool chain)—schedule slots, a **calendar** window (events + category metadata), and five patient-chart domains.
 
 Production deployment runs on **AWS** (BAA-backed account) in a private VPC with HTTPS-only ingress. The default **in-VPC** footprint is **4 containers**:
 - `openemr-web` (PHP/Laminas app)
@@ -40,7 +40,7 @@ Stack choices were made to fit OpenEMR realities and clinical risk constraints:
 
 Design priorities:
 - Fast retrieval over broad chat behavior
-- **LLM-chosen tool calls:** six read-only, schema-bound tools (Section 3); the model decides which tools and arguments to use per request—application code does not hard-code retrieval order.
+- **LLM-chosen tool calls:** seven read-only, schema-bound tools (Section 3); the model decides which tools and arguments to use per request—application code does not hard-code retrieval order.
 - Strict patient scoping and authorization checks (and **schedule-slot** scoping for day-wide operations)
 - Data-only responses (no diagnosis/treatment recommendations; **UC4** returns facts, not interpretation)
 - Minimal PHI egress and auditable traces
@@ -51,13 +51,13 @@ Design priorities:
 
 **Primary user:** family physician in 15-minute visits, ~20 patients/day.
 
-**Care team context:** a **nurse** completes **pre-visit intake** before the physician enters the room (vitals, medication list updates, chief complaint, reason for visit, new symptoms). That documentation lives in OpenEMR and is a **first-class input** to **UC2** alongside longitudinal chart data.
+**Care team context:** a **clinician** completes **pre-visit intake** before the physician enters the room (vitals, medication list updates, chief complaint, reason for visit, new symptoms). That documentation lives in OpenEMR and is a **first-class input** to **UC2** alongside longitudinal chart data.
 
 **Agent role:** informative only; no chart writes; no clinical or operational recommendations; no autonomous messaging (**UC5** supplies **drafts** only; the physician sends through normal workflow).
 
 **Use cases** (same order as `USERS.md`):
 1. **Early-morning day summary (UC1)** — physician opens **today’s** (or next session’s) schedule; wide, shallow **factual** lines per slot (time, patient id as on schedule, new vs established when on file, reason/chief complaint/visit type when documented, light chart hints such as critical results on file, referral pending vs resulted, “no same-day intake yet” when detectable). **Not** visit order, staffing, or “who to prioritize.” Target latency: full day ~**20 seconds**.
-2. **Pre-visit briefing (UC2)** — physician opens the patient encounter; briefing must land in **~5 seconds**, organized around **today’s chief complaint** (e.g. BP recheck → lead with BP history, antihypertensives, relevant labs). Includes nurse intake (vitals with notable change vs last visit, med changes), top active problems, recent abnormal labs, short last-visit summary, open care gaps. **No** “consider adjusting dose”–style advice.
+2. **Pre-visit briefing (UC2)** — physician opens the patient encounter; briefing must land in **~5 seconds**, organized around **today’s chief complaint** (e.g. BP recheck → lead with BP history, antihypertensives, relevant labs). Includes clinician intake (vitals with notable change vs last visit, med changes), top active problems, recent abnormal labs, short last-visit summary, open care gaps. **No** “consider adjusting dose”–style advice.
 3. **Critical flag surfacing (UC3)** — drug–drug or drug–condition interactions, abnormal labs not clearly addressed in the last note, overdue preventive care, referrals without result after ~60+ days; **context per flag** (which meds, which condition, why it matters). Part of **UC2**, optionally echoed in **UC1**/**UC6** scan mode, or on demand (on-demand path follows **UC4**-class latency where applicable).
 4. **In-room Q&A (UC4)** — pointed question during an active encounter; **direct answer** from the record in **under 8 seconds**; **no** interpretation of results—return values and status, physician interprets.
 5. **Post-appointment patient message (UC5)** — after the visit is documented, optional **plain-language draft** for the patient, grounded **only** in what is documented for **this** visit (note, assessment/plan, today’s orders/referrals, return instructions in chart). Optional one-line **physician-only** chart recap for verification. Draft in **~10 seconds**; agent does **not** send or choose channel; if the note is empty or contradictory, surface that briefly instead of inventing content.
@@ -124,7 +124,7 @@ Design priorities:
 ### UC2 — Pre-Visit Briefing
 
 ```
-  [Nurse completes intake]
+  [Clinician completes intake]
   (chief complaint, vitals, med updates)
                 |
                 v
@@ -382,22 +382,23 @@ Design priorities:
 
 ### LLM-callable retrieval tools
 
-The agent registers **six** read-only tools (each with a **JSON Schema** or equivalent function-calling contract, e.g. LangChain `StructuredTool`). The **LLM decides** which tools to call, with what arguments, and in what order; application code must **not** encode a deterministic pipeline such as “always run tools 1→2→3 before synthesis.” Rule-based **post-hoc verification** (and optional non-chain helpers that run **after** tool results return, e.g. interaction highlighting) is allowed; **retrieval sequencing** stays in the model.
+The agent registers **seven** read-only tools (each with a **JSON Schema** or equivalent function-calling contract, e.g. LangChain `StructuredTool`). The **LLM decides** which tools to call, with what arguments, and in what order; application code must **not** encode a deterministic pipeline such as “always run tools 1→2→3 before synthesis.” Rule-based **post-hoc verification** (and optional non-chain helpers that run **after** tool results return, e.g. interaction highlighting) is allowed; **retrieval sequencing** stays in the model.
 
 Returns should use **stable, typed shapes** (arrays of objects with fixed keys) so the **Verification Layer** can match physician-visible claims to tool JSON without scraping free text.
 
 | Tool | Primary use cases | Schema inputs (representative) | Returns (representative) |
 |------|-------------------|-------------------------------|---------------------------|
 | `list_schedule_slots` | UC1, UC6; seeds UC7 when the client passes a no-show list | `date`; optional `time_start` / `time_end` or enum `window` (`full_day`, `remainder_after`, …); optional `facility_id` | Slots: time, patient id, display identifier, visit type / reason when on schedule, slot status (e.g. scheduled / completed / no-show) |
+| `get_calendar` | UC1, UC6; calendar-oriented questions across a **date range** (events + category metadata), alongside or instead of a single-day slot list | `start_date`; optional `end_date` (defaults to `start_date`); optional `calendar_id` (appointment category); optional `facility_id` | **Calendars:** category rows visible in scope; **events:** timed rows derived from the appointment backend for the window (same underlying schedule domain as slots, shaped for calendar views) |
 | `get_patient_core_profile` | UC2 baseline; shallow orientation before deeper pulls | `patient_id`; optional `encounter_id` for scoping | Demographics, active problems (structured), allergies |
 | `get_medication_list` | UC2 med reconciliation; UC3 interaction context; UC4 dose / interaction questions | `patient_id`; optional `encounter_id`; optional `since_date` or `compare_to_encounter_id` when the API supports deltas | Active meds: drug, dose, route, frequency, status, effective dates; prescriber when policy allows |
 | `get_observations` | UC2 vitals and labs; UC3 unaddressed abnormals; UC4 trends (e.g. A1c) | `patient_id`; `categories[]` (e.g. `vital`, `laboratory`, `imaging_result`); optional `codes[]`; `from_date`, `to_date`; `limit`; `sort` | Time-stamped observations: value, unit, reference range / abnormal flag when available |
 | `get_encounters_and_notes` | UC2 chief complaint / last visit; UC3 “addressed in note”; UC5 encounter grounding | `patient_id`; optional `encounter_id` (single visit); optional `limit` / `before_date`; optional `sections[]` (e.g. chief complaint, assessment/plan, HPI, chunked full text) | Encounter metadata and requested note sections |
 | `get_referrals_orders_care_gaps` | UC2 open items; UC3 long-pending referral; UC4 referral result status; UC7 time-sensitive sweep | `patient_id`; optional status filters (e.g. `pending`, `completed`); optional `older_than_days` | Referrals / orders: ids, types, ordered date, status, result-on-file flags; structured care-gap / preventive overdue signals when exposed by the bridge |
 
-**Optional split:** if latency tuning for **UC4** requires narrower fetches, replace `get_observations` with two tools — `get_vitals` and `get_laboratory_results` — using the same auth and typing rules (seven tools total).
+**Optional split:** if latency tuning for **UC4** requires narrower fetches, replace `get_observations` with two tools — `get_vitals` and `get_laboratory_results` — using the same auth and typing rules (**eight** tools total including `get_calendar` and the other schedule/chart tools).
 
-**Auth:** every tool execution runs after the **Auth Guard** resolves **physician + patient** (and, for `list_schedule_slots`, **schedule / facility** scope). Tools never accept raw SQL from the model.
+**Auth:** every tool execution runs after the **Auth Guard** resolves **physician + patient** (and, for `list_schedule_slots` and `get_calendar`, **schedule / facility** scope). Tools never accept raw SQL from the model.
 
 ---
 
@@ -417,7 +418,7 @@ Returns should use **stable, typed shapes** (arrays of objects with fixed keys) 
 
 ## 5. Data Retrieval Contract
 
-Minimum retrieval domains **vary by use case**; all physician-visible responses include source linkage where the UI supports verification. In implementation, these domains map to the **six schema-bound tools** in Section 3 (`list_schedule_slots` for schedule/list context; `get_patient_core_profile`, `get_medication_list`, `get_observations`, `get_encounters_and_notes`, and `get_referrals_orders_care_gaps` for chart content—the LLM selects which to invoke per request).
+Minimum retrieval domains **vary by use case**; all physician-visible responses include source linkage where the UI supports verification. In implementation, these domains map to the **seven schema-bound tools** in Section 3 (`list_schedule_slots` and **`get_calendar`** for schedule/list and calendar-window context; `get_patient_core_profile`, `get_medication_list`, `get_observations`, `get_encounters_and_notes`, and `get_referrals_orders_care_gaps` for chart content—the LLM selects which to invoke per request).
 
 **Encounter-scoped (UC2, UC3, UC4, UC5):**
 - Patient summary (demographics, active problems, allergies)
@@ -429,7 +430,7 @@ Minimum retrieval domains **vary by use case**; all physician-visible responses 
 - **UC5:** **today’s** encounter note, assessment/plan, orders and referrals placed **this visit**, return instructions already in chart — **no** expansion into undocumented clinical opinion
 
 **Schedule- and list-scoped (UC1, UC6, UC7):**
-- Schedule rows (time, patient identifier as displayed, **new vs established** when on file, reason for visit / chief complaint / visit type from scheduling template, intake, or recent chart as available)
+- Schedule rows (time, patient identifier as displayed, **new vs established** when on file, reason for visit / chief complaint / visit type from scheduling template, intake, or recent chart as available); **`get_calendar`** covers a bounded **date range** for calendar-style event and category metadata in the same read-only contract
 - **Per-slot shallow chart facts:** e.g. final or new critical results on file, intake present vs missing when detectable, referral/imaging pending vs resulted, optional **UC3**-style hints when product policy includes them in scan mode
 - **UC7:** same factual bar as briefing + flags for **missed** patients only; minimal line when nothing time-sensitive
 
@@ -543,4 +544,4 @@ If a dependency exceeds budget, return partial output with explicit gap disclosu
 2. PHI governance controls are in place (including agreements covering OpenRouter, selected upstream models, and LangSmith trace handling).
 3. Audit logging and encryption at rest are verified.
 4. Adversarial and missing-data evals pass with no unsafe failures — including **UC5** “empty or contradictory note” behavior and **UC1**/**UC6** “no invented priorities” checks.
-5. Physician review confirms outputs are accurate and useful in real workflow — **nurse intake → UC2** timing, **UC4** in-room latency, and **UC5** edit-and-send usability.
+5. Physician review confirms outputs are accurate and useful in real workflow — **clinician intake → UC2** timing, **UC4** in-room latency, and **UC5** edit-and-send usability.

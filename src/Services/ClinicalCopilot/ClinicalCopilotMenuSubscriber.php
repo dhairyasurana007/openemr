@@ -45,7 +45,17 @@ final class ClinicalCopilotMenuSubscriber implements EventSubscriberInterface
         $entry->requirement = 0;
         $entry->acl_req = ['patients', 'demo'];
 
+        $day = new \stdClass();
+        $day->label = 'Clinical Co-Pilot (schedule day)';
+        $day->menu_id = 'cpl1';
+        $day->target = 'cpl';
+        $day->url = '/interface/modules/zend_modules/public/ClinicalCopilot/day_panel.php';
+        $day->children = [];
+        $day->requirement = 0;
+        $day->acl_req = ['patients', 'demo'];
+
         $items[] = $entry;
+        $items[] = $day;
         $menu->setMenu($items);
 
         return $menu;

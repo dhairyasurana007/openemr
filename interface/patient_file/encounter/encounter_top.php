@@ -17,6 +17,7 @@ require_once("$srcdir/pid.inc.php");
 require_once("$srcdir/encounter.inc.php");
 require_once("$srcdir/forms.inc.php");
 
+use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\Header;
 use OpenEMR\Tabs\TabsWrapper;
@@ -45,6 +46,16 @@ $tabset->declareInitialTab(
     xl('Summary'),
     "<iframe class='w-100' style='height:94.5vh;border: 0;' src='forms.php'>" . xlt('Problem loading.') . "</iframe>"
 );
+$clinicalCopilotEncounterTab = AclMain::aclCheckCore('patients', 'demo')
+    && (AclMain::aclCheckCore('encounters', 'notes') || AclMain::aclCheckCore('encounters', 'notes_a'));
+if ($clinicalCopilotEncounterTab) {
+    $copilotEncounterPanelSrc = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/encounter_panel.php';
+    $copilotEncounterPanelSrc = htmlspecialchars($copilotEncounterPanelSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $tabset->declareInitialTab(
+        xl('Co-Pilot'),
+        "<iframe class='w-100' style='height:94.5vh;border: 0;' src='" . $copilotEncounterPanelSrc . "'>" . xlt('Problem loading.') . "</iframe>"
+    );
+}
 // We might have been invoked to load a particular encounter form.
 // In that case it will be the second tab, and removable.
 if (!empty($_GET['formname'])) {

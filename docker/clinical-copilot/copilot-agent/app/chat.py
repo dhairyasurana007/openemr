@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 from typing import Annotated, Any, Literal
 
@@ -20,12 +21,23 @@ from app.settings import Settings
 router = APIRouter(prefix="/v1", tags=["chat"])
 
 
+class CallerContext(BaseModel):
+    """OpenEMR web binding forwarded from chat.php (PHI-safe keys; values may identify patients/slots)."""
+
+    use_case: str | None = Field(default=None, max_length=8)
+    patient_uuid: str | None = Field(default=None, max_length=64)
+    encounter_id: str | None = Field(default=None, max_length=32)
+    schedule_date: str | None = Field(default=None, max_length=10)
+    authorized_slot_ids: list[str] | None = None
+
+
 class ChatRequestBody(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     surface: Literal["encounter", "schedule_day", "uc5_draft"] = Field(
         default="encounter",
         description="Caller context for deterministic output-safety gates (UC1/UC6 vs UC5).",
     )
+    caller_context: CallerContext | None = None
 
 
 def _verify_internal_secret(settings: Settings, header_value: str | None) -> None:
@@ -75,10 +87,21 @@ async def chat(
 
     backend: RetrievalBackend = request.app.state.retrieval_backend
 
+    user_message = body.message.strip()
+    if body.caller_context is not None:
+        ctx = body.caller_context.model_dump(exclude_none=True)
+        if ctx:
+            user_message = (
+                "[CALLER_CONTEXT]\n"
+                + json.dumps(ctx, separators=(",", ":"), ensure_ascii=False)
+                + "\n[/CALLER_CONTEXT]\n\n"
+                + user_message
+            )
+
     try:
         reply, diagnostics = await asyncio.to_thread(
             _run_copilot_chat_sync,
-            body.message.strip(),
+            user_message,
             settings,
             backend,
         )

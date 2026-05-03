@@ -23,4 +23,11 @@ class ClinicalCopilotRetrievalRestControllerTest extends TestCase
     {
         $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', ClinicalCopilotRetrievalRestController::SCHEMA_VERSION);
     }
+
+    public function testGetCalendarCitationPath(): void
+    {
+        $c = ClinicalCopilotRetrievalRestController::citation('get_calendar', 'calendar', '/api/clinical-copilot/retrieval/calendar');
+        $this->assertSame('get_calendar', $c['tool']);
+        $this->assertSame('/api/clinical-copilot/retrieval/calendar', $c['path']);
+    }
 }

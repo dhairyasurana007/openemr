@@ -20,9 +20,16 @@ class ClinicalCopilotInternalAuthTest extends TestCase
     public function testAllowsRequestWhenSecretNotConfigured(): void
     {
         putenv('CLINICAL_COPILOT_INTERNAL_SECRET=');
+        $this->assertFalse(ClinicalCopilotInternalAuth::isSecretConfigured());
         $request = HttpRestRequest::create('/api/clinical-copilot/retrieval/list-schedule-slots', 'GET');
         ClinicalCopilotInternalAuth::assertConfiguredSecretMatches($request);
         $this->addToAssertionCount(1);
+    }
+
+    public function testIsSecretConfiguredWhenEnvSet(): void
+    {
+        putenv('CLINICAL_COPILOT_INTERNAL_SECRET=not-empty');
+        $this->assertTrue(ClinicalCopilotInternalAuth::isSecretConfigured());
     }
 
     public function testRejectsMismatchedSecret(): void

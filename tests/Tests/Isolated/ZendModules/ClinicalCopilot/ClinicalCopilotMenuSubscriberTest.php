@@ -25,9 +25,10 @@ class ClinicalCopilotMenuSubscriberTest extends TestCase
         $event = new MenuEvent([$existing]);
         $out = $subscriber->onMenuUpdate($event);
         $menu = $out->getMenu();
-        $this->assertCount(2, $menu);
+        $this->assertCount(3, $menu);
         $this->assertSame('cpl', $menu[1]->target);
         $this->assertStringContainsString('ClinicalCopilot/panel.php', (string) $menu[1]->url);
+        $this->assertStringContainsString('ClinicalCopilot/day_panel.php', (string) $menu[2]->url);
     }
 
     public function testOnMenuUpdateLeavesNonArrayUnchanged(): void

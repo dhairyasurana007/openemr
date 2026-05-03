@@ -27,12 +27,20 @@ def _bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _standard_api_path_prefix() -> str:
+    """OpenEMR serves the standard API at ``/apis/{site_id}/api/...`` (default site: ``default``)."""
+    raw = (os.environ.get("OPENEMR_STANDARD_API_PATH_PREFIX") or "/apis/default/api").strip()
+    if raw == "":
+        return "/apis/default/api"
+    return "/" + raw.strip("/")
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime configuration loaded once at process start."""
 
     openrouter_api_key: str
-    """API key for OpenRouter (OpenAI-compatible base URL). Empty disables chat."""
+    """OpenRouter API key (Chat Completions-compatible HTTP API; model id e.g. anthropic/claude-*). Empty disables chat."""
     openrouter_model: str
     """OpenRouter model id, e.g. ``anthropic/claude-3.5-haiku``."""
     openrouter_http_timeout_s: float
@@ -44,6 +52,11 @@ class Settings:
     clinical_copilot_internal_secret: str
     """When non-empty, ``POST /v1/chat`` requires matching ``X-Clinical-Copilot-Internal-Secret``."""
     openemr_internal_hostport: str
+    """Host:port or full URL for OpenEMR HTTP (e.g. ``openemr-web:80``). Document root; not the API prefix."""
+    openemr_standard_api_path_prefix: str
+    """Path prefix for OpenEMR standard REST API (e.g. ``/apis/default/api``). Retrieval URLs are under this + ``/clinical-copilot/retrieval/``."""
+    openemr_http_verify: bool
+    """Verify TLS certificates for agent→OpenEMR HTTPS. Set false only for private self-signed (e.g. ``openemr-web:443`` in Compose)."""
     openemr_http_timeout_connect_s: float
     openemr_http_timeout_read_s: float
     openemr_http_max_connections: int
@@ -52,6 +65,8 @@ class Settings:
     """Semaphore limit for concurrent agent→OpenEMR HTTP calls (backpressure)."""
     readyz_probe_openemr: bool
     """When True, /meta/health/readyz awaits OpenEMR /meta/health/livez (stricter deploy ordering)."""
+    use_openemr_retrieval: bool
+    """When True, retrieval tools call OpenEMR standard API under ``openemr_standard_api_path_prefix``. When False, empty stub."""
     copilot_max_inflight: int
     """When >0, cap concurrent non-health requests (503 when saturated)."""
     langchain_api_key: str
@@ -90,12 +105,15 @@ class Settings:
             openemr_internal_hostport=os.environ.get(
                 "OPENEMR_INTERNAL_HOSTPORT", "openemr-web:80"
             ).strip(),
+            openemr_standard_api_path_prefix=_standard_api_path_prefix(),
+            openemr_http_verify=_bool("OPENEMR_HTTP_VERIFY", True),
             openemr_http_timeout_connect_s=_float("OPENEMR_HTTP_TIMEOUT_CONNECT_S", 2.0),
             openemr_http_timeout_read_s=_float("OPENEMR_HTTP_TIMEOUT_READ_S", 30.0),
             openemr_http_max_connections=_int("OPENEMR_HTTP_MAX_CONNECTIONS", 20),
             openemr_http_max_keepalive=_int("OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS", 10),
             openemr_max_concurrent_requests=_int("OPENEMR_MAX_CONCURRENT_REQUESTS", 8),
             readyz_probe_openemr=_bool("COPILOT_READYZ_PROBE_OPENEMR", False),
+            use_openemr_retrieval=_bool("COPILOT_USE_OPENEMR_RETRIEVAL", True),
             copilot_max_inflight=_int("COPILOT_MAX_INFLIGHT", 0),
             langchain_api_key=api_key,
             langchain_tracing_v2=langchain_tracing_v2,

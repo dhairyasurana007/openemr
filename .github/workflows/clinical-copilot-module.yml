@@ -1,0 +1,32 @@
+##
+# PHP isolated tests for Clinical Co-Pilot (menu, chat bridge, use-case payloads, schedule scope helpers).
+# Complements Clinical Copilot Agent (Python) workflow.
+
+name: Clinical Copilot Module (PHP isolated)
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  php-clinical-copilot-isolated:
+    name: PHPUnit ClinicalCopilot subset
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup PHP and Composer
+      uses: ./.github/actions/setup-php-composer
+      with:
+        php-version: '8.3'
+
+    - name: Run isolated tests (ClinicalCopilot)
+      run: |
+        vendor/bin/phpunit -c phpunit-isolated.xml \
+          tests/Tests/Isolated/Services/ClinicalCopilot \
+          tests/Tests/Isolated/ZendModules/ClinicalCopilot \
+          tests/Tests/Isolated/RestControllers/ClinicalCopilot

@@ -32,6 +32,7 @@ $statusText = $handoff->isConfigured()
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
+$loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
 
 ?>
@@ -50,11 +51,14 @@ $agentReady = $handoff->isConfigured();
             display: flex;
             flex-direction: column;
             max-width: 100%;
+            min-width: 0;
         }
         #clinical-copilot-messages {
             flex: 1 1 auto;
             min-height: 0;
+            min-width: 0;
             overflow-y: auto;
+            overflow-x: hidden;
             background: var(--white, #fff);
         }
         #clinical-copilot-composer {
@@ -63,9 +67,9 @@ $agentReady = $handoff->isConfigured();
             background: var(--light, #f8f9fa);
         }
         .clinical-copilot-msg {
-            max-width: 52rem;
-            margin-left: auto;
-            margin-right: auto;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .clinical-copilot-msg-user {
             text-align: right;
@@ -76,6 +80,7 @@ $agentReady = $handoff->isConfigured();
             background: var(--primary, #007bff);
             color: #fff;
             border-radius: 1rem 1rem 0.25rem 1rem;
+            max-width: min(100%, 32rem);
         }
         .clinical-copilot-msg-assistant .clinical-copilot-bubble {
             display: inline-block;
@@ -88,6 +93,9 @@ $agentReady = $handoff->isConfigured();
             margin: 0.35rem 0;
             white-space: pre-wrap;
             word-break: break-word;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .clinical-copilot-msg-meta {
             font-size: 0.75rem;
@@ -133,6 +141,7 @@ $agentReady = $handoff->isConfigured();
     <script>
         (function () {
             var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var agentReady = <?php echo $agentReady ? 'true' : 'false'; ?>;
             var btn = document.getElementById('clinical-copilot-send');
@@ -146,7 +155,7 @@ $agentReady = $handoff->isConfigured();
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
 
-            function appendBubble(role, text, isError) {
+            function appendBubble(role, text, isError, metaLabelOverride) {
                 var row = document.createElement('div');
                 row.className = 'clinical-copilot-msg mb-2 ' + (role === 'user' ? 'clinical-copilot-msg-user' : 'clinical-copilot-msg-assistant');
                 var bubble = document.createElement('div');
@@ -155,11 +164,13 @@ $agentReady = $handoff->isConfigured();
                 row.appendChild(bubble);
                 var meta = document.createElement('div');
                 meta.className = 'clinical-copilot-msg-meta ' + (role === 'user' ? 'text-right pr-1' : 'pl-1');
-                meta.appendChild(document.createTextNode(
-                    role === 'user'
+                var metaLabel = metaLabelOverride;
+                if (!metaLabel) {
+                    metaLabel = role === 'user'
                         ? <?php echo json_encode(xl('You')); ?>
-                        : (isError ? <?php echo json_encode(xl('Error')); ?> : <?php echo json_encode(xl('Assistant')); ?>)
-                ));
+                        : (isError ? <?php echo json_encode(xl('Error')); ?> : <?php echo json_encode(xl('Assistant')); ?>);
+                }
+                meta.appendChild(document.createTextNode(metaLabel));
                 row.appendChild(meta);
                 messagesEl.appendChild(row);
                 scrollToBottom();
@@ -238,6 +249,46 @@ $agentReady = $handoff->isConfigured();
                     btn.click();
                 }
             });
+
+            if (agentReady) {
+                var loadRow = document.createElement('div');
+                loadRow.className = 'clinical-copilot-msg clinical-copilot-msg-assistant mb-2';
+                loadRow.id = 'clinical-copilot-login-auto-loading';
+                var loadBubble = document.createElement('div');
+                loadBubble.className = 'clinical-copilot-bubble text-muted border';
+                loadBubble.appendChild(document.createTextNode(<?php echo json_encode(xl('Checking for a current or imminent visit') . '…'); ?>));
+                loadRow.appendChild(loadBubble);
+                messagesEl.appendChild(loadRow);
+                scrollToBottom();
+                fetch(loginAppointmentAutosummaryUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({csrf_token_form: csrfToken})
+                }).then(function (r) {
+                    return r.json().then(function (data) {
+                        return {ok: r.ok, data: data};
+                    });
+                }).then(function (res) {
+                    var lr = document.getElementById('clinical-copilot-login-auto-loading');
+                    if (lr) {
+                        lr.remove();
+                    }
+                    if (!res.ok || !res.data || !res.data.ok) {
+                        return;
+                    }
+                    if (res.data.ran === true && typeof res.data.reply === 'string' && res.data.reply.trim() !== '') {
+                        removeIntroIfPresent();
+                        var hdr = <?php echo json_encode(xl('Automatic summary (visit now or starting within 5 minutes)') . ':'); ?>;
+                        appendBubble('assistant', hdr + '\n\n' + res.data.reply, false, <?php echo json_encode(xl('Visit summary')); ?>);
+                    }
+                }).catch(function () {
+                    var lr2 = document.getElementById('clinical-copilot-login-auto-loading');
+                    if (lr2) {
+                        lr2.remove();
+                    }
+                });
+            }
         })();
     </script>
 </body>

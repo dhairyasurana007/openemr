@@ -24,6 +24,7 @@ use OpenEMR\Core\OEHttpKernel;
 use OpenEMR\Events\RestApiExtend\RestApiSecurityCheckEvent;
 use OpenEMR\FHIR\Config\ServerConfig;
 use OpenEMR\RestControllers\Authorization\BearerTokenAuthorizationStrategy;
+use OpenEMR\RestControllers\Authorization\ClinicalCopilotRetrievalAuthorizationStrategy;
 use OpenEMR\RestControllers\Authorization\IAuthorizationStrategy;
 use OpenEMR\RestControllers\Authorization\LocalApiAuthorizationController;
 use OpenEMR\RestControllers\Authorization\SkipAuthorizationStrategy;
@@ -98,6 +99,7 @@ class AuthorizationListener implements EventSubscriberInterface
             $skipAuthorizationStrategy->addSkipRoute('/api/version');
             $skipAuthorizationStrategy->addSkipRoute('/api/product');
             $this->addAuthorizationStrategy($skipAuthorizationStrategy);
+            $this->addAuthorizationStrategy(new ClinicalCopilotRetrievalAuthorizationStrategy($this->getLogger()));
             // TODO: @adunsulag not sure I like instantiating the ServerConfig here, perhaps we need to do this in a different way?
             $serverConfig = new ServerConfig();
             $bearerTokenAuthorizationStrategy = new BearerTokenAuthorizationStrategy($this->getGlobalsBag(), EventAuditLogger::getInstance(), $this->getLogger());

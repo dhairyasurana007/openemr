@@ -30,3 +30,5 @@ def test_stub_payloads_include_contract_keys() -> None:
     _assert_keys(ref, {"tool", "schema_version", "citations", "referrals", "orders", "care_gaps"})
     slots = b.list_schedule_slots("2026-05-01")
     _assert_keys(slots, {"tool", "schema_version", "citations", "date", "slots"})
+    cal = b.get_calendar("2026-05-01", end_date="2026-05-07")
+    _assert_keys(cal, {"tool", "schema_version", "citations", "query", "calendars", "events"})

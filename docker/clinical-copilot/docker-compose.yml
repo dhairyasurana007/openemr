@@ -6,12 +6,25 @@
 #
 # Usage (from this directory):
 #   docker compose up --build --detach
+#   First run builds ``openemr-web`` from the repo root Dockerfile (can take several minutes).
+#   Demo physician/clinician users: seeding runs by default; set ``OPENEMR_AUTO_SEED_STANDARD_ROLES=false`` (or no/off/0) to disable.
+#   Defaults: ``physician1``, ``physician2``, ``clinician`` (passwords: ``OE_SEED_*_PASSWORD`` or ``OE_PASS`` or ``pass``). Set
+#   ``OE_SEED_CLINICIAN_USERNAME`` to an empty string to skip creating the clinician only.
+#   Demo patients + back-to-back appointments: ``OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE=false`` to disable.
+#   See ``contrib/render/openemr-seed-copilot-demo-schedule.php`` (40 patients ``pubpid`` CCSEED-P1-01..20 and CCSEED-P2-01..20, 15-min slots).
+#   ACL titles are English defaults. Per-role ``users`` prefs:
+#   ``OE_SEED_PHYSICIAN_SEE_AUTH`` (default 2), ``OE_SEED_PHYSICIAN_CALENDAR`` (default 1), ``OE_SEED_*_FACILITY_ID``, etc.
+#   See docblock in ``contrib/render/openemr-seed-standard-role-users.php`` for semantics.
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
 #   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
 #   (liveness: /meta/health/livez — cheap; readiness defaults to process-only unless
 #   COPILOT_READYZ_PROBE_OPENEMR=true probes OpenEMR /meta/health/livez)
 #
-# Agent→OpenEMR HTTP bounds (optional env on copilot-agent):
+# Agent→OpenEMR (optional env on copilot-agent):
+#   OPENEMR_INTERNAL_HOSTPORT default ``https://openemr-web:443``; OPENEMR_HTTP_VERIFY default ``false`` (image TLS).
+#   COPILOT_USE_OPENEMR_RETRIEVAL=true (default) — tools call /apis/default/api/clinical-copilot/retrieval/* on openemr-web.
+#   OPENEMR_STANDARD_API_PATH_PREFIX=/apis/default/api (default) if your site id is not ``default``.
+#   Set to false for empty stub-only responses (e.g. some automated tests).
 #   OPENEMR_HTTP_TIMEOUT_CONNECT_S, OPENEMR_HTTP_TIMEOUT_READ_S,
 #   OPENEMR_HTTP_MAX_CONNECTIONS, OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS,
 #   OPENEMR_MAX_CONCURRENT_REQUESTS (semaphore for REST tool calls),
@@ -24,6 +37,12 @@
 #   OPENROUTER_API_KEY=...
 #   LANGCHAIN_API_KEY=...   # LangSmith
 #   LANGCHAIN_TRACING_V2=true
+#
+# ``openemr-web`` is built from the **repository root** ``Dockerfile`` (not the
+# published ``openemr/openemr`` image alone) so this checkout’s PHP routes —
+# including ``/apis/default/api/clinical-copilot/retrieval/*`` — exist inside
+# the container. Override with ``image: openemr/openemr:latest`` only if your
+# upstream tag already ships those endpoints.
 #
 # Skipping setup.php (automatic install):
 # The official `openemr/openemr` image runs `openemr.sh` on start. It reads
@@ -61,7 +80,10 @@ services:
   openemr-web:
     container_name: openemr-web
     restart: unless-stopped
-    image: openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: openemr-clinical-copilot:local
     expose:
       - '80'
       - '443'
@@ -84,6 +106,34 @@ services:
       CLINICAL_COPILOT_AGENT_BASE_URL: ${CLINICAL_COPILOT_AGENT_BASE_URL:-http://copilot-agent:8000}
       # Same value as on copilot-agent when set: PHP proxy → agent and agent → OpenEMR retrieval.
       CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
+      # OpenEMR username for ACL on retrieval when using CLINICAL_COPILOT_INTERNAL_SECRET (match ``OE_USER`` in practice).
+      CLINICAL_COPILOT_SERVICE_USERNAME: ${CLINICAL_COPILOT_SERVICE_USERNAME:-admin}
+      # Optional idempotent seed users (Physicians / Clinicians built-in ACL groups). Demo passwords — change for real use.
+      # If physician* logins fail after a partial install, set OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS=true once.
+      OPENEMR_AUTO_SEED_STANDARD_ROLES: ${OPENEMR_AUTO_SEED_STANDARD_ROLES:-true}
+      OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS: ${OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS:-false}
+      OE_SEED_PHYSICIAN1_USERNAME: ${OE_SEED_PHYSICIAN1_USERNAME:-physician1}
+      OE_SEED_PHYSICIAN2_USERNAME: ${OE_SEED_PHYSICIAN2_USERNAME:-physician2}
+      # Passwords for physician1/2/clinician are hardcoded in contrib/render/openemr-seed-standard-role-users.php (``pass``).
+      # Shared defaults for both physicians; override per user with OE_SEED_PHYSICIAN1_* / OE_SEED_PHYSICIAN2_*.
+      OE_SEED_PHYSICIAN_SEE_AUTH: ${OE_SEED_PHYSICIAN_SEE_AUTH:-2}
+      OE_SEED_PHYSICIAN_CALENDAR: ${OE_SEED_PHYSICIAN_CALENDAR:-1}
+      OE_SEED_PHYSICIAN_CAL_UI: ${OE_SEED_PHYSICIAN_CAL_UI:-3}
+      OE_SEED_PHYSICIAN_FACILITY_ID: ${OE_SEED_PHYSICIAN_FACILITY_ID:-}
+      OE_SEED_CLINICIAN_USERNAME: ${OE_SEED_CLINICIAN_USERNAME:-clinician}
+      OE_SEED_CLINICIAN_FNAME: ${OE_SEED_CLINICIAN_FNAME:-Clinician}
+      OE_SEED_CLINICIAN_LNAME: ${OE_SEED_CLINICIAN_LNAME:-Demo}
+      # Default 3 (All) for schedulers; calendar 0=not a listed provider (still schedule via ACL).
+      OE_SEED_CLINICIAN_SEE_AUTH: ${OE_SEED_CLINICIAN_SEE_AUTH:-3}
+      OE_SEED_CLINICIAN_CALENDAR: ${OE_SEED_CLINICIAN_CALENDAR:-0}
+      OE_SEED_CLINICIAN_CAL_UI: ${OE_SEED_CLINICIAN_CAL_UI:-3}
+      OE_SEED_CLINICIAN_FACILITY_ID: ${OE_SEED_CLINICIAN_FACILITY_ID:-}
+      # Idempotent: 40 diverse demo patients + same-day 15-minute stacked appointments for ``physician1`` and ``physician2`` (override below).
+      OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE: ${OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE:-true}
+      OE_SEED_COPILOT_PROVIDER_USERNAME: ${OE_SEED_COPILOT_PROVIDER_USERNAME:-physician1}
+      OE_SEED_COPILOT_SCHEDULE_DATE: ${OE_SEED_COPILOT_SCHEDULE_DATE:-}
+      OE_SEED_COPILOT_FIRST_START: ${OE_SEED_COPILOT_FIRST_START:-09:00:00}
+      OE_SEED_COPILOT_SLOT_SECONDS: ${OE_SEED_COPILOT_SLOT_SECONDS:-900}
     depends_on:
       openemr-mysql:
         condition: service_healthy
@@ -133,8 +183,11 @@ services:
       LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-clinical-copilot}
       REDIS_URL: ${REDIS_URL:-}
-      # Agent → OpenEMR REST (internal HTTP to app container).
-      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-openemr-web:80}
+      # Agent → OpenEMR: use HTTPS on :443 inside the mesh (Apache). HTTP :80 often
+# redirects with a Location that breaks server-side clients; TLS verify is off for the image CA.
+      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-https://openemr-web:443}
+      OPENEMR_HTTP_VERIFY: ${OPENEMR_HTTP_VERIFY:-false}
+      COPILOT_USE_OPENEMR_RETRIEVAL: ${COPILOT_USE_OPENEMR_RETRIEVAL:-true}
       CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
       COPILOT_READYZ_PROBE_OPENEMR: ${COPILOT_READYZ_PROBE_OPENEMR:-false}
       OPENEMR_HTTP_TIMEOUT_CONNECT_S: ${OPENEMR_HTTP_TIMEOUT_CONNECT_S:-2}

@@ -26,6 +26,7 @@ from app.verification import (
 
 
 def _default_llm_factory(settings: Settings) -> BaseChatModel:
+    # OpenRouter speaks the OpenAI Chat Completions wire format; ``ChatOpenAI`` is that client—not “OpenAI models”.
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
@@ -42,13 +43,16 @@ def _default_llm_factory(settings: Settings) -> BaseChatModel:
 
 
 _TOOL_LOOP_INSTRUCTION = (
-    "**Mandatory tool-first behavior:** for **patient chart** questions, call patient-scoped tools "
-    "(get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
-    "get_referrals_orders_care_gaps) as needed. For **schedule / day / column** questions, call "
-    "list_schedule_slots. "
-    "Call the **minimal** set that covers the question. If a tool returns retrieval_status.ok=false, "
-    "do not invent replacements—stop or try a different read. "
-    "**No assumptions** in this phase—retrieve facts via tools only."
+    "Retrieval checklist:\n"
+    "1) Tool names must match the system prompt exactly—never ``get``/generic names.\n"
+    "2) If ``patient_uuid`` is present and the question is chart data: call the needed tools among "
+    "get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
+    "get_referrals_orders_care_gaps.\n"
+    "3) No patient UUID → do not call those five.\n"
+    "4) Schedule/day/column → list_schedule_slots first.\n"
+    "5) Calendar beyond slots → get_calendar with a sensible date window.\n"
+    "6) Minimal tool set only. retrieval_status.ok=false → stop or try another read; never invent data.\n"
+    "7) This phase: tool calls only—no assumptions."
 )
 
 
@@ -125,6 +129,7 @@ def run_chat_with_tools(
             break
 
         name_to_tool = {t.name: t for t in tools}
+        allowed = sorted(name_to_tool.keys())
         for call in tcalls:
             name = call.get("name")
             raw_args = call.get("args") or {}
@@ -142,7 +147,12 @@ def run_chat_with_tools(
                         "status": "unknown_tool",
                     }
                 )
-                err = {"error": "unknown_tool", "tool": name}
+                err = {
+                    "error": "unknown_tool",
+                    "tool": name,
+                    "allowed_tools": allowed,
+                    "hint": "Use an exact tool name from allowed_tools; there is no list-all-patients or generic get.",
+                }
                 messages.append(ToolMessage(content=json.dumps(err), tool_call_id=tool_call_id))
                 continue
             try:

@@ -222,4 +222,29 @@ if (! $installer->quick_install()) {
     // Installation succeeded - print the debug message
     // This typically includes information about what was created and configured
     echo $installer->debug_message . "\n";
+
+    // Flex `openemr.sh` does not run `render-openemr-bootstrap.sh`; seed demo physicians + clinician here so
+    // development-easy and other stock-flex first boots get `physician1` / `physician2` / `clinician` without a manual step.
+    // Opt out with OPENEMR_AUTO_SEED_STANDARD_ROLES=false (handled inside the seed script).
+    $seedScript = __DIR__ . '/contrib/render/openemr-seed-standard-role-users.php';
+    if (is_file($seedScript) && is_readable($seedScript)) {
+        $phpBinary = (defined('PHP_BINARY') && PHP_BINARY !== '') ? PHP_BINARY : 'php';
+        $cmd = escapeshellarg($phpBinary) . ' ' . escapeshellarg($seedScript);
+        passthru($cmd, $seedExit);
+        if ((int) $seedExit !== 0) {
+            fwrite(STDERR, "auto_configure: openemr-seed-standard-role-users.php exited {$seedExit}.\n");
+        }
+    }
+
+    // Demo patients + stacked calendar slots for `physician1` and `physician2` (40 patients total). Opt out with
+    // OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE=false (handled inside the seed script).
+    $copilotSeedScript = __DIR__ . '/contrib/render/openemr-seed-copilot-demo-schedule.php';
+    if (is_file($copilotSeedScript) && is_readable($copilotSeedScript)) {
+        $phpBinary = (defined('PHP_BINARY') && PHP_BINARY !== '') ? PHP_BINARY : 'php';
+        $cmd2 = escapeshellarg($phpBinary) . ' ' . escapeshellarg($copilotSeedScript);
+        passthru($cmd2, $copilotSeedExit);
+        if ((int) $copilotSeedExit !== 0) {
+            fwrite(STDERR, "auto_configure: openemr-seed-copilot-demo-schedule.php exited {$copilotSeedExit}.\n");
+        }
+    }
 }

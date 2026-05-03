@@ -1,0 +1,66 @@
+##
+# Doctrine migrations against MySQL (validates db/Migrations including clinical co-pilot ai_audit_log).
+# Transferred from .github/future-workflows/database.yml; runs on every branch like other CI workflows.
+
+name: Database Doctrine migrations (MySQL)
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  mysql-migrate:
+    name: Doctrine migrations (MySQL 8.0)
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: openemr_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: ./.github/actions/setup-php-composer
+      with:
+        php-version: '8.3'
+
+    - name: Create sqlconf.php
+      run: |
+        cat > sites/default/sqlconf.php << 'EOF'
+        <?php
+        $sqlconf = [
+            'host' => '127.0.0.1',
+            'port' => 3306,
+            'login' => 'root',
+            'pass' => 'root',
+            'dbase' => 'openemr_test',
+            'db_encoding' => 'utf8mb4',
+        ];
+        EOF
+
+    - name: Run migrations
+      run: php cli migrations:migrate --no-interaction
+      env:
+        ENVIRONMENT: test
+
+    - name: Verify migration status
+      run: php cli migrations:status
+      env:
+        ENVIRONMENT: test
+
+    - name: Verify ai_audit_log exists (clinical co-pilot audit / backup restore smoke)
+      run: |
+        mysql -h 127.0.0.1 -uroot -proot openemr_test -e "SHOW CREATE TABLE ai_audit_log\G" | grep -q 'ai_audit_log'
