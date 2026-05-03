@@ -18,6 +18,7 @@ namespace OpenEMR\Tests\Isolated\Validators;
 
 use OpenEMR\Validators\BaseValidator;
 use OpenEMR\Validators\ImmunizationValidator;
+use OpenEMR\Validators\ProcessingResult;
 use PHPUnit\Framework\TestCase;
 
 class ImmunizationValidatorTest extends TestCase
@@ -40,26 +41,20 @@ class ImmunizationValidatorTest extends TestCase
         $this->assertInstanceOf(ImmunizationValidator::class, $validator);
     }
 
-    public function testValidatorHasEmptyConfiguration(): void
+    public function testValidatorAcceptsInsertContextWithNoRules(): void
     {
-        // ImmunizationValidator currently has an empty configureValidator() method
-        // This test documents the current state - it doesn't add any validation contexts
+        $result = $this->validator->validate(['test' => 'data'], BaseValidator::DATABASE_INSERT_CONTEXT);
 
-        // We can test this by trying to validate with unsupported contexts
-        // The empty configuration causes internal errors in the validator
-        $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Call to a member function merge() on null');
-
-        $this->validator->validate(['test' => 'data'], BaseValidator::DATABASE_INSERT_CONTEXT);
+        $this->assertInstanceOf(ProcessingResult::class, $result);
+        $this->assertTrue($result->isValid());
     }
 
-    public function testValidatorRejectsUpdateContext(): void
+    public function testValidatorAcceptsUpdateContextWithNoRules(): void
     {
-        // Similar test for update context
-        $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Call to a member function merge() on null');
+        $result = $this->validator->validate(['test' => 'data'], BaseValidator::DATABASE_UPDATE_CONTEXT);
 
-        $this->validator->validate(['test' => 'data'], BaseValidator::DATABASE_UPDATE_CONTEXT);
+        $this->assertInstanceOf(ProcessingResult::class, $result);
+        $this->assertTrue($result->isValid());
     }
 
     public function testValidatorClassExists(): void

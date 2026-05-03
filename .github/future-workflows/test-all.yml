@@ -116,7 +116,7 @@ jobs:
       fail-fast: false
       matrix:
         config: ${{ fromJson(needs.collect.outputs.configs) }}
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/reusable-openemr-docker-tests.yml
     secrets: inherit
     with:
       docker_dir: ${{ matrix.config.docker_dir }}

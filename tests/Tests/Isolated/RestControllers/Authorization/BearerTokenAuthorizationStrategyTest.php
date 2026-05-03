@@ -7,6 +7,7 @@ use OpenEMR\Common\Auth\OpenIDConnect\Entities\AccessTokenEntity;
 use OpenEMR\Common\Auth\OpenIDConnect\Entities\ClientEntity;
 use OpenEMR\Common\Auth\OpenIDConnect\Entities\ScopeEntity;
 use OpenEMR\Common\Auth\OpenIDConnect\Repositories\AccessTokenRepository;
+use OpenEMR\Common\Auth\OpenIDConnect\Validators\ScopeValidatorFactory;
 use OpenEMR\Common\Auth\UuidUserAccount;
 use OpenEMR\Common\Http\HttpRestRequest;
 use OpenEMR\Common\Logging\EventAuditLogger;
@@ -20,6 +21,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\HttpFoundation\Session\Storage\MockFileSessionStorageFactory;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class BearerTokenAuthorizationStrategyTest extends TestCase
 {
@@ -74,7 +76,8 @@ class BearerTokenAuthorizationStrategyTest extends TestCase
         $accessToken = new AccessTokenEntity();
         $accessToken->setIdentifier($tokenId);
         $accessToken->setIssuer(self::ISSUER);
-        $accessToken->setPrivateKey(new CryptKey(self::KEY_PATH_PRIVATE));
+        $pem = (string) file_get_contents(self::KEY_PATH_PRIVATE);
+        $accessToken->setPrivateKey(new CryptKey($pem, null, false));
         $accessToken->setClient($testClient);
         $accessToken->setExpiryDateTime(new \DateTimeImmutable('+1 hour'));
         $accessToken->setUserIdentifier($userUuid);
@@ -247,8 +250,50 @@ class BearerTokenAuthorizationStrategyTest extends TestCase
             ->willReturn(false);
         $strategy->setPatientLaunchAccessVerifier($verifier);
 
+        $this->expectException(HttpException::class);
+        $this->expectExceptionMessage('not authorized for the requested patient context');
         $strategy->populateTokenContextForRequest($request);
-        $this->assertNull($request->getPatientUUIDString());
+    }
+
+    public function testPopulateTokenContextForRequestThrowsWhenStandaloneLaunchMissingPatientContext(): void
+    {
+        $oauthUuid = '123e4567-e89b-12d3-a456-426614174000';
+        $request = HttpRestRequest::create('/apis/default/fhir/Patient', 'GET');
+        $request->setSession($this->getMockSessionForRequest($request));
+        $request->setAccessTokenId('tok-1');
+        $request->setRequestUser($oauthUuid, ['id' => 1, 'uuid' => $oauthUuid, 'username' => 'testuser']);
+        $scopeFactory = new ScopeValidatorFactory();
+        $request->setAccessTokenScopeValidationArray($scopeFactory->buildScopeValidatorArray(['launch/patient', 'openid']));
+
+        $repo = $this->createMock(AccessTokenRepository::class);
+        $repo->method('getTokenByToken')->willReturn(['context' => json_encode([])]);
+
+        $strategy = $this->getBearerTokenAuthorizationStrategy($request);
+        $strategy->setAccessTokenRepository($repo);
+        $strategy->setPatientLaunchAccessVerifier($this->createMock(PatientLaunchAccessVerifier::class));
+
+        $this->expectException(HttpException::class);
+        $this->expectExceptionMessage('patient context is required for this request');
+        $strategy->populateTokenContextForRequest($request);
+    }
+
+    public function testPopulateTokenContextForRequestThrowsWhenPatientContextButMissingOAuthUserUuid(): void
+    {
+        $patientUuid = '223e4567-e89b-12d3-a456-426614174000';
+        $request = HttpRestRequest::create('/apis/default/fhir/Patient', 'GET');
+        $request->setSession($this->getMockSessionForRequest($request));
+        $request->setAccessTokenId('tok-1');
+        $request->setRequestUser(null, ['id' => 1, 'username' => 'testuser']);
+
+        $repo = $this->createMock(AccessTokenRepository::class);
+        $repo->method('getTokenByToken')->willReturn(['context' => json_encode(['patient' => $patientUuid])]);
+
+        $strategy = $this->getBearerTokenAuthorizationStrategy($request);
+        $strategy->setAccessTokenRepository($repo);
+
+        $this->expectException(HttpException::class);
+        $this->expectExceptionMessage('not authorized for the requested patient context');
+        $strategy->populateTokenContextForRequest($request);
     }
 
     public function testPopulateTokenContextForRequestSetsPatientWhenVerifierAllows(): void
@@ -274,5 +319,26 @@ class BearerTokenAuthorizationStrategyTest extends TestCase
 
         $strategy->populateTokenContextForRequest($request);
         $this->assertSame($patientUuid, $request->getPatientUUIDString());
+    }
+
+    public function testPopulateTokenContextForRequestAllowsEhrLaunchScopeWithoutPatientInContext(): void
+    {
+        $oauthUuid = '123e4567-e89b-12d3-a456-426614174000';
+        $request = HttpRestRequest::create('/apis/default/fhir/Patient', 'GET');
+        $request->setSession($this->getMockSessionForRequest($request));
+        $request->setAccessTokenId('tok-1');
+        $request->setRequestUser($oauthUuid, ['id' => 1, 'uuid' => $oauthUuid, 'username' => 'testuser']);
+        $scopeFactory = new ScopeValidatorFactory();
+        $request->setAccessTokenScopeValidationArray($scopeFactory->buildScopeValidatorArray(['launch', 'openid']));
+
+        $repo = $this->createMock(AccessTokenRepository::class);
+        $repo->method('getTokenByToken')->willReturn(['context' => json_encode([])]);
+
+        $strategy = $this->getBearerTokenAuthorizationStrategy($request);
+        $strategy->setAccessTokenRepository($repo);
+        $strategy->setPatientLaunchAccessVerifier($this->createMock(PatientLaunchAccessVerifier::class));
+
+        $strategy->populateTokenContextForRequest($request);
+        $this->assertNull($request->getPatientUUIDString());
     }
 }

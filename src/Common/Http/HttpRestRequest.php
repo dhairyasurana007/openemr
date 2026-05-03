@@ -316,7 +316,11 @@ class HttpRestRequest extends Request implements Stringable
             $this->requestUserUUID = null;
         } else {
             $this->requestUserUUIDString = $userUUIDString ?? null;
-            $this->requestUserUUID = UuidRegistry::uuidToBytes($userUUIDString);
+            if ($userUUIDString !== null && $userUUIDString !== '') {
+                $this->requestUserUUID = UuidRegistry::uuidToBytes($userUUIDString);
+            } else {
+                $this->requestUserUUID = null;
+            }
         }
     }
 

@@ -296,11 +296,11 @@
             "@php .phpstan/reset-baseline.php",
             "@phpstan-baseline"
         ],
-        "phpunit-isolated": "phpunit -c phpunit-isolated.xml",
-        "phpunit-track-a-isolated": "phpunit -c phpunit-isolated.xml tests/Tests/Isolated/RestControllers/Authorization/SkipAuthorizationStrategyTest.php tests/Tests/Isolated/RestControllers/Authorization/PatientLaunchAccessVerifierTest.php tests/Tests/Isolated/RestControllers/Authorization/BearerTokenAuthorizationStrategyTest.php tests/Tests/Isolated/RestControllers/Subscriber/ApiResponseLoggerListenerTest.php",
+        "phpunit-isolated": "phpunit -c phpunit-isolated.xml --testsuite=isolated,unit-isolated",
+        "phpunit-track-a-isolated": "phpunit -c phpunit-isolated.xml --testsuite track-a",
         "rector-check": "php -d memory_limit=4g ./vendor/bin/rector process --dry-run",
         "rector-fix": "php -d memory_limit=4g ./vendor/bin/rector process",
         "require-checker": "php -d memory_limit=4g ./vendor/bin/composer-require-checker check --config-file=.composer-require-checker.json",
-        "update-twig-fixtures": "UPDATE_FIXTURES=1 phpunit -c phpunit-isolated.xml --filter TwigTemplateRenderTest"
+        "update-twig-fixtures": "UPDATE_FIXTURES=1 phpunit -c phpunit-isolated.xml --testsuite=isolated,unit-isolated --filter TwigTemplateRenderTest"
     }
 }

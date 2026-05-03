@@ -2,7 +2,7 @@
 
 ## Continuous Integration
 
-This directory houses the configuration for automated tests across multiple version and setup configurations of OpenEMR. It is used by the GitHub Actions workflow in `.github/workflows/test.yml` to run various tests.
+This directory houses the configuration for automated tests across multiple version and setup configurations of OpenEMR. It is used by the GitHub Actions workflow in `.github/workflows/reusable-openemr-docker-tests.yml` to run various tests.
 
 ### Layout and Configurations
 

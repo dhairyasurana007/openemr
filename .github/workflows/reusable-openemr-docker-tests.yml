@@ -6,7 +6,7 @@
 #   setup job  - checkout, build deps, docker up, install OpenEMR, dump DB
 #   test matrix - fan out test suites in parallel, each restoring the DB snapshot
 
-name: Test
+name: OpenEMR Docker tests (reusable)
 
 run-name: ${{ inputs.display_name || inputs.docker_dir }}
 

@@ -4,18 +4,13 @@
 # - "Tests": Tests that require a database and initialization before they can run or pass.
 # This workflow runs the kind that does not require initialization.
 
-name: Isolated Tests
+name: CI PHPUnit isolated (multi-PHP)
 
 
+# Every branch: `push` and `pull_request` (no `branches:` filter).
 on:
   push:
-    branches:
-    - master
-    - rel-*
   pull_request:
-    branches:
-    - master
-    - rel-*
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
@@ -48,6 +43,7 @@ jobs:
     - name: Run isolated tests with coverage
       run: |
         vendor/bin/phpunit -c phpunit-isolated.xml \
+                           --testsuite=isolated,unit-isolated \
                            --coverage-clover=clover.xml \
                            --log-junit=junit.xml
 

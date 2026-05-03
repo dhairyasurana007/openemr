@@ -2,6 +2,8 @@
 
 namespace OpenEMR\Validators;
 
+use Particle\Validator\Validator;
+
 /**
  * Supports PractitionerRole Record Validation.
  *
@@ -21,5 +23,20 @@ class ImmunizationValidator extends BaseValidator
     protected function configureValidator(): void
     {
         parent::configureValidator();
+
+        $this->validator->context(
+            self::DATABASE_INSERT_CONTEXT,
+            static function (Validator $v): void {
+                // Particle only allocates $chains[$context] when at least one rule is registered.
+                $v->optional('_openemr_immunization_unused', null, true);
+            }
+        );
+
+        $this->validator->context(
+            self::DATABASE_UPDATE_CONTEXT,
+            static function (Validator $v): void {
+                $v->optional('_openemr_immunization_unused', null, true);
+            }
+        );
     }
 }
