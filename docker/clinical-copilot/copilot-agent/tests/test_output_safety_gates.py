@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.llm_prompts import SUMMARIZER_SYSTEM_PROMPT
+from app.llm_prompts import (
+    GROUNDED_SUMMARY_SYSTEM_PROMPT,
+    RETRIEVAL_PHASE_SYSTEM_PROMPT,
+    SUMMARIZER_SYSTEM_PROMPT,
+)
 from app.output_safety import (
     check_schedule_patient_token_scope,
     check_schedule_wide_safety,
@@ -109,3 +113,17 @@ def test_summarizer_system_prompt_includes_hard_rules() -> None:
     assert "visit order" in lowered or "who to worry" in lowered
     assert "missing or contradictory" in lowered
     assert "do not invent" in lowered or "don't invent" in lowered or "not invent" in lowered
+
+
+def test_grounded_summary_prompt_requires_json_only_no_assumptions() -> None:
+    lowered = GROUNDED_SUMMARY_SYSTEM_PROMPT.lower()
+    assert "retrieved_json" in lowered
+    assert "no assumptions" in lowered or "not literally" in lowered
+    assert "no recommendations" in lowered
+    assert "admitting" in lowered or "do not have" in lowered
+
+
+def test_retrieval_phase_prompt_is_tool_only() -> None:
+    lowered = RETRIEVAL_PHASE_SYSTEM_PROMPT.lower()
+    assert "retrieval" in lowered
+    assert "not shown" in lowered or "not shown to" in lowered

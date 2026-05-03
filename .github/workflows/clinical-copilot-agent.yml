@@ -29,7 +29,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt pytest
 
-    - name: Run copilot-agent tests (includes offline safety gates)
+    - name: Run copilot-agent tests (tools, verification, offline safety gates)
       working-directory: docker/clinical-copilot/copilot-agent
       run: python -m pytest tests -v
 
