@@ -2917,8 +2917,15 @@ $GLOBALS_METADATA = [
                 '1' => xl('Minimal Logging'),
                 '2' => xl('Full Logging'),
             ],
-            '2',                               // default
-            xl('API Log Option (Full includes requests and responses).')
+            '1',                               // default (minimal: metadata without JSON bodies — Track A / PHI-safe default)
+            xl('API Log Option. Full logs JSON bodies and can retain PHI; use Minimal or None for staging unless encryption and retention are aligned.')
+        ],
+
+        'api_audit_log_retention_days' => [
+            xl('API audit log retention (days)'),
+            'num',
+            '0',
+            xl('Delete API audit rows (log + api_log) older than this many days (api_log.created_time). 0 disables. When set, schedule OpenEMR Common Logging ApiAuditLogRetention::purgeOlderThanDays to match this value.')
         ],
 
         'billing_log_option' => [

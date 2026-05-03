@@ -448,31 +448,43 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
      */
     public function populateTokenContextForRequest(HttpRestRequest $restRequest): HttpRestRequest
     {
-
+        $standaloneLaunch = $restRequest->requestHasScopeEntity(
+            ScopeEntity::createFromString(SmartLaunchController::CLIENT_APP_STANDALONE_LAUNCH_SCOPE)
+        );
         $context = $this->getTokenContextForRequest($restRequest);
         // note that the context here is the SMART value that is returned in the response for an AccessToken in this
         // case it is the patient value which is the logical id (ie uuid) of the patient.
-        $patientUuid = $context['patient'] ?? null;
-        if (!empty($patientUuid)) {
+        $patientUuidRaw = $context['patient'] ?? null;
+        $patientUuid = is_string($patientUuidRaw) ? trim($patientUuidRaw) : '';
+
+        if ($patientUuid !== '') {
             $oauthUserUuid = $restRequest->getRequestUserUUIDString()
                 ?? (isset($restRequest->getRequestUser()['uuid']) ? (string) $restRequest->getRequestUser()['uuid'] : '');
             if ($oauthUserUuid === '') {
                 $this->getSystemLogger()->error(
-                    'OpenEMR Error: api had patient launch scope but oauth user uuid is not available for patient access verification.'
+                    'OpenEMR Error: patient launch context present but oauth user uuid is not available for patient access verification.'
                 );
-                return $restRequest;
+                throw new HttpException(403, 'OpenEMR Error: not authorized for the requested patient context.');
             }
-            // we only set the bound patient access if the underlying user can still access the patient
-            if ($this->checkUserHasAccessToPatient($oauthUserUuid, $patientUuid)) {
-                $restRequest->setPatientUuidString($patientUuid);
-            } else {
-                $this->getSystemLogger()->error("OpenEMR Error: api had patient launch scope but user did not have access to patient uuid."
-                    . " Resources restricted with patient scopes will not return results");
+            if (!$this->checkUserHasAccessToPatient($oauthUserUuid, $patientUuid)) {
+                $this->getSystemLogger()->error(
+                    'OpenEMR Error: api had patient launch scope but user did not have access to patient uuid.',
+                    ['oauthUserUuid' => $oauthUserUuid, 'patientUuid' => $patientUuid]
+                );
+                throw new HttpException(403, 'OpenEMR Error: not authorized for the requested patient context.');
             }
-        } else {
-            $this->getSystemLogger()->error("OpenEMR Error: api had patient launch scope but no patient was set in the "
-                . " session cache.  Resources restricted with patient scopes will not return results");
+            $restRequest->setPatientUuidString($patientUuid);
+
+            return $restRequest;
         }
+
+        if ($standaloneLaunch) {
+            $this->getSystemLogger()->error(
+                'OpenEMR Error: launch/patient scope requires patient context in the access token but none was found.'
+            );
+            throw new HttpException(403, 'OpenEMR Error: patient context is required for this request.');
+        }
+
         return $restRequest;
     }
 
@@ -484,7 +496,16 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
         $token = $accessTokenRepo->getTokenByToken($restRequest->getAccessTokenId());
         $context = $token['context'] ?? "{}"; // if there is no populated context we just return an empty return
         try {
-            return json_decode($context, true);
+            $decoded = json_decode((string) $context, true);
+            if (!is_array($decoded)) {
+                $this->getSystemLogger()->error('OpenEMR Error: token context json did not decode to an object', [
+                    'tokenId' => $restRequest->getAccessTokenId(),
+                ]);
+
+                return [];
+            }
+
+            return $decoded;
         } catch (\Throwable $exception) {
             $this->getSystemLogger()->error("OpenEMR Error: failed to decode token context json", ['exception' => $exception->getMessage()
                 , 'tokenId' => $restRequest->getAccessTokenId()]);

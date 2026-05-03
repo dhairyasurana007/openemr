@@ -62,5 +62,16 @@ This file configures the kind that does not require initialization.
       <directory>tests/Tests/Unit/PaymentProcessing</directory>
       <directory>tests/Tests/Unit/library</directory>
     </testsuite>
+
+    <!-- Track A REST/auth/session/logging/retention: Docker image build runs vendor/bin/phpunit with testsuite track-a. -->
+    <testsuite name="track-a">
+      <file>tests/Tests/Isolated/RestControllers/Authorization/SkipAuthorizationStrategyTest.php</file>
+      <file>tests/Tests/Isolated/RestControllers/Authorization/PatientLaunchAccessVerifierTest.php</file>
+      <file>tests/Tests/Isolated/RestControllers/Authorization/BearerTokenAuthorizationStrategyTest.php</file>
+      <file>tests/Tests/Isolated/RestControllers/Subscriber/AuthorizationListenerTest.php</file>
+      <file>tests/Tests/Isolated/RestControllers/Subscriber/ApiResponseLoggerListenerTest.php</file>
+      <file>tests/Tests/Isolated/Common/Logging/ApiAuditLogRetentionTest.php</file>
+      <file>tests/Tests/Isolated/Common/Session/SessionConfigurationBuilderTest.php</file>
+    </testsuite>
   </testsuites>
 </phpunit>

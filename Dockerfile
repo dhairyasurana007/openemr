@@ -6,7 +6,7 @@ WORKDIR /var/www/localhost/htdocs/openemr
 # Railway deploys this workspace state instead of the upstream image code.
 COPY . .
 
-# Track A isolated REST auth tests (no DB). Fails the image build on regressions (`composer phpunit-track-a-isolated`).
+# Track A isolated tests (no DB): `phpunit-isolated.xml` testsuite `track-a`. Fails the image build on regressions.
 # Skip for a faster local build: docker build --build-arg OPENEMR_RUN_TRACK_A_TESTS=0 .
 ARG OPENEMR_RUN_TRACK_A_TESTS=1
 RUN if [ "$OPENEMR_RUN_TRACK_A_TESTS" != "1" ]; then exit 0; fi; \
@@ -23,7 +23,7 @@ RUN if [ "$OPENEMR_RUN_TRACK_A_TESTS" != "1" ]; then exit 0; fi; \
     fi; \
     curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --ignore-platform-reqs --no-interaction --prefer-dist --no-scripts; \
-    COMPOSER_ALLOW_SUPERUSER=1 composer phpunit-track-a-isolated; \
+    ./vendor/bin/phpunit -c phpunit-isolated.xml --testsuite track-a; \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --ignore-platform-reqs --no-interaction --no-dev --prefer-dist --no-scripts; \
     rm -f /usr/local/bin/composer; \
     rm -rf /root/.composer; \
