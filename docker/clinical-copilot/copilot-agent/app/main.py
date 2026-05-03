@@ -9,11 +9,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.chat import router as chat_router
+from app.langsmith_env import apply_langchain_runtime_env
 from app.middleware_inflight import InflightLimitMiddleware
 from app.openemr_http import OpenEmrHttpPool
+from app.retrieval_backends import StubRetrievalBackend
 from app.settings import Settings
 
 _SETTINGS = Settings.load()
+apply_langchain_runtime_env(_SETTINGS)
 
 
 @asynccontextmanager
@@ -21,6 +24,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = OpenEmrHttpPool(_SETTINGS)
     app.state.settings = _SETTINGS
     app.state.openemr_pool = pool
+    app.state.retrieval_backend = StubRetrievalBackend()
     try:
         yield
     finally:

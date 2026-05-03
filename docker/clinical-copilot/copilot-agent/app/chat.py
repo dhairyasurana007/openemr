@@ -1,15 +1,20 @@
-"""User chat → OpenRouter (LangChain); called from OpenEMR web via server-to-server proxy."""
+"""User chat → OpenRouter (LangChain) with model-driven retrieval tools and post-verification."""
 
 from __future__ import annotations
 
 import asyncio
 import secrets
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.llm_prompts import SUMMARIZER_SYSTEM_PROMPT
+from app.agent_runner import run_chat_with_tools
+from app.output_safety import (
+    check_schedule_wide_safety,
+    check_uc5_draft_with_contradictory_note,
+)
+from app.retrieval_backends import RetrievalBackend
 from app.settings import Settings
 
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -17,6 +22,10 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 
 class ChatRequestBody(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    surface: Literal["encounter", "schedule_day", "uc5_draft"] = Field(
+        default="encounter",
+        description="Caller context for deterministic output-safety gates (UC1/UC6 vs UC5).",
+    )
 
 
 def _verify_internal_secret(settings: Settings, header_value: str | None) -> None:
@@ -32,31 +41,19 @@ def _verify_internal_secret(settings: Settings, header_value: str | None) -> Non
         raise HTTPException(status_code=403, detail="Clinical co-pilot internal authentication failed")
 
 
-def _invoke_llm_sync(message: str, settings: Settings) -> str:
-    from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_openai import ChatOpenAI
+def _run_copilot_chat_sync(message: str, settings: Settings, backend: RetrievalBackend) -> tuple[str, dict[str, Any]]:
+    return run_chat_with_tools(message, settings, backend)
 
-    llm = ChatOpenAI(
-        model=settings.openrouter_model,
-        api_key=settings.openrouter_api_key,
-        base_url="https://openrouter.ai/api/v1",
-        timeout=settings.openrouter_http_timeout_s,
-        max_retries=1,
-        default_headers={
-            "HTTP-Referer": settings.openrouter_http_referer,
-            "X-Title": settings.openrouter_app_title,
-        },
-    )
-    response = llm.invoke(
-        [
-            SystemMessage(content=SUMMARIZER_SYSTEM_PROMPT),
-            HumanMessage(content=message),
-        ]
-    )
-    content = response.content
-    if not isinstance(content, str):
-        return str(content)
-    return content
+
+def _output_safety_findings(surface: str, reply: str) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    if surface == "schedule_day":
+        for f in check_schedule_wide_safety(reply):
+            findings.append({"code": f.code, "detail": f.detail})
+    elif surface == "uc5_draft":
+        for f in check_uc5_draft_with_contradictory_note(reply):
+            findings.append({"code": f.code, "detail": f.detail})
+    return findings
 
 
 @router.post("/chat")
@@ -66,7 +63,7 @@ async def chat(
     x_clinical_copilot_internal_secret: Annotated[
         str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
     ] = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     settings: Settings = request.app.state.settings
     _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
 
@@ -76,12 +73,35 @@ async def chat(
             detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
         )
 
+    backend: RetrievalBackend = request.app.state.retrieval_backend
+
     try:
-        reply = await asyncio.to_thread(_invoke_llm_sync, body.message.strip(), settings)
+        reply, diagnostics = await asyncio.to_thread(
+            _run_copilot_chat_sync,
+            body.message.strip(),
+            settings,
+            backend,
+        )
     except HTTPException:
         raise
     except Exception as exc:
         # Do not leak vendor or network details to clients.
         raise HTTPException(status_code=502, detail="Upstream language model request failed.") from exc
 
-    return {"reply": reply}
+    out: dict[str, Any] = {"reply": reply}
+    out["tools_used"] = diagnostics.get("tools_used") or []
+    out["summarization_mode"] = diagnostics.get("summarization_mode", "")
+    if diagnostics.get("retrieval_truncated") is True:
+        out["retrieval_truncated"] = True
+    out["verification"] = diagnostics.get("verification", {})
+    vf = diagnostics.get("verification_findings") or []
+    if vf:
+        out["verification_findings"] = vf
+    out["tool_rounds_used"] = diagnostics.get("tool_rounds_used", 0)
+    out["tool_payload_count"] = diagnostics.get("tool_payload_count", 0)
+
+    safety = _output_safety_findings(body.surface, reply)
+    if safety:
+        out["output_safety_findings"] = safety
+
+    return out

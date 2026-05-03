@@ -54,9 +54,28 @@ class Settings:
     """When True, /meta/health/readyz awaits OpenEMR /meta/health/livez (stricter deploy ordering)."""
     copilot_max_inflight: int
     """When >0, cap concurrent non-health requests (503 when saturated)."""
+    langchain_api_key: str
+    """LangSmith API key (``LANGCHAIN_API_KEY``). Empty disables authenticated tracing."""
+    langchain_tracing_v2: bool
+    """``LANGCHAIN_TRACING_V2``: send LangChain runs to LangSmith when true and key is set."""
+    langchain_project: str
+    """LangSmith project name (``LANGCHAIN_PROJECT``)."""
+    langchain_endpoint: str
+    """LangSmith API base URL (``LANGCHAIN_ENDPOINT``); empty = client default."""
 
     @staticmethod
     def load() -> Settings:
+        api_key = (
+            (os.environ.get("LANGCHAIN_API_KEY") or os.environ.get("LANGSMITH_API_KEY") or "").strip()
+        )
+        tracing_raw = os.environ.get("LANGCHAIN_TRACING_V2")
+        if tracing_raw is None or str(tracing_raw).strip() == "":
+            langchain_tracing_v2 = api_key != ""
+        else:
+            langchain_tracing_v2 = str(tracing_raw).strip().lower() in ("1", "true", "yes", "on")
+        if api_key == "":
+            langchain_tracing_v2 = False
+
         return Settings(
             openrouter_api_key=(os.environ.get("OPENROUTER_API_KEY") or "").strip(),
             openrouter_model=(os.environ.get("OPENROUTER_MODEL") or "anthropic/claude-3.5-haiku").strip(),
@@ -78,6 +97,10 @@ class Settings:
             openemr_max_concurrent_requests=_int("OPENEMR_MAX_CONCURRENT_REQUESTS", 8),
             readyz_probe_openemr=_bool("COPILOT_READYZ_PROBE_OPENEMR", False),
             copilot_max_inflight=_int("COPILOT_MAX_INFLIGHT", 0),
+            langchain_api_key=api_key,
+            langchain_tracing_v2=langchain_tracing_v2,
+            langchain_project=(os.environ.get("LANGCHAIN_PROJECT") or "clinical-copilot").strip(),
+            langchain_endpoint=(os.environ.get("LANGCHAIN_ENDPOINT") or "").strip(),
         )
 
     def openemr_base_url(self) -> str:
