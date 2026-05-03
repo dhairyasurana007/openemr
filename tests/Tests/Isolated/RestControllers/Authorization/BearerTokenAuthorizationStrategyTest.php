@@ -12,6 +12,7 @@ use OpenEMR\Common\Http\HttpRestRequest;
 use OpenEMR\Common\Logging\EventAuditLogger;
 use OpenEMR\Core\OEGlobalsBag;
 use OpenEMR\RestControllers\Authorization\BearerTokenAuthorizationStrategy;
+use OpenEMR\RestControllers\Authorization\PatientLaunchAccessVerifier;
 use OpenEMR\Services\TrustedUserService;
 use OpenEMR\Services\UserService;
 use PHPUnit\Framework\TestCase;
@@ -223,5 +224,55 @@ class BearerTokenAuthorizationStrategyTest extends TestCase
         $strategy = $this->getBearerTokenAuthorizationStrategy($request);
         $uuidUserAccountClass = $strategy->getUuidUserAccountFactory()(1);
         $this->assertInstanceOf(UuidUserAccount::class, $uuidUserAccountClass, "Expected UuidUserAccount instance");
+    }
+
+    public function testPopulateTokenContextForRequestDoesNotSetPatientWhenVerifierDenies(): void
+    {
+        $oauthUuid = '123e4567-e89b-12d3-a456-426614174000';
+        $patientUuid = '223e4567-e89b-12d3-a456-426614174000';
+        $request = HttpRestRequest::create('/apis/default/fhir/Patient', 'GET');
+        $request->setSession($this->getMockSessionForRequest($request));
+        $request->setAccessTokenId('tok-1');
+        $request->setRequestUser($oauthUuid, ['id' => 1, 'uuid' => $oauthUuid, 'username' => 'testuser']);
+
+        $repo = $this->createMock(AccessTokenRepository::class);
+        $repo->method('getTokenByToken')->willReturn(['context' => json_encode(['patient' => $patientUuid])]);
+
+        $strategy = $this->getBearerTokenAuthorizationStrategy($request);
+        $strategy->setAccessTokenRepository($repo);
+
+        $verifier = $this->createMock(PatientLaunchAccessVerifier::class);
+        $verifier->expects($this->once())->method('userMayBindSmartPatient')
+            ->with($oauthUuid, $patientUuid)
+            ->willReturn(false);
+        $strategy->setPatientLaunchAccessVerifier($verifier);
+
+        $strategy->populateTokenContextForRequest($request);
+        $this->assertNull($request->getPatientUUIDString());
+    }
+
+    public function testPopulateTokenContextForRequestSetsPatientWhenVerifierAllows(): void
+    {
+        $oauthUuid = '123e4567-e89b-12d3-a456-426614174000';
+        $patientUuid = '223e4567-e89b-12d3-a456-426614174000';
+        $request = HttpRestRequest::create('/apis/default/fhir/Patient', 'GET');
+        $request->setSession($this->getMockSessionForRequest($request));
+        $request->setAccessTokenId('tok-1');
+        $request->setRequestUser($oauthUuid, ['id' => 1, 'uuid' => $oauthUuid, 'username' => 'testuser']);
+
+        $repo = $this->createMock(AccessTokenRepository::class);
+        $repo->method('getTokenByToken')->willReturn(['context' => json_encode(['patient' => $patientUuid])]);
+
+        $strategy = $this->getBearerTokenAuthorizationStrategy($request);
+        $strategy->setAccessTokenRepository($repo);
+
+        $verifier = $this->createMock(PatientLaunchAccessVerifier::class);
+        $verifier->expects($this->once())->method('userMayBindSmartPatient')
+            ->with($oauthUuid, $patientUuid)
+            ->willReturn(true);
+        $strategy->setPatientLaunchAccessVerifier($verifier);
+
+        $strategy->populateTokenContextForRequest($request);
+        $this->assertSame($patientUuid, $request->getPatientUUIDString());
     }
 }

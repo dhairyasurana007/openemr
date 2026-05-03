@@ -54,7 +54,9 @@ class SkipAuthorizationStrategy implements IAuthorizationStrategy
             $pathInfo = substr($pathInfo, strlen($sitePath));
         }
         foreach ($this->skipRoutes as $route) {
-            if (str_starts_with($route, $pathInfo)) {
+            // Request path must start with the configured skip prefix (not the reverse), otherwise
+            // short pathInfo values can incorrectly match longer skip routes.
+            if (str_starts_with($pathInfo, $route)) {
                 return true;
             }
         }

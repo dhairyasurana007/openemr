@@ -168,6 +168,7 @@ class PatientService extends BaseService
     public function databaseInsert($data)
     {
         $session = SessionWrapperFactory::getInstance()->getActiveSession();
+        $data = $this->normalizePatientDataForStorage($data);
         $freshPid = $this->getFreshPid();
         $data['pid'] = $freshPid;
         $data['uuid'] = (new UuidRegistry(['table_name' => 'patient_data']))->createUuid();
@@ -251,6 +252,7 @@ class PatientService extends BaseService
     public function databaseUpdate($data)
     {
         $session = SessionWrapperFactory::getInstance()->getActiveSession();
+        $data = $this->normalizePatientDataForStorage($data);
         // Get the data before update to send to the event listener
         /** @var int $pid */
         $pid = $data['pid'];
@@ -928,6 +930,36 @@ class PatientService extends BaseService
             $this->patientSuffixKeys = [xl('Jr.'), ' ' . xl('Jr'), xl('Sr.'), ' ' . xl('Sr'), xl('II{{patient suffix}}'), xl('III{{patient suffix}}'), xl('IV{{patient suffix}}')];
         }
         return $this->patientSuffixKeys;
+    }
+
+    private function normalizePatientDataForStorage(array $data): array
+    {
+        foreach (['providerID', 'ref_providerID', 'advance_directive_user_authenticator', 'soap_import_status'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = $this->optionalInt($data[$field]);
+            }
+        }
+        if (array_key_exists('pharmacy_id', $data)) {
+            $data['pharmacy_id'] = $this->optionalInt($data['pharmacy_id'], 0);
+        }
+
+        foreach (['DOB', 'financial_review', 'regdate', 'contrastart', 'deceased_date', 'ad_reviewed'] as $field) {
+            if (array_key_exists($field, $data) && empty($data[$field])) {
+                $data[$field] = null;
+            }
+        }
+
+        return $data;
+    }
+
+    private function optionalInt($value, ?int $default = null): ?int
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+        return ($validated === false) ? $default : (int) $validated;
     }
 
     /**

@@ -43,6 +43,8 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
 
     private UserService $userService;
 
+    private ?PatientLaunchAccessVerifier $patientLaunchAccessVerifier = null;
+
     public function __construct(private OEGlobalsBag $globalsBag, private EventAuditLogger $auditLogger, ?LoggerInterface $logger = null)
     {
         if ($logger) {
@@ -425,6 +427,19 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
         return $this->userService;
     }
 
+    public function setPatientLaunchAccessVerifier(?PatientLaunchAccessVerifier $patientLaunchAccessVerifier): void
+    {
+        $this->patientLaunchAccessVerifier = $patientLaunchAccessVerifier;
+    }
+
+    protected function getPatientLaunchAccessVerifier(): PatientLaunchAccessVerifier
+    {
+        if ($this->patientLaunchAccessVerifier === null) {
+            $this->patientLaunchAccessVerifier = new PatientLaunchAccessVerifier($this->getUserService());
+        }
+        return $this->patientLaunchAccessVerifier;
+    }
+
     /**
      * Grabs all of the context information for the request's access token and populates any context variables the
      * request needs (such as patient binding information).  Returns the populated request
@@ -439,8 +454,16 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
         // case it is the patient value which is the logical id (ie uuid) of the patient.
         $patientUuid = $context['patient'] ?? null;
         if (!empty($patientUuid)) {
+            $oauthUserUuid = $restRequest->getRequestUserUUIDString()
+                ?? (isset($restRequest->getRequestUser()['uuid']) ? (string) $restRequest->getRequestUser()['uuid'] : '');
+            if ($oauthUserUuid === '') {
+                $this->getSystemLogger()->error(
+                    'OpenEMR Error: api had patient launch scope but oauth user uuid is not available for patient access verification.'
+                );
+                return $restRequest;
+            }
             // we only set the bound patient access if the underlying user can still access the patient
-            if ($this->checkUserHasAccessToPatient($restRequest->getRequestUserId(), $patientUuid)) {
+            if ($this->checkUserHasAccessToPatient($oauthUserUuid, $patientUuid)) {
                 $restRequest->setPatientUuidString($patientUuid);
             } else {
                 $this->getSystemLogger()->error("OpenEMR Error: api had patient launch scope but user did not have access to patient uuid."
@@ -472,15 +495,12 @@ class BearerTokenAuthorizationStrategy implements IAuthorizationStrategy
 
     /**
      * Checks whether a user has access to the patient. Returns true if the user can access the given patient, false otherwise
-     * @param $userId The id from the users table that represents the user
-     * @param $patientUuid The uuid from the patient_data table that represents the patient
+     * @param string $userId OAuth user UUID (users.uuid) for the token subject
+     * @param string $patientUuid The uuid from the patient_data table that represents the patient
      * @return bool True if has access, false otherwise
      */
     protected function checkUserHasAccessToPatient($userId, $patientUuid): bool
     {
-        // TODO: the session should never be populated with the pid from the access token unless the user had access to
-        // it.  However, if we wanted an additional check or if we wanted to fire off any kind of event that does
-        // patient filtering by provider / clinic we would handle that here.
-        return true;
+        return $this->getPatientLaunchAccessVerifier()->userMayBindSmartPatient((string) $userId, (string) $patientUuid);
     }
 }

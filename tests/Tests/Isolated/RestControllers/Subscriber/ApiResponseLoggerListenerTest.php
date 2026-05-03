@@ -137,4 +137,64 @@ class ApiResponseLoggerListenerTest extends TestCase
         $apiResponseLoggerListener->setEventAuditLogger($auditLogger);
         $apiResponseLoggerListener->onRequestTerminated($terminatedEvent);
     }
+
+    /**
+     * @return void
+     * @throws Exception
+     */
+    public function testOnRequestTerminatedSkipsWhenSkipResponseLoggingAttributeSet(): void
+    {
+        $globalsBag = new OEGlobalsBag([
+            'api_log_option' => 2,
+        ]);
+        $kernel = $this->createMock(OEHttpKernel::class);
+        $kernel->method('getGlobalsBag')
+            ->willReturn($globalsBag);
+        $request = HttpRestRequest::create('/api/test');
+        $request->attributes->set('skipResponseLogging', true);
+        $mockSessionFactory = new MockFileSessionStorageFactory();
+        $session = new Session($mockSessionFactory->createStorage(null));
+        $request->setSession($session);
+
+        $response = new JsonResponse(['secret' => 'phi'], Response::HTTP_OK);
+        $terminatedEvent = new TerminateEvent($kernel, $request, $response);
+
+        $auditLogger = $this->createMock(EventAuditLogger::class);
+        $auditLogger->expects($this->never())->method('recordLogItem');
+
+        $apiResponseLoggerListener = new ApiResponseLoggerListener();
+        $apiResponseLoggerListener->setSystemLogger($this->createMock(LoggerInterface::class));
+        $apiResponseLoggerListener->setEventAuditLogger($auditLogger);
+        $apiResponseLoggerListener->onRequestTerminated($terminatedEvent);
+    }
+
+    /**
+     * @return void
+     * @throws Exception
+     */
+    public function testOnRequestTerminatedSkipsWhenLocalApi(): void
+    {
+        $globalsBag = new OEGlobalsBag([
+            'api_log_option' => 2,
+        ]);
+        $kernel = $this->createMock(OEHttpKernel::class);
+        $kernel->method('getGlobalsBag')
+            ->willReturn($globalsBag);
+        $request = HttpRestRequest::create('/api/test');
+        $request->setIsLocalApi(true);
+        $mockSessionFactory = new MockFileSessionStorageFactory();
+        $session = new Session($mockSessionFactory->createStorage(null));
+        $request->setSession($session);
+
+        $response = new JsonResponse(['secret' => 'phi'], Response::HTTP_OK);
+        $terminatedEvent = new TerminateEvent($kernel, $request, $response);
+
+        $auditLogger = $this->createMock(EventAuditLogger::class);
+        $auditLogger->expects($this->never())->method('recordLogItem');
+
+        $apiResponseLoggerListener = new ApiResponseLoggerListener();
+        $apiResponseLoggerListener->setSystemLogger($this->createMock(LoggerInterface::class));
+        $apiResponseLoggerListener->setEventAuditLogger($auditLogger);
+        $apiResponseLoggerListener->onRequestTerminated($terminatedEvent);
+    }
 }

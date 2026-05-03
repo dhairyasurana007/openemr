@@ -1,0 +1,164 @@
+# Clinical Co-Pilot — container stack aligned with ARCHITECTURE.md (repo root).
+#
+# If you use setup.php "Server Host": use the MySQL hostname or IP only (no https://).
+# From inside this Compose network that is: openemr-mysql (port 3306 in the separate field).
+# Hosted DB examples look like mysql.example.internal — still a hostname, not a full URL.
+#
+# Usage (from this directory):
+#   docker compose up --build --detach
+#   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
+#   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
+#   (liveness: /meta/health/livez — cheap; readiness defaults to process-only unless
+#   COPILOT_READYZ_PROBE_OPENEMR=true probes OpenEMR /meta/health/livez)
+#
+# Agent→OpenEMR HTTP bounds (optional env on copilot-agent):
+#   OPENEMR_HTTP_TIMEOUT_CONNECT_S, OPENEMR_HTTP_TIMEOUT_READ_S,
+#   OPENEMR_HTTP_MAX_CONNECTIONS, OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS,
+#   OPENEMR_MAX_CONCURRENT_REQUESTS (semaphore for REST tool calls),
+#   COPILOT_MAX_INFLIGHT (inbound 503 cap for non-health paths; 0 = off)
+#
+# Optional Redis (5th container) for agent replicas / job queues:
+#   docker compose --profile redis up --build --detach
+#
+# Secrets: copy values into a local `.env` (never commit). LangSmith / OpenRouter are external.
+#   OPENROUTER_API_KEY=...
+#   LANGCHAIN_API_KEY=...   # LangSmith
+#   LANGCHAIN_TRACING_V2=true
+#
+# Skipping setup.php (automatic install):
+# The official `openemr/openemr` image runs `openemr.sh` on start. It reads
+# `sites/default/sqlconf.php` → `$config`. If `$config` is 0, it runs
+# `auto_configure.php` when MYSQL_HOST and MYSQL_ROOT_PASS are non-empty and
+# MANUAL_SETUP is not "yes". OPENEMR_SETTING_* does NOT replace that step.
+# Custom images built from this repo (Dockerfile + COPY) should use
+# `contrib/render/render-openemr-bootstrap.sh`, which runs
+# `contrib/render/openemr-auto-install.php` before `openemr.sh` when the same
+# env vars are set (so setup.php is not required when auto_configure is absent).
+# If you still see setup.php: check logs for "Running quick setup!" / errors;
+# verify DB is reachable at MYSQL_HOST:3306 from the openemr-web container;
+# remove stale volumes (`docker compose down -v`) if a prior install half-failed.
+
+name: clinical-copilot
+
+services:
+  openemr-mysql:
+    container_name: openemr-mysql
+    restart: unless-stopped
+    image: mariadb:11.8.6@sha256:78a5047d3ba33975f183f183c2464cc7f1eab13ec8667e57cc9a5821d6da7577
+    command: ['mariadbd', '--character-set-server=utf8mb4']
+    volumes:
+      - openemr_database:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/healthcheck.sh', '--su-mysql', '--connect', '--innodb_initialized']
+      start_period: 1m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+
+  openemr-web:
+    container_name: openemr-web
+    restart: unless-stopped
+    image: openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+    expose:
+      - '80'
+      - '443'
+    volumes:
+      - openemr_logs:/var/log
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+    # Bootstrap in custom images may derive CLINICAL_COPILOT_AGENT_BASE_URL from *_PRIVATE_HOSTPORT on PaaS.
+    environment:
+      MYSQL_HOST: openemr-mysql
+      MYSQL_ROOT_PASS: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: ${MYSQL_USER:-openemr}
+      MYSQL_PASS: ${MYSQL_PASS:-openemr}
+      OE_USER: ${OE_USER:-admin}
+      OE_PASS: ${OE_PASS:-pass}
+      # Must be absent or "no" for the image entrypoint to run auto_configure (skip web setup).
+      MANUAL_SETUP: ${MANUAL_SETUP:-no}
+      # Match the public URL browsers use (nginx TLS port). Adjust for real deployments.
+      OPENEMR_SETTING_site_addr_oath: ${OPENEMR_SITE_ADDR:-https://localhost:8443}
+      # Private agent URL on the Compose network (mirrors Render CLINICAL_COPILOT_AGENT_BASE_URL).
+      CLINICAL_COPILOT_AGENT_BASE_URL: ${CLINICAL_COPILOT_AGENT_BASE_URL:-http://copilot-agent:8000}
+    depends_on:
+      openemr-mysql:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/curl
+        - --fail
+        - --insecure
+        - --location
+        - --show-error
+        - --silent
+        - https://localhost/meta/health/readyz
+      start_period: 3m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    build:
+      context: ./nginx
+    ports:
+      - '${COPILOT_HTTP_PORT:-8080}:80'
+      - '${COPILOT_HTTPS_PORT:-8443}:443'
+    depends_on:
+      openemr-web:
+        condition: service_healthy
+
+  copilot-agent:
+    container_name: copilot-agent
+    restart: unless-stopped
+    build:
+      context: ./copilot-agent
+    depends_on:
+      openemr-web:
+        condition: service_healthy
+    ports:
+      - '${COPILOT_AGENT_PORT:-8000}:8000'
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-clinical-copilot}
+      REDIS_URL: ${REDIS_URL:-}
+      # Agent → OpenEMR REST (internal HTTP to app container).
+      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-openemr-web:80}
+      CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
+      COPILOT_READYZ_PROBE_OPENEMR: ${COPILOT_READYZ_PROBE_OPENEMR:-false}
+      OPENEMR_HTTP_TIMEOUT_CONNECT_S: ${OPENEMR_HTTP_TIMEOUT_CONNECT_S:-2}
+      OPENEMR_HTTP_TIMEOUT_READ_S: ${OPENEMR_HTTP_TIMEOUT_READ_S:-30}
+      OPENEMR_HTTP_MAX_CONNECTIONS: ${OPENEMR_HTTP_MAX_CONNECTIONS:-20}
+      OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS: ${OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS:-10}
+      OPENEMR_MAX_CONCURRENT_REQUESTS: ${OPENEMR_MAX_CONCURRENT_REQUESTS:-8}
+      COPILOT_MAX_INFLIGHT: ${COPILOT_MAX_INFLIGHT:-0}
+
+  redis:
+    container_name: copilot-redis
+    profiles: [redis]
+    restart: unless-stopped
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - copilot_redis:/data
+    expose:
+      - '6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  openemr_database: {}
+  openemr_logs: {}
+  openemr_sites: {}
+  copilot_redis: {}

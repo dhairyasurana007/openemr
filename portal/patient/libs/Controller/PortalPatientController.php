@@ -159,15 +159,15 @@ class PortalPatientController extends AppBasePortalController
             $patient->PhoneBiz = $this->SafeGetVal($json, 'phoneBiz', $patient->PhoneBiz);
             $patient->PhoneContact = $this->SafeGetVal($json, 'phoneContact', $patient->PhoneContact);
             $patient->PhoneCell = $this->SafeGetVal($json, 'phoneCell', $patient->PhoneCell);
-            $patient->PharmacyId = $this->SafeGetVal($json, 'pharmacyId', $patient->PharmacyId);
+            $patient->PharmacyId = $this->SafeGetOptionalIntVal($json, 'pharmacyId', $patient->PharmacyId);
             $patient->Status = $this->SafeGetVal($json, 'status', $patient->Status);
             $patient->ContactRelationship = $this->SafeGetVal($json, 'contactRelationship', $patient->ContactRelationship);
             $patient->Date = date('Y-m-d H:i:s', strtotime((string) $this->SafeGetVal($json, 'date', $patient->Date)));
             $patient->Sex = $this->SafeGetVal($json, 'sex', $patient->Sex);
             $patient->Referrer = $this->SafeGetVal($json, 'referrer', $patient->Referrer);
             $patient->Referrerid = $this->SafeGetVal($json, 'referrerid', $patient->Referrerid);
-            $patient->Providerid = $this->SafeGetVal($json, 'providerid', $patient->Providerid);
-            $patient->RefProviderid = $this->SafeGetVal($json, 'refProviderid', $patient->RefProviderid);
+            $patient->Providerid = $this->SafeGetOptionalIntVal($json, 'providerid', $patient->Providerid);
+            $patient->RefProviderid = $this->SafeGetOptionalIntVal($json, 'refProviderid', $patient->RefProviderid);
             $patient->Email = $this->SafeGetVal($json, 'email', $patient->Email);
             $patient->EmailDirect = $this->SafeGetVal($json, 'emailDirect', $patient->EmailDirect);
             $patient->Ethnoracial = $this->SafeGetVal($json, 'ethnoracial', $patient->Ethnoracial);
@@ -206,7 +206,7 @@ class PortalPatientController extends AppBasePortalController
             $patient->AllowImmInfoShare = $this->SafeGetVal($json, 'allowImmInfoShare', $patient->AllowImmInfoShare);
             $patient->AllowHealthInfoEx = $this->SafeGetVal($json, 'allowHealthInfoEx', $patient->AllowHealthInfoEx);
             $patient->AllowPatientPortal = $this->SafeGetVal($json, 'allowPatientPortal', $patient->AllowPatientPortal);
-            $patient->CareTeam = $this->SafeGetVal($json, 'careTeam', $patient->CareTeam);
+            $patient->CareTeam = $this->SafeGetOptionalIntVal($json, 'careTeam', $patient->CareTeam);
             $patient->County = $this->SafeGetVal($json, 'county', $patient->County);
             //$patient->Industry = $this->SafeGetVal($json, 'industry', $patient->Industry);
             $patient->Note = $this->SafeGetVal($json, 'note', $patient->Note);

@@ -21,6 +21,32 @@ if (empty($site_id) || preg_match('/[^A-Za-z0-9\\-.]/', $site_id)) {
     die("Site ID '" . htmlspecialchars($site_id, ENT_NOQUOTES) . "' contains invalid characters.");
 }
 
+// Until MySQL accepts connections, show a friendly wait page (cold start / Render DB boot).
+// Set OPENEMR_SKIP_DB_GATE=1 to disable. See public/initializing.html.
+if (($_ENV['OPENEMR_SKIP_DB_GATE'] ?? getenv('OPENEMR_SKIP_DB_GATE')) !== '1') {
+    $dbHost = $_ENV['MYSQL_HOST'] ?? getenv('MYSQL_HOST');
+    if (is_string($dbHost) && $dbHost !== '') {
+        $dbPort = (int) (($_ENV['MYSQL_PORT'] ?? getenv('MYSQL_PORT')) ?: 3306);
+        $errno = 0;
+        $errstr = '';
+        $fp = @fsockopen($dbHost, $dbPort, $errno, $errstr, 1.5);
+        if ($fp === false) {
+            header('HTTP/1.1 503 Service Unavailable');
+            header('Cache-Control: no-store, no-cache, must-revalidate');
+            header('Retry-After: 5');
+            $waitFile = __DIR__ . '/public/initializing.html';
+            if (is_readable($waitFile)) {
+                readfile($waitFile);
+            } else {
+                header('Content-Type: text/plain; charset=UTF-8');
+                echo 'OpenEMR is starting; database is not reachable yet. Retry shortly.';
+            }
+            exit;
+        }
+        fclose($fp);
+    }
+}
+
 require_once "sites/$site_id/sqlconf.php";
 
 if ($config == 1) {

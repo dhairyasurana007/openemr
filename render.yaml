@@ -1,0 +1,188 @@
+# Render Blueprint — clinical-copilot topology: private MariaDB + OpenEMR web + Key Value Redis + copilot-agent.
+# Aligns with docker/clinical-copilot/docker-compose.yml (minus nginx/TLS edge on PaaS).
+#
+# ## Apply this (first time or switching from manual services)
+#
+# 1. Commit and push this file to the branch Render builds from (often `main`).
+# 2. Dashboard → Blueprints → **New Blueprint** → select this GitHub/GitLab repo.
+# 3. Render detects `render.yaml` at the repo root (or set **Blueprint Path** if you moved it).
+# 4. Review the **preview**: it creates/updates **four** services:
+#    - `openemr-mysql` — private MariaDB (not on the public internet).
+#    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
+#      **Track A REST/auth isolated tests** run during the **image build** (`composer phpunit-track-a-isolated` in the
+#      Dockerfile); a failing test fails the build. Disable locally: `docker build --build-arg OPENEMR_RUN_TRACK_A_TESTS=0 .`
+#      Other GitHub workflow YAML may live under `.github/future-workflows/` and is not executed until moved back to
+#      `.github/workflows/`.
+#    - `clinical-copilot-redis` — Render Key Value (Redis®-compatible); private mesh only (`ipAllowList: []`).
+#    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); Render
+#      `healthCheckPath` uses `/meta/health/readyz` (readiness). The agent also exposes
+#      `/meta/health/livez` for cheap liveness only (process up). Default readiness does
+#      not call OpenEMR; set `COPILOT_READYZ_PROBE_OPENEMR=true` on `copilot-agent` to gate
+#      routing on OpenEMR `/meta/health/livez` (avoid OpenEMR `readyz` here — it bootstraps
+#      the app and can be slow / circular during deploy).
+#
+#    **MVP without managed Redis:** delete the `clinical-copilot-redis` entry below and on `copilot-agent`
+#    replace the `REDIS_URL` `fromService` block with `- key: REDIS_URL` / `sync: false` (set in Dashboard
+#    or leave unset until you add an external Redis / enable the Key Value service again).
+# 5. **Create / update** the Blueprint. First apply can take several minutes (DB disk + image pulls).
+# 6. After deploy: open the **openemr-web** public URL; bootstrap runs `openemr-auto-install.php` when env is correct.
+#
+# ## Secrets (Dashboard: set on each service, same value where noted)
+#
+# - **copilot-agent:** `OPENROUTER_API_KEY` (required for LLM calls). Optional: LangSmith keys.
+#   `REDIS_URL` is wired from `clinical-copilot-redis` when that service is present (see MVP note above).
+# - **Both web services:** `CLINICAL_COPILOT_INTERNAL_SECRET` — optional shared secret for server-to-server auth
+#   (set the same value on `openemr-web` and `copilot-agent` when you enforce it in the agent module).
+# - **openemr-web:** `CLINICAL_COPILOT_AGENT_PUBLIC_URL` — optional; public agent URL if the browser calls the
+#   agent directly (PHP→agent uses private mesh via `CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT` / derived
+#   `CLINICAL_COPILOT_AGENT_BASE_URL` from `contrib/render/render-openemr-bootstrap.sh`).
+# - **openemr-web:** `OE_PASS`, `OPENEMR_SETTING_site_addr_oath` as needed (see envVars below).
+#
+# ## Names and regions
+#
+# - **Region:** All services use `virginia` (US East). They must match for private networking.
+#   If Virginia is unavailable for your workspace or instance type, set every `region` below to
+#   `ohio` (Render’s other US region east of Oregon). Do not mix regions across services.
+# - Edit **name** under each service to adopt an existing Render service instead of creating a new one.
+#
+# ## Billing / plans
+#
+# - Private services need a **paid** instance type on Render (see Render pricing).
+# - `plan: starter` must be valid for your workspace; change if the sync UI errors.
+#
+# ## Troubleshooting
+#
+# - `MYSQL_HOST` is injected as the **private hostname** of `openemr-mysql` (not a Docker Compose name).
+# - If a previous manual deploy failed, clear the web service **persistent disk** (if any) or fix `sites/`.
+# - See `contrib/render/render-openemr-bootstrap.sh` for MySQL wait / install order.
+# - Renaming: older blueprints used `openemr-copilot-agent` for the OpenEMR image only. Adopt or rename
+#   that service to `openemr-web` in the Dashboard if you are migrating this file onto an existing stack.
+
+services:
+  - type: pserv
+    name: openemr-mysql
+    runtime: image
+    region: virginia
+    plan: starter
+    # Use library/ + patch tag — Render rejects some short tags (e.g. mariadb:11.8).
+    image:
+      url: docker.io/library/mariadb:11.8.6
+    disk:
+      name: mariadb-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_ROOT_PASSWORD
+        generateValue: true
+      - key: MYSQL_DATABASE
+        value: openemr
+      - key: MYSQL_USER
+        value: openemr
+      - key: MYSQL_PASSWORD
+        generateValue: true
+
+  - type: web
+    name: openemr-web
+    runtime: docker
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /meta/health/readyz
+    envVars:
+      - key: PORT
+        value: "80"
+      - key: MYSQL_HOST
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          property: host
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_ROOT_PASS
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          envVarKey: MYSQL_ROOT_PASSWORD
+      - key: MYSQL_USER
+        value: openemr
+      - key: MYSQL_PASS
+        fromService:
+          name: openemr-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+      - key: MYSQL_DATABASE
+        value: openemr
+      - key: MANUAL_SETUP
+        value: "no"
+      - key: CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT
+        fromService:
+          name: copilot-agent
+          type: web
+          property: hostport
+      - key: CLINICAL_COPILOT_AGENT_PUBLIC_URL
+        sync: false
+      - key: CLINICAL_COPILOT_INTERNAL_SECRET
+        sync: false
+      # Set in Dashboard after first deploy if you need a fixed public OAuth URL.
+      - key: OPENEMR_SETTING_site_addr_oath
+        sync: false
+      # Optional: set a strong initial OpenEMR admin password (otherwise default is weak).
+      - key: OE_PASS
+        sync: false
+
+  # Optional cost/complexity tradeoff: remove this block + fix `REDIS_URL` on `copilot-agent` for MVP (see header).
+  - type: keyvalue
+    name: clinical-copilot-redis
+    region: virginia
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  - type: web
+    name: copilot-agent
+    runtime: docker
+    region: virginia
+    dockerfilePath: ./docker/clinical-copilot/copilot-agent/Dockerfile
+    dockerContext: ./docker/clinical-copilot/copilot-agent
+    plan: starter
+    healthCheckPath: /meta/health/readyz
+    envVars:
+      - key: OPENEMR_INTERNAL_HOSTPORT
+        fromService:
+          name: openemr-web
+          type: web
+          property: hostport
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "false"
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_ENDPOINT
+        value: https://api.smith.langchain.com
+      - key: LANGCHAIN_PROJECT
+        value: clinical-copilot
+      - key: REDIS_URL
+        fromService:
+          name: clinical-copilot-redis
+          type: keyvalue
+          property: connectionString
+      - key: CLINICAL_COPILOT_INTERNAL_SECRET
+        sync: false
+      # Optional: stricter readiness (agent 503 until OpenEMR livez responds).
+      - key: COPILOT_READYZ_PROBE_OPENEMR
+        value: "false"
+      # Agent→OpenEMR client bounds (timeouts, pool size, concurrent REST cap).
+      - key: OPENEMR_HTTP_TIMEOUT_CONNECT_S
+        value: "2"
+      - key: OPENEMR_HTTP_TIMEOUT_READ_S
+        value: "30"
+      - key: OPENEMR_HTTP_MAX_CONNECTIONS
+        value: "20"
+      - key: OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS
+        value: "10"
+      - key: OPENEMR_MAX_CONCURRENT_REQUESTS
+        value: "8"
+      # Inbound backpressure for non-health routes (0 = unlimited).
+      - key: COPILOT_MAX_INFLIGHT
+        value: "0"

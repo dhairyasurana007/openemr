@@ -23,14 +23,31 @@ class SkipAuthorizationStrategyTest extends TestCase
         $this->assertTrue($skipAuthorizationStrategy->shouldProcessRequest($request), "Options should be skipped when flag is set");
     }
 
-    public function testAddSkipRoute(): void
+    public function testShouldProcessRequestMatchesWhenPathStartsWithSkipPrefix(): void
     {
-        $this->markTestIncomplete("Test is incomplete");
+        $request = HttpRestRequest::create('/default/fhir/metadata', 'GET');
+        $request->setRequestSite('default');
+        $strategy = new SkipAuthorizationStrategy();
+        $strategy->addSkipRoute('/fhir/metadata');
+        $this->assertTrue($strategy->shouldProcessRequest($request));
     }
 
-    public function testShouldProcessRequest(): void
+    public function testShouldProcessRequestDoesNotMatchWhenOnlySkipRouteIsPrefixOfPath(): void
     {
-        $this->markTestIncomplete("Test is incomplete");
+        $request = HttpRestRequest::create('/default/fhir/meta', 'GET');
+        $request->setRequestSite('default');
+        $strategy = new SkipAuthorizationStrategy();
+        $strategy->addSkipRoute('/fhir/metadata');
+        $this->assertFalse($strategy->shouldProcessRequest($request));
+    }
+
+    public function testShouldProcessRequestDoesNotMatchUnlistedPath(): void
+    {
+        $request = HttpRestRequest::create('/default/fhir/Patient', 'GET');
+        $request->setRequestSite('default');
+        $strategy = new SkipAuthorizationStrategy();
+        $strategy->addSkipRoute('/fhir/metadata');
+        $this->assertFalse($strategy->shouldProcessRequest($request));
     }
 
     public function testAuthorizeRequestWithValidSkippedPath(): void
@@ -48,7 +65,9 @@ class SkipAuthorizationStrategyTest extends TestCase
             ->with($userId)
             ->willReturn(['id' => $userId, 'uuid' => $userUuid, 'username' => 'testuser']);
         $skipAuthorizationStrategy->setUserService($mockUserService);
-        $skipAuthorizationStrategy->addSkipRoute("/apis/default/fhir/metadata");
+        $request->server->set('PATH_INFO', '/default/fhir/metadata');
+        $request->setRequestSite('default');
+        $skipAuthorizationStrategy->addSkipRoute('/fhir/metadata');
         $this->assertTrue($skipAuthorizationStrategy->authorizeRequest($request), "Path should be authorized for skipped path");
         // now assert all the attributes that were populated.
 

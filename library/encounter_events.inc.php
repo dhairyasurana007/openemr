@@ -347,6 +347,15 @@ function check_event_exist($eid)
 // $args is mainly filled with content from the POST http var
 function InsertEvent($args, $from = 'general')
 {
+    $optionalInt = static function ($value, int $default = 0): int {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+        return ($validated === false) ? $default : (int) $validated;
+    };
+
     $pc_recurrtype = '0';
     if (!empty($args['form_repeat']) || !empty($args['days_every_week'])) {
         if ($args['recurrspec']['event_repeat_freq_type'] == "6") {
@@ -358,8 +367,12 @@ function InsertEvent($args, $from = 'general')
 
     $form_pid = empty($args['form_pid']) ? '' : $args['form_pid'];
     $form_room = empty($args['form_room']) ? '' : $args['form_room'];
-    $form_gid = empty($args['form_gid']) ? '' : $args['form_gid'];
-    ;
+    $form_gid = $optionalInt($args['form_gid'] ?? null);
+    $new_multiple_value = $optionalInt($args['new_multiple_value'] ?? null);
+    $form_prefcat = $optionalInt($args['form_prefcat'] ?? null);
+    $facility = $optionalInt($args['facility'] ?? null);
+    $billing_facility = $optionalInt($args['billing_facility'] ?? null);
+
     if ($from == 'general') {
         $session = SessionWrapperFactory::getInstance()->getActiveSession();
         $pc_eid = sqlInsert(
@@ -369,16 +382,16 @@ function InsertEvent($args, $from = 'general')
             "pc_recurrspec, pc_startTime, pc_endTime, pc_alldayevent, " .
             "pc_apptstatus, pc_prefcatid, pc_location, pc_eventstatus, pc_sharing, pc_facility,pc_billing_location,pc_room " .
             ") VALUES (?,?,?,?,?,?,NOW(),?,?,?,?,?,?,?,?,?,?,?,?,?,1,1,?,?,?)",
-            [$args['form_category'],($args['new_multiple_value'] ?? ''),$args['form_provider'],$form_pid,$form_gid,
+            [$args['form_category'],$new_multiple_value,$args['form_provider'],$form_pid,$form_gid,
             $args['form_title'],$args['form_comments'],$session->get('authUserID'),$args['event_date'],
             fixDate(is_string($args['form_enddate']) ? $args['form_enddate'] : null, null),$args['duration'],$pc_recurrtype,serialize($args['recurrspec']),
-            $args['starttime'],$args['endtime'],$args['form_allday'],$args['form_apptstatus'],$args['form_prefcat'],
-            $args['locationspec'],(int)$args['facility'],(int)$args['billing_facility'],$form_room]
+            $args['starttime'],$args['endtime'],$args['form_allday'],$args['form_apptstatus'],$form_prefcat,
+            $args['locationspec'],$facility,$billing_facility,$form_room]
         );
 
             //Manage tracker status.
         if (!empty($form_pid)) {
-            manage_tracker_status($args['event_date'], $args['starttime'], $pc_eid, $form_pid, $session->get('authUser'), $args['form_apptstatus'], $args['form_room']);
+            manage_tracker_status($args['event_date'], $args['starttime'], $pc_eid, $form_pid, $session->get('authUser'), $args['form_apptstatus'], $form_room);
         }
 
             OEGlobalsBag::getInstance()->set('temporary-eid-for-manage-tracker', $pc_eid); //used by manage tracker module to set correct encounter in tracker when check in
@@ -392,13 +405,13 @@ function InsertEvent($args, $from = 'general')
             "pc_recurrspec, pc_startTime, pc_endTime, pc_alldayevent, " .
             "pc_apptstatus, pc_prefcatid, pc_location, pc_eventstatus, pc_sharing, pc_facility,pc_billing_location " .
             ") VALUES (?,?,?,?,?,NOW(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [$args['form_category'],$args['new_multiple_value'],$args['form_provider'],$form_pid,$args['form_title'],
+            [$args['form_category'],$new_multiple_value,$args['form_provider'],$form_pid,$args['form_title'],
                 $args['event_date'],fixDate(is_string($args['form_enddate']) ? $args['form_enddate'] : null, null),$args['duration'],$pc_recurrtype,serialize($args['recurrspec']),
-                $args['starttime'],$args['endtime'],$args['form_allday'],$args['form_apptstatus'],$args['form_prefcat'], $args['locationspec'],
+                $args['starttime'],$args['endtime'],$args['form_allday'],$args['form_apptstatus'],$form_prefcat, $args['locationspec'],
             1,
             1,
-            (int)$args['facility'],
-            (int)$args['billing_facility']]
+            $facility,
+            $billing_facility]
         );
     }
 }
