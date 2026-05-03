@@ -44,4 +44,12 @@ final readonly class ClinicalCopilotAgentChatAuditBinding
 
         return new self($userId, $pid, $encounter);
     }
+
+    /**
+     * Explicit patient context (e.g. login-time calendar match) when session pid is unset.
+     */
+    public static function forUserAndPatient(int $userId, int $pid, ?int $encounter = null): self
+    {
+        return new self($userId, $pid, $encounter);
+    }
 }

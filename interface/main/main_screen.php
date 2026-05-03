@@ -467,20 +467,37 @@ if ($is_expired) {
     ];
 }
 
-// First visible tab after login: Clinical Co-Pilot (no DB list / upgrade required).
+// Default tabs after login: Clinical Co-Pilot first (active), Calendar second; no other default tabs.
 if (!$is_expired) {
     $copilotNotes = 'interface/modules/zend_modules/public/ClinicalCopilot/panel.php';
-    $_tabs = array_values(array_filter(
-        $_tabs,
-        static function ($tab) use ($copilotNotes): bool {
-            return ($tab['notes'] ?? '') !== $copilotNotes;
-        }
-    ));
-    array_unshift($_tabs, [
-        'notes' => $copilotNotes,
-        'option_id' => 'cpl',
-        'title' => 'Clinical Co-Pilot',
-    ]);
+    $calendarNotes = 'interface/main/main_info.php';
+    $plainLogin = empty($_POST['patientID']) && !(isset($_GET['mode']) && (string) $_GET['mode'] === 'loadcalendar');
+    if ($plainLogin) {
+        $_tabs = [
+            [
+                'notes' => $copilotNotes,
+                'option_id' => 'cpl',
+                'title' => xl('Clinical Co-Pilot'),
+            ],
+            [
+                'notes' => $calendarNotes,
+                'option_id' => 'cal',
+                'title' => xl('Calendar'),
+            ],
+        ];
+    } else {
+        $_tabs = array_values(array_filter(
+            $_tabs,
+            static function ($tab) use ($copilotNotes): bool {
+                return ($tab['notes'] ?? '') !== $copilotNotes;
+            }
+        ));
+        array_unshift($_tabs, [
+            'notes' => $copilotNotes,
+            'option_id' => 'cpl',
+            'title' => xl('Clinical Co-Pilot'),
+        ]);
+    }
 }
 
 // Will set Session variables to communicate settings to tab layout
