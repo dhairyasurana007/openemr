@@ -222,4 +222,17 @@ if (! $installer->quick_install()) {
     // Installation succeeded - print the debug message
     // This typically includes information about what was created and configured
     echo $installer->debug_message . "\n";
+
+    // Flex `openemr.sh` does not run `render-openemr-bootstrap.sh`; seed demo physicians here so
+    // development-easy and other stock-flex first boots get `physician1` / `physician2` without a manual step.
+    // Opt out with OPENEMR_AUTO_SEED_STANDARD_ROLES=false (handled inside the seed script).
+    $seedScript = __DIR__ . '/contrib/render/openemr-seed-standard-role-users.php';
+    if (is_file($seedScript) && is_readable($seedScript)) {
+        $phpBinary = (defined('PHP_BINARY') && PHP_BINARY !== '') ? PHP_BINARY : 'php';
+        $cmd = escapeshellarg($phpBinary) . ' ' . escapeshellarg($seedScript);
+        passthru($cmd, $seedExit);
+        if ((int) $seedExit !== 0) {
+            fwrite(STDERR, "auto_configure: openemr-seed-standard-role-users.php exited {$seedExit}.\n");
+        }
+    }
 }

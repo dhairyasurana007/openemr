@@ -4,7 +4,8 @@
  * Optional first-boot seeding of two **Physicians** demo accounts (``physician1``, ``physician2``) plus **Clinicians**
  * (idempotent by username).
  *
- * Runs after the database is configured. Disabled unless ``OPENEMR_AUTO_SEED_STANDARD_ROLES`` is truthy.
+ * Runs after the database is configured. Runs by default whenever this script executes; set
+ * ``OPENEMR_AUTO_SEED_STANDARD_ROLES`` to ``false``, ``no``, ``off``, or ``0`` to skip.
  *
  * ## Policy you can approximate (not automatic law — tune ACL under Administration → ACL)
  *
@@ -52,8 +53,8 @@ use OpenEMR\Common\Uuid\UuidRegistry;
 $openemrRoot = dirname(__DIR__, 2);
 chdir($openemrRoot);
 
-if (!isEnvTruthy(getenv('OPENEMR_AUTO_SEED_STANDARD_ROLES'))) {
-    fwrite(STDOUT, "openemr-seed-standard-role-users: OPENEMR_AUTO_SEED_STANDARD_ROLES not enabled, skipping.\n");
+if (isStandardRoleSeedExplicitlyDisabled()) {
+    fwrite(STDOUT, "openemr-seed-standard-role-users: OPENEMR_AUTO_SEED_STANDARD_ROLES is false/no/off/0, skipping.\n");
     exit(0);
 }
 
@@ -379,6 +380,21 @@ function seedOneUser(
         "openemr-seed-standard-role-users: created '{$username}' groups=[" . implode(', ', $aclGroupTitles)
         . "] facility_id={$facilityId} calendar={$prefs['calendar']} cal_ui={$prefs['cal_ui']} see_auth={$prefs['see_auth']}.\n"
     );
+}
+
+/**
+ * Demo standard-role seeding is on unless the operator explicitly disables it.
+ *
+ * @param string|false $raw
+ */
+function isStandardRoleSeedExplicitlyDisabled(): bool
+{
+    $raw = getenv('OPENEMR_AUTO_SEED_STANDARD_ROLES');
+    if ($raw === false) {
+        return false;
+    }
+
+    return in_array(strtolower(trim((string) $raw)), ['0', 'false', 'no', 'off'], true);
 }
 
 /** @param string|false $raw */

@@ -129,7 +129,7 @@ if ! php "${OE_ROOT}/contrib/render/openemr-auto-install.php"; then
     echo "render-openemr-bootstrap: WARNING: openemr-auto-install.php failed. Starting Apache anyway so you can use setup.php or read logs. Fix MYSQL_* / credentials and redeploy." >&2
 fi
 
-echo "render-openemr-bootstrap: openemr-seed-standard-role-users.php (no-op unless OPENEMR_AUTO_SEED_STANDARD_ROLES is enabled)..."
+echo "render-openemr-bootstrap: openemr-seed-standard-role-users.php (skipped only when OPENEMR_AUTO_SEED_STANDARD_ROLES is false/no/off/0)..."
 if ! php "${OE_ROOT}/contrib/render/openemr-seed-standard-role-users.php"; then
     echo "render-openemr-bootstrap: WARNING: openemr-seed-standard-role-users.php failed (check ACL group titles match your locale)." >&2
 fi
