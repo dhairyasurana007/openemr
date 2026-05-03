@@ -1,0 +1,40 @@
+##
+# Track A (staging PHI baseline): isolated PHPUnit for REST authorization, SMART patient binding,
+# skip-route matching, and API response logging gates — no database.
+#
+# Complements the full `isolated-tests.yml` matrix with a single fast job (PHP 8.2) for branch protection
+# or quick signal on PRs. Script: `composer phpunit-track-a-isolated`.
+
+name: Track A REST auth (isolated)
+
+on:
+  push:
+    branches:
+      - master
+      - rel-*
+  pull_request:
+    branches:
+      - master
+      - rel-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  track-a-isolated:
+    runs-on: ubuntu-24.04
+    name: PHP 8.2 — Track A isolated
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP and Composer
+        uses: ./.github/actions/setup-php-composer
+        with:
+          php-version: '8.2'
+          coverage: none
+          extensions: redis
+
+      - name: Run Track A isolated PHPUnit
+        run: composer phpunit-track-a-isolated

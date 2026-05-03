@@ -9,6 +9,10 @@
 # 4. Review the **preview**: it creates/updates **four** services:
 #    - `openemr-mysql` — private MariaDB (not on the public internet).
 #    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
+#      **Track A REST/auth checks** run in GitHub Actions (`.github/workflows/track-a-rest-auth-isolated.yml` and the
+#      full `isolated-tests.yml` suite), not during the Docker image build on Render. Other workflow YAML files are
+#      kept under `.github/future-workflows/` and are **not** executed until moved back into `.github/workflows/`
+#      (GitHub only loads workflows from that directory).
 #    - `clinical-copilot-redis` — Render Key Value (Redis®-compatible); private mesh only (`ipAllowList: []`).
 #    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); Render
 #      `healthCheckPath` uses `/meta/health/readyz` (readiness). The agent also exposes
