@@ -3,7 +3,7 @@
 --
 -- Keep v_database in sync with $v_database in version.php.
 -- CI will fail if they don't match.
--- v_database: 538
+-- v_database: 539
 --
 
 --
@@ -1113,6 +1113,28 @@ CREATE TABLE `clinical_rules_log` (
   KEY `uid` (`uid`),
   KEY `category` (`category`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `clinical_copilot_encounter_state`
+--
+
+DROP TABLE IF EXISTS `clinical_copilot_encounter_state`;
+CREATE TABLE `clinical_copilot_encounter_state` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `pid` int(11) NOT NULL,
+  `encounter` int(11) NOT NULL,
+  `intake_completed_at` datetime DEFAULT NULL,
+  `intake_completed_user` varchar(255) DEFAULT NULL,
+  `uc2_pregen_status` varchar(32) NOT NULL DEFAULT 'none' COMMENT 'none,pending,complete,failed',
+  `uc2_pregen_error` text DEFAULT NULL,
+  `uc2_briefing_cached` mediumtext DEFAULT NULL,
+  `uc2_pregen_updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pid_encounter` (`pid`,`encounter`),
+  KEY `pid` (`pid`)
+) ENGINE=InnoDB COMMENT='Clinical co-pilot per-encounter clinician intake and UC2 pre-generation cache';
 
 -- --------------------------------------------------------
 

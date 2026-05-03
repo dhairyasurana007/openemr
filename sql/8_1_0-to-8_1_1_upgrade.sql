@@ -112,3 +112,20 @@
 --  #IfMBOEncounterNeeded
 --    desc: Add encounter to the form_misc_billing_options table
 --    arguments: none
+
+#IfNotTable clinical_copilot_encounter_state
+CREATE TABLE `clinical_copilot_encounter_state` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `pid` int(11) NOT NULL,
+  `encounter` int(11) NOT NULL,
+  `intake_completed_at` datetime DEFAULT NULL,
+  `intake_completed_user` varchar(255) DEFAULT NULL,
+  `uc2_pregen_status` varchar(32) NOT NULL DEFAULT 'none' COMMENT 'none,pending,complete,failed',
+  `uc2_pregen_error` text DEFAULT NULL,
+  `uc2_briefing_cached` mediumtext DEFAULT NULL,
+  `uc2_pregen_updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pid_encounter` (`pid`,`encounter`),
+  KEY `pid` (`pid`)
+) ENGINE=InnoDB COMMENT='Clinical co-pilot per-encounter clinician intake and UC2 pre-generation cache';
+#EndIf

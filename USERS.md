@@ -19,8 +19,8 @@
 ### Start of day (physician)
 Before the first patient or during the first quiet minutes, the physician looks at **today's schedule** to remember who is on the column, who is new to the practice, and whether anything on file stands out for specific slots. They want a **quick read** across the whole day — not a deep briefing per patient (that comes when they open each encounter). **Use Case 1** (early-morning day summary) supports this pass.
 
-### Pre-visit intake (nurse)
-Before the physician enters the room, a nurse visits the patient and handles intake:
+### Pre-visit intake (clinician)
+Before the physician enters the room, a clinician visits the patient and handles intake:
 - Records vitals (blood pressure, weight, temperature, pulse)
 - Updates the medication list for any changes since the last visit
 - Documents the chief complaint and reason for today's visit
@@ -34,7 +34,7 @@ The physician finishes documenting the previous visit and has approximately 90 s
 **This is when the per-patient briefing (Use Case 2) runs.**
 
 The agent's job here is to synthesize two things:
-- **What the nurse just captured** — today's vitals, chief complaint, medication updates
+- **What the clinician just captured** — today's vitals, chief complaint, medication updates
 - **Everything in the patient's history** — prior labs, past visit notes, active diagnoses, current medications, open care gaps
 
 The physician needs this synthesis in a single paragraph they can read in 20 seconds. They do not have time to read three encounter notes, cross-reference labs against the medication list, and check for open referrals separately.
@@ -79,7 +79,7 @@ Slots with nothing notable beyond identity and time get a minimal line so the sc
 **Trigger:** Physician opens a patient encounter in OpenEMR.
 
 **What the agent delivers** (within 5 seconds of encounter open):
-- Chief complaint for today's visit (from nurse intake)
+- Chief complaint for today's visit (from clinician intake)
 - Vitals from today's intake with any significant changes from last visit flagged
 - Active problem list (top 3–5 conditions)
 - Current medications — changes since last visit highlighted

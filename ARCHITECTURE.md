@@ -6,11 +6,11 @@ Clinical Co-Pilot is an agent built into OpenEMR for **family physicians** in **
 
 **Agent scope (see [`USERS.md`](USERS.md)):** the agent is **informative only** — it summarizes and surfaces facts from the record (and, where applicable, schedule or task context). It does **not** write to the chart, orders, problem or medication lists, or patient messages, and does not send communications. It gives **no recommendations**: it does not advise what to prescribe, order, refer, or document, nor operational “what to do next.” It presents what is on file; **plain-language drafts** appear only where a use case explicitly allows them (**UC5**), for the physician to edit. Individual use cases add tighter limits.
 
-**Clinical workflow the architecture supports:** start-of-day and post-lunch **schedule-wide** scans (**UC1**, **UC6**); **nurse pre-visit intake** documented in OpenEMR (vitals, meds, chief complaint, symptoms); **~90 seconds between patients** when the physician opens the encounter and receives the **pre-visit briefing** (**UC2**); **in-room** chart lookups (**UC4**); optional **post-visit patient message draft** from the official record (**UC5**); end-of-day **no-show / missed-appointment sweep** (**UC7**). **UC3** (critical flags) is bundled with **UC2** or available on demand.
+**Clinical workflow the architecture supports:** start-of-day and post-lunch **schedule-wide** scans (**UC1**, **UC6**); **clinician pre-visit intake** documented in OpenEMR (vitals, meds, chief complaint, symptoms); **~90 seconds between patients** when the physician opens the encounter and receives the **pre-visit briefing** (**UC2**); **in-room** chart lookups (**UC4**); optional **post-visit patient message draft** from the official record (**UC5**); end-of-day **no-show / missed-appointment sweep** (**UC7**). **UC3** (critical flags) is bundled with **UC2** or available on demand.
 
 It supports **seven** use cases, numbered **chronologically** by typical clinical day in [`USERS.md`](USERS.md). In brief:
 - **UC1 — Early-morning day summary:** shallow, schedule-wide orientation before the column starts (~20 slots, wide and shallow factual lines per slot).
-- **UC2 — Pre-visit briefing:** on encounter open, synthesis of **today’s nurse intake** and **chart history** in a scannable shape (chief-complaint–led, not a generic dump).
+- **UC2 — Pre-visit briefing:** on encounter open, synthesis of **today’s clinician intake** and **chart history** in a scannable shape (chief-complaint–led, not a generic dump).
 - **UC3 — Critical flag surfacing:** possible medication interactions, unaddressed abnormal labs, overdue preventive care, long-pending referrals; part of UC2, UC1/UC6 “scan hints” when the product surfaces them, or on demand.
 - **UC4 — In-room follow-up question:** during the visit, pointed chart questions (lab trends, dose, referral status) — **values and facts**, not clinical interpretation.
 - **UC5 — Post-appointment patient message:** optional patient-facing **draft** grounded only in **documented** encounter and associated structured data; physician reviews, edits, and sends; optional physician-only “chart recap” line for verification.
@@ -51,13 +51,13 @@ Design priorities:
 
 **Primary user:** family physician in 15-minute visits, ~20 patients/day.
 
-**Care team context:** a **nurse** completes **pre-visit intake** before the physician enters the room (vitals, medication list updates, chief complaint, reason for visit, new symptoms). That documentation lives in OpenEMR and is a **first-class input** to **UC2** alongside longitudinal chart data.
+**Care team context:** a **clinician** completes **pre-visit intake** before the physician enters the room (vitals, medication list updates, chief complaint, reason for visit, new symptoms). That documentation lives in OpenEMR and is a **first-class input** to **UC2** alongside longitudinal chart data.
 
 **Agent role:** informative only; no chart writes; no clinical or operational recommendations; no autonomous messaging (**UC5** supplies **drafts** only; the physician sends through normal workflow).
 
 **Use cases** (same order as `USERS.md`):
 1. **Early-morning day summary (UC1)** — physician opens **today’s** (or next session’s) schedule; wide, shallow **factual** lines per slot (time, patient id as on schedule, new vs established when on file, reason/chief complaint/visit type when documented, light chart hints such as critical results on file, referral pending vs resulted, “no same-day intake yet” when detectable). **Not** visit order, staffing, or “who to prioritize.” Target latency: full day ~**20 seconds**.
-2. **Pre-visit briefing (UC2)** — physician opens the patient encounter; briefing must land in **~5 seconds**, organized around **today’s chief complaint** (e.g. BP recheck → lead with BP history, antihypertensives, relevant labs). Includes nurse intake (vitals with notable change vs last visit, med changes), top active problems, recent abnormal labs, short last-visit summary, open care gaps. **No** “consider adjusting dose”–style advice.
+2. **Pre-visit briefing (UC2)** — physician opens the patient encounter; briefing must land in **~5 seconds**, organized around **today’s chief complaint** (e.g. BP recheck → lead with BP history, antihypertensives, relevant labs). Includes clinician intake (vitals with notable change vs last visit, med changes), top active problems, recent abnormal labs, short last-visit summary, open care gaps. **No** “consider adjusting dose”–style advice.
 3. **Critical flag surfacing (UC3)** — drug–drug or drug–condition interactions, abnormal labs not clearly addressed in the last note, overdue preventive care, referrals without result after ~60+ days; **context per flag** (which meds, which condition, why it matters). Part of **UC2**, optionally echoed in **UC1**/**UC6** scan mode, or on demand (on-demand path follows **UC4**-class latency where applicable).
 4. **In-room Q&A (UC4)** — pointed question during an active encounter; **direct answer** from the record in **under 8 seconds**; **no** interpretation of results—return values and status, physician interprets.
 5. **Post-appointment patient message (UC5)** — after the visit is documented, optional **plain-language draft** for the patient, grounded **only** in what is documented for **this** visit (note, assessment/plan, today’s orders/referrals, return instructions in chart). Optional one-line **physician-only** chart recap for verification. Draft in **~10 seconds**; agent does **not** send or choose channel; if the note is empty or contradictory, surface that briefly instead of inventing content.
@@ -124,7 +124,7 @@ Design priorities:
 ### UC2 — Pre-Visit Briefing
 
 ```
-  [Nurse completes intake]
+  [Clinician completes intake]
   (chief complaint, vitals, med updates)
                 |
                 v
@@ -544,4 +544,4 @@ If a dependency exceeds budget, return partial output with explicit gap disclosu
 2. PHI governance controls are in place (including agreements covering OpenRouter, selected upstream models, and LangSmith trace handling).
 3. Audit logging and encryption at rest are verified.
 4. Adversarial and missing-data evals pass with no unsafe failures — including **UC5** “empty or contradictory note” behavior and **UC1**/**UC6** “no invented priorities” checks.
-5. Physician review confirms outputs are accurate and useful in real workflow — **nurse intake → UC2** timing, **UC4** in-room latency, and **UC5** edit-and-send usability.
+5. Physician review confirms outputs are accurate and useful in real workflow — **clinician intake → UC2** timing, **UC4** in-room latency, and **UC5** edit-and-send usability.

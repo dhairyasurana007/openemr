@@ -18,6 +18,7 @@ use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\Header;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotEncounterPrompts;
 
 if (!AclMain::aclCheckCore('patients', 'demo')) {
     echo xlt('Not authorized');
@@ -39,6 +40,7 @@ if ($pid === '' || $pid === '0' || $encounterId === '' || $encounterId === '0') 
 $handoff = AgentRuntimeHandoff::fromEnvironment();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
+$stateUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/encounter_state.php';
 $agentReady = $handoff->isConfigured();
 
 ?>
@@ -63,6 +65,14 @@ $agentReady = $handoff->isConfigured();
 <div id="ccp-enc" class="px-0">
     <div class="px-3 py-2 border-bottom bg-light flex-shrink-0">
         <h5 class="mb-1"><?php echo xlt('Encounter Co-Pilot'); ?></h5>
+        <div class="form-row align-items-center mb-2">
+            <div class="col-md-8">
+                <span id="ccp-intake-status" class="text-muted small"></span>
+            </div>
+            <div class="col-md-4 text-md-right">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="ccp-clinician-intake-done"><?php echo xlt('Clinician intake complete'); ?></button>
+            </div>
+        </div>
         <div class="form-row align-items-end">
             <div class="form-group col-md-4 mb-2 mb-md-0">
                 <label for="ccp-use-case" class="font-weight-bold"><?php echo xlt('Use case'); ?></label>
@@ -95,9 +105,11 @@ $agentReady = $handoff->isConfigured();
 <script>
 (function () {
     var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    var stateUrl = <?php echo json_encode($stateUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var agentReady = <?php echo $agentReady ? 'true' : 'false'; ?>;
     var encounterId = <?php echo json_encode($encounterId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    var uc2Prompt = <?php echo json_encode(ClinicalCopilotEncounterPrompts::UC2_PREVISIT_FACTS, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     var sloMs = { UC2: 9000, UC3: 12000, UC4: 12000, UC5: 14000 };
     var ucSel = document.getElementById('ccp-use-case');
     var input = document.getElementById('ccp-enc-input');
@@ -174,9 +186,104 @@ $agentReady = $handoff->isConfigured();
     });
     var p2 = document.getElementById('ccp-prompt-uc2');
     var p3 = document.getElementById('ccp-prompt-uc3');
+    var intakeBtn = document.getElementById('ccp-clinician-intake-done');
+    var intakeStatusEl = document.getElementById('ccp-intake-status');
+    function setIntakeStatus(text) {
+        if (intakeStatusEl) intakeStatusEl.textContent = text || '';
+    }
+    function refreshIntakeUiFromState(data) {
+        if (!data) return;
+        if (data.intake_completed) {
+            setIntakeStatus(<?php echo json_encode(xl('Intake completed')); ?> + (data.intake_completed_at ? ' · ' + data.intake_completed_at : ''));
+            if (intakeBtn) intakeBtn.disabled = true;
+        } else {
+            setIntakeStatus('');
+            if (intakeBtn) intakeBtn.disabled = false;
+        }
+    }
+    if (intakeBtn) intakeBtn.addEventListener('click', function () {
+        if (typeof top.restoreSession === 'function') top.restoreSession();
+        intakeBtn.disabled = true;
+        fetch(stateUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'clinician_intake_complete',
+                csrf_token_form: csrfToken,
+                use_case: 'UC2',
+                encounter_id: encounterId
+            })
+        }).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+        .then(function (res) {
+            if (res.ok && res.data && res.data.ok) {
+                refreshIntakeUiFromState({
+                    intake_completed: true,
+                    intake_completed_at: res.data.intake_completed_at || null
+                });
+                if (res.data.uc2_briefing && typeof res.data.uc2_briefing === 'string') {
+                    appendBubble('assistant', res.data.uc2_briefing, false);
+                } else if (res.data.uc2_status === 'pending') {
+                    appendBubble('assistant', <?php echo json_encode(xl('UC2 briefing is already being generated; open this panel again in a moment.')); ?>, false);
+                } else if (res.data.uc2_error) {
+                    appendBubble('assistant', String(res.data.uc2_error), true);
+                } else if (res.data.agent_unavailable) {
+                    appendBubble('assistant', <?php echo json_encode(xl('Intake saved. UC2 briefing requires the co-pilot agent to be configured.')); ?>, false);
+                }
+            } else {
+                var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Request failed')); ?>;
+                appendBubble('assistant', err, true);
+                intakeBtn.disabled = false;
+            }
+        }).catch(function () {
+            appendBubble('assistant', <?php echo json_encode(xl('Network error')); ?>, true);
+            intakeBtn.disabled = false;
+        });
+    });
+    fetch(stateUrl, { method: 'GET', credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            refreshIntakeUiFromState(data);
+            var cached = data && typeof data.uc2_briefing_cached === 'string' ? data.uc2_briefing_cached.trim() : '';
+            if (cached !== '') {
+                appendBubble('assistant', <?php echo json_encode(xl('Pre-generated UC2 briefing (cached)')); ?> + "\n\n" + cached, false);
+                return;
+            }
+            var ac = data && data.agent_configured;
+            if (!ac) return;
+            var sk = 'ccp_uc2_fallback_' + encounterId;
+            try {
+                if (sessionStorage.getItem(sk)) return;
+                sessionStorage.setItem(sk, '1');
+            } catch (e) { return; }
+            if (typeof top.restoreSession === 'function') top.restoreSession();
+            var ctl = new AbortController();
+            var tid = setTimeout(function () { ctl.abort(); }, sloMs.UC2 || 9000);
+            fetch(stateUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                signal: ctl.signal,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'uc2_open_encounter_fallback',
+                    csrf_token_form: csrfToken,
+                    use_case: 'UC2',
+                    encounter_id: encounterId
+                })
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+            .then(function (res) {
+                if (res.ok && res.data && res.data.ok) {
+                    if (res.data.uc2_briefing && typeof res.data.uc2_briefing === 'string') {
+                        appendBubble('assistant', <?php echo json_encode(xl('UC2 briefing (on open)')); ?> + "\n\n" + res.data.uc2_briefing, false);
+                    } else if (res.data.uc2_error) {
+                        appendBubble('assistant', String(res.data.uc2_error), true);
+                    }
+                }
+            }).catch(function () { /* ignore */ }).finally(function () { clearTimeout(tid); });
+        }).catch(function () { /* ignore */ });
     if (p2) p2.addEventListener('click', function () {
         if (ucSel) ucSel.value = 'UC2';
-        sendMessage(<?php echo json_encode(xl('Summarize chief complaint, intake, and chart facts for this visit (facts only, no prioritization).')); ?>);
+        sendMessage(uc2Prompt);
     });
     if (p3) p3.addEventListener('click', function () {
         if (ucSel) ucSel.value = 'UC3';
