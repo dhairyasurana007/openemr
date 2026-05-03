@@ -50,11 +50,14 @@ $agentReady = $handoff->isConfigured();
             display: flex;
             flex-direction: column;
             max-width: 100%;
+            min-width: 0;
         }
         #clinical-copilot-messages {
             flex: 1 1 auto;
             min-height: 0;
+            min-width: 0;
             overflow-y: auto;
+            overflow-x: hidden;
             background: var(--white, #fff);
         }
         #clinical-copilot-composer {
@@ -76,6 +79,7 @@ $agentReady = $handoff->isConfigured();
             background: var(--primary, #007bff);
             color: #fff;
             border-radius: 1rem 1rem 0.25rem 1rem;
+            max-width: min(100%, 32rem);
         }
         .clinical-copilot-msg-assistant .clinical-copilot-bubble {
             display: inline-block;
@@ -88,6 +92,9 @@ $agentReady = $handoff->isConfigured();
             margin: 0.35rem 0;
             white-space: pre-wrap;
             word-break: break-word;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .clinical-copilot-msg-meta {
             font-size: 0.75rem;

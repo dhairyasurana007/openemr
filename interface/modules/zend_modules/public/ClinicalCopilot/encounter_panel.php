@@ -51,13 +51,13 @@ $agentReady = $handoff->isConfigured();
     <title><?php echo text(xl('Encounter Co-Pilot')); ?></title>
     <style>
         html, body { height: 100%; margin: 0; }
-        #ccp-enc { height: 100%; display: flex; flex-direction: column; max-width: 100%; }
-        #ccp-enc-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: var(--white, #fff); }
+        #ccp-enc { height: 100%; display: flex; flex-direction: column; max-width: 100%; min-width: 0; }
+        #ccp-enc-messages { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: var(--white, #fff); }
         #ccp-enc-composer { flex: 0 0 auto; border-top: 1px solid rgba(0, 0, 0, 0.1); background: var(--light, #f8f9fa); }
-        .ccp-bubble { padding: 0.5rem 0.85rem; margin: 0.35rem 0; white-space: pre-wrap; word-break: break-word; }
+        .ccp-bubble { padding: 0.5rem 0.85rem; margin: 0.35rem 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; }
         .ccp-msg { width: 100%; max-width: 100%; box-sizing: border-box; }
         .ccp-msg-user { text-align: right; }
-        .ccp-msg-user .ccp-bubble { display: inline-block; text-align: left; background: var(--primary, #007bff); color: #fff; border-radius: 1rem 1rem 0.25rem 1rem; }
+        .ccp-msg-user .ccp-bubble { display: inline-block; text-align: left; background: var(--primary, #007bff); color: #fff; border-radius: 1rem 1rem 0.25rem 1rem; max-width: min(100%, 32rem); }
         .ccp-msg-assistant .ccp-bubble { display: inline-block; background: var(--light, #e9ecef); border-radius: 1rem 1rem 1rem 0.25rem; }
     </style>
 </head>
