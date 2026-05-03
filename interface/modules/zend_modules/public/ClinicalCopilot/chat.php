@@ -19,7 +19,10 @@ use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotUseCase;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotWebChatComposer;
 use OpenEMR\Services\ClinicalCopilot\CopilotAgentChatBridge;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -67,8 +70,39 @@ try {
 
     $handoff = AgentRuntimeHandoff::fromEnvironment();
     $bridge = new CopilotAgentChatBridge();
-    $out = $bridge->forwardMessage($message, $handoff);
+
+    $useCaseRaw = $payload['use_case'] ?? '';
+    $hasExplicitUseCase = is_string($useCaseRaw) && trim($useCaseRaw) !== '';
+    if (!$hasExplicitUseCase) {
+        $out = $bridge->forwardMessage($message, $handoff);
+        echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
+        exit;
+    }
+
+    $parsed = ClinicalCopilotUseCase::tryParse($useCaseRaw);
+    if ($parsed === null) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid use_case']);
+        exit;
+    }
+
+    if ($parsed->isScheduleScoped() && !AclMain::aclCheckCore('patients', 'appt')) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Not authorized for schedule']);
+        exit;
+    }
+
+    $composer = new ClinicalCopilotWebChatComposer();
+    $agentPayload = $composer->compose($session, $payload, $message);
+    $out = $bridge->forwardPayload($agentPayload, $handoff);
     echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
+} catch (HttpExceptionInterface $e) {
+    $msg = $e->getMessage();
+    if ($msg === '') {
+        $msg = 'Request rejected';
+    }
+    http_response_code($e->getStatusCode());
+    echo json_encode(['error' => $msg], JSON_THROW_ON_ERROR);
 } catch (\DomainException $e) {
     http_response_code(503);
     echo json_encode(['error' => 'Clinical co-pilot is not configured.']);

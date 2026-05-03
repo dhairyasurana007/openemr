@@ -3,12 +3,53 @@
 from __future__ import annotations
 
 import json
+import time
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.retrieval_backends import RetrievalBackend
 from app.settings import Settings
+
+
+def _agent_debug_ndjson(
+    *,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, Any],
+) -> None:
+    # region agent log
+    payload: dict[str, Any] = {
+        "sessionId": "16a0eb",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    line = json.dumps(payload, default=str) + "\n"
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+    for depth in (4, 3, 2):
+        if len(here.parents) <= depth:
+            continue
+        ancestor = here.parents[depth]
+        if (ancestor / "composer.json").is_file():
+            candidates.append(ancestor / "debug-16a0eb.log")
+            break
+    candidates.append(Path.cwd() / "debug-16a0eb.log")
+    candidates.append(Path("/tmp/debug-16a0eb.log"))
+    for dest in candidates:
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with dest.open("a", encoding="utf-8") as fp:
+                fp.write(line)
+            break
+        except OSError:
+            continue
+    # endregion
 
 
 class OpenEmrRetrievalBackend:
@@ -33,6 +74,20 @@ class OpenEmrRetrievalBackend:
             ),
             follow_redirects=True,
         )
+        # region agent log
+        _agent_debug_ndjson(
+            hypothesis_id="H1-H4",
+            location="openemr_retrieval_backend.py:OpenEmrRetrievalBackend.__init__",
+            message="retrieval_http_client_config",
+            data={
+                "openemr_base_url": str(self._client.base_url),
+                "api_prefix": self._prefix,
+                "openemr_internal_hostport": settings.openemr_internal_hostport,
+                "openemr_http_verify": settings.openemr_http_verify,
+                "use_openemr_retrieval": settings.use_openemr_retrieval,
+            },
+        )
+        # endregion
 
     def close(self) -> None:
         self._client.close()
@@ -48,6 +103,21 @@ class OpenEmrRetrievalBackend:
         try:
             response = self._client.get(path, params=q, headers=self._headers())
         except httpx.HTTPError as exc:
+            # region agent log
+            _agent_debug_ndjson(
+                hypothesis_id="H1-H5",
+                location="openemr_retrieval_backend.py:_get_json",
+                message="retrieval_http_transport_error",
+                data={
+                    "tool": tool,
+                    "path": path,
+                    "param_keys": sorted(q.keys()),
+                    "base_url": str(self._client.base_url),
+                    "exc_type": type(exc).__name__,
+                    "exc_str": str(exc)[:500],
+                },
+            )
+            # endregion
             return {
                 "tool": tool,
                 "schema_version": "1",

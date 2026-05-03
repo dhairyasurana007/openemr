@@ -9,6 +9,8 @@
 #   First run builds ``openemr-web`` from the repo root Dockerfile (can take several minutes).
 #   Demo physician/clinician users: set ``OPENEMR_AUTO_SEED_STANDARD_ROLES=false`` to disable, or clear
 #   ``OE_SEED_*_USERNAME`` to skip one role (clear clinician username to skip). Two physicians: ``physician1`` / ``physician2``.
+#   Demo patients + back-to-back appointments: ``OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE=false`` to disable.
+#   See ``contrib/render/openemr-seed-copilot-demo-schedule.php`` (20 patients ``pubpid`` CCSEED-01..20, 15-min slots).
 #   ACL titles are English defaults. Per-role ``users`` prefs:
 #   ``OE_SEED_PHYSICIAN_SEE_AUTH`` (default 2), ``OE_SEED_PHYSICIAN_CALENDAR`` (default 1), ``OE_SEED_*_FACILITY_ID``, etc.
 #   See docblock in ``contrib/render/openemr-seed-standard-role-users.php`` for semantics.
@@ -124,6 +126,12 @@ services:
       OE_SEED_CLINICIAN_CALENDAR: ${OE_SEED_CLINICIAN_CALENDAR:-0}
       OE_SEED_CLINICIAN_CAL_UI: ${OE_SEED_CLINICIAN_CAL_UI:-3}
       OE_SEED_CLINICIAN_FACILITY_ID: ${OE_SEED_CLINICIAN_FACILITY_ID:-}
+      # Idempotent: 20 diverse demo patients + same-day 15-minute stacked appointments for ``physician1`` (override below).
+      OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE: ${OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE:-true}
+      OE_SEED_COPILOT_PROVIDER_USERNAME: ${OE_SEED_COPILOT_PROVIDER_USERNAME:-physician1}
+      OE_SEED_COPILOT_SCHEDULE_DATE: ${OE_SEED_COPILOT_SCHEDULE_DATE:-}
+      OE_SEED_COPILOT_FIRST_START: ${OE_SEED_COPILOT_FIRST_START:-09:00:00}
+      OE_SEED_COPILOT_SLOT_SECONDS: ${OE_SEED_COPILOT_SLOT_SECONDS:-900}
     depends_on:
       openemr-mysql:
         condition: service_healthy

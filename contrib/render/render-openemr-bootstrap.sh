@@ -134,6 +134,11 @@ if ! php "${OE_ROOT}/contrib/render/openemr-seed-standard-role-users.php"; then
     echo "render-openemr-bootstrap: WARNING: openemr-seed-standard-role-users.php failed (check ACL group titles match your locale)." >&2
 fi
 
+echo "render-openemr-bootstrap: openemr-seed-copilot-demo-schedule.php (no-op unless OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE is enabled)..."
+if ! php "${OE_ROOT}/contrib/render/openemr-seed-copilot-demo-schedule.php"; then
+    echo "render-openemr-bootstrap: WARNING: openemr-seed-copilot-demo-schedule.php failed (check facility/calendar category exist)." >&2
+fi
+
 # Render private service mesh: Blueprint may set CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT (host:port).
 # Derive a full URL for PHP / modules without string templating in render.yaml.
 if [ -n "${CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT:-}" ]; then

@@ -27,6 +27,23 @@ final class CopilotAgentChatBridge
      */
     public function forwardMessage(string $message, AgentRuntimeHandoff $handoff): array
     {
+        $payload = new ClinicalCopilotAgentChatPayload(
+            message: $message,
+            useCase: ClinicalCopilotUseCase::UC4,
+            httpTimeoutOverrideSeconds: 120.0,
+        );
+
+        return $this->forwardPayload($payload, $handoff);
+    }
+
+    /**
+     * @return array{reply: string}
+     *
+     * @throws \DomainException When the agent base URL is not configured.
+     * @throws \RuntimeException When the agent returns an error or malformed JSON.
+     */
+    public function forwardPayload(ClinicalCopilotAgentChatPayload $payload, AgentRuntimeHandoff $handoff): array
+    {
         $base = $handoff->privateAgentBaseUrl;
         if ($base === '') {
             throw new \DomainException('Clinical co-pilot agent URL is not configured');
@@ -42,12 +59,13 @@ final class CopilotAgentChatBridge
             $headers[ClinicalCopilotInternalAuth::HEADER_NAME] = $secret;
         }
 
-        $client = new Client(['timeout' => 120.0]);
+        $timeout = $payload->effectiveHttpTimeoutSeconds();
+        $client = new Client(['timeout' => $timeout]);
 
         try {
             $response = $client->post($url, [
                 'headers' => $headers,
-                'json' => ['message' => $message],
+                'json' => $payload->toAgentJsonArray(),
             ]);
         } catch (GuzzleException $e) {
             throw new \RuntimeException('Unable to reach the clinical co-pilot agent.', 0, $e);
