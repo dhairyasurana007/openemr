@@ -82,6 +82,8 @@ services:
       OPENEMR_SETTING_site_addr_oath: ${OPENEMR_SITE_ADDR:-https://localhost:8443}
       # Private agent URL on the Compose network (mirrors Render CLINICAL_COPILOT_AGENT_BASE_URL).
       CLINICAL_COPILOT_AGENT_BASE_URL: ${CLINICAL_COPILOT_AGENT_BASE_URL:-http://copilot-agent:8000}
+      # Same value as on copilot-agent when set: PHP proxy → agent and agent → OpenEMR retrieval.
+      CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
     depends_on:
       openemr-mysql:
         condition: service_healthy
@@ -125,6 +127,7 @@ services:
       - '${COPILOT_AGENT_PORT:-8000}:8000'
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}

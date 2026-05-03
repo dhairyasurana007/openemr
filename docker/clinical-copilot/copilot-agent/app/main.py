@@ -8,6 +8,7 @@ from typing import Any, AsyncIterator
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.chat import router as chat_router
 from app.middleware_inflight import InflightLimitMiddleware
 from app.openemr_http import OpenEmrHttpPool
 from app.settings import Settings
@@ -34,6 +35,8 @@ app = FastAPI(
 
 if _SETTINGS.copilot_max_inflight > 0:
     app.add_middleware(InflightLimitMiddleware, max_inflight=_SETTINGS.copilot_max_inflight)
+
+app.include_router(chat_router)
 
 
 @app.get("/health")
