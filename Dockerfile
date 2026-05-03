@@ -38,7 +38,7 @@ RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \
 
 # OpenEMR installer expects this file to be writable during first-time setup.
 RUN mkdir -p sites/default \
-    && touch sites/default/sqlconf.php \
+    && printf '<?php\n// Placeholder — openemr-auto-install.php writes the real config at runtime.\n$config = 0;\n' > sites/default/sqlconf.php \
     && chmod 666 sites/default/sqlconf.php \
     && mkdir -p sites/default/documents/letter_templates \
     && mkdir -p sites/default/documents/edi \

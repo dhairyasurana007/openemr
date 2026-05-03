@@ -114,7 +114,42 @@ if ($siteAddr !== false && $siteAddr !== '') {
     $installSettings['custom_globals'] = json_encode($customGlobals, JSON_THROW_ON_ERROR);
 }
 
+// Check whether the DB is already configured by attempting a direct connection and
+// querying for the admin user row.  This is necessary because sites/default/sqlconf.php
+// is committed to the repo with $config=0, so the file-based check above never fires on
+// a re-deploy.  Without this guard, quick_install() calls load_dumpfiles() which DROPs
+// and recreates every table on every deploy, wiping all patient data.  If the DB already
+// has an admin row, the installation is complete; we just need to (re)write sqlconf.php
+// with the current env-var credentials so the seed scripts can connect.
+$dbLogin   = ($mysqlUser !== false && $mysqlUser !== '') ? $mysqlUser : 'openemr';
+$dbPass    = ($mysqlPass !== false && $mysqlPass !== '') ? $mysqlPass : 'openemr';
+$dbName    = ($mysqlDatabase !== false && $mysqlDatabase !== '') ? $mysqlDatabase : 'openemr';
+$dbPort    = ($mysqlPort !== false && $mysqlPort !== '') ? (int) $mysqlPort : 3306;
+$adminUser = ($oeUser !== false && $oeUser !== '') ? $oeUser : 'admin';
+
+$dbAlreadyConfigured = false;
+$probeConn = @mysqli_connect($mysqlHost, $dbLogin, $dbPass, $dbName, $dbPort);
+if ($probeConn !== false) {
+    $probeResult = @mysqli_query($probeConn, 'SELECT 1 FROM `users` WHERE BINARY `username` = \'' . mysqli_real_escape_string($probeConn, $adminUser) . '\' LIMIT 1');
+    if ($probeResult !== false && mysqli_num_rows($probeResult) > 0) {
+        $dbAlreadyConfigured = true;
+    }
+
+    mysqli_close($probeConn);
+}
+
 $installer = new Installer($installSettings, new OpenEMR\Common\Logging\SystemLogger());
+
+if ($dbAlreadyConfigured) {
+    fwrite(STDOUT, "openemr-auto-install: DB already has admin user '{$adminUser}', skipping schema load — writing sqlconf.php with current credentials.\n");
+    if (!$installer->write_configuration_file()) {
+        fwrite(STDERR, 'openemr-auto-install: ERROR writing config: ' . $installer->error_message . "\n");
+        exit(1);
+    }
+
+    fwrite(STDOUT, "openemr-auto-install: completed (credentials refresh only).\n");
+    exit(0);
+}
 
 fwrite(STDOUT, "openemr-auto-install: running quick_install (schema load can take several minutes; Render may log \"No open ports\" until Apache starts after this).\n");
 if (\function_exists('fflush')) {
