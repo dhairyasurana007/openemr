@@ -55,14 +55,13 @@ class CsrfUtilsTest extends TestCase
         $this->assertNotSame($default, $api);
     }
 
-    public function testCollectCsrfTokenLazyInitializesWhenKeyMissing(): void
+    public function testCollectCsrfTokenRejectsMissingKey(): void
     {
         $session = $this->createSessionStub();
 
-        $token = CsrfUtils::collectCsrfToken($session);
-
-        $this->assertSame(40, strlen($token));
-        $this->assertTrue(CsrfUtils::verifyCsrfToken($token, $session));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('CSRF key is empty');
+        CsrfUtils::collectCsrfToken($session);
     }
 
     public function testTokenStability(): void

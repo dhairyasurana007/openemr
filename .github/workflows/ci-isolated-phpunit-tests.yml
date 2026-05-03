@@ -43,6 +43,7 @@ jobs:
     - name: Run isolated tests with coverage
       run: |
         vendor/bin/phpunit -c phpunit-isolated.xml \
+                           --testsuite=isolated,unit-isolated \
                            --coverage-clover=clover.xml \
                            --log-junit=junit.xml
 
