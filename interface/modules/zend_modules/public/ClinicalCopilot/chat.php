@@ -19,6 +19,8 @@ use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotAgentChatAuditBinding;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotAgentChatPayload;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotUseCase;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotWebChatComposer;
 use OpenEMR\Services\ClinicalCopilot\CopilotAgentChatBridge;
@@ -74,7 +76,11 @@ try {
     $useCaseRaw = $payload['use_case'] ?? '';
     $hasExplicitUseCase = is_string($useCaseRaw) && trim($useCaseRaw) !== '';
     if (!$hasExplicitUseCase) {
-        $out = $bridge->forwardMessage($message, $handoff);
+        $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload(
+            $session,
+            new ClinicalCopilotAgentChatPayload($message, ClinicalCopilotUseCase::UC4),
+        );
+        $out = $bridge->forwardMessage($message, $handoff, $audit);
         echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
         exit;
     }
@@ -94,7 +100,8 @@ try {
 
     $composer = new ClinicalCopilotWebChatComposer();
     $agentPayload = $composer->compose($session, $payload, $message);
-    $out = $bridge->forwardPayload($agentPayload, $handoff);
+    $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload($session, $agentPayload);
+    $out = $bridge->forwardPayload($agentPayload, $handoff, $audit);
     echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
 } catch (HttpExceptionInterface $e) {
     $msg = $e->getMessage();

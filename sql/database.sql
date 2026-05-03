@@ -3,7 +3,7 @@
 --
 -- Keep v_database in sync with $v_database in version.php.
 -- CI will fail if they don't match.
--- v_database: 539
+-- v_database: 540
 --
 
 --
@@ -1135,6 +1135,32 @@ CREATE TABLE `clinical_copilot_encounter_state` (
   UNIQUE KEY `pid_encounter` (`pid`,`encounter`),
   KEY `pid` (`pid`)
 ) ENGINE=InnoDB COMMENT='Clinical co-pilot per-encounter clinician intake and UC2 pre-generation cache';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ai_audit_log`
+--
+
+DROP TABLE IF EXISTS `ai_audit_log`;
+CREATE TABLE `ai_audit_log` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `user_id` bigint(20) NOT NULL DEFAULT '0',
+  `use_case` varchar(8) NOT NULL DEFAULT '',
+  `surface` varchar(32) NOT NULL DEFAULT '',
+  `pid` int(11) NOT NULL DEFAULT '0',
+  `encounter` int(11) DEFAULT NULL,
+  `event_kind` varchar(64) NOT NULL DEFAULT 'agent_chat',
+  `outcome` varchar(24) NOT NULL DEFAULT '',
+  `http_status` int(11) DEFAULT NULL,
+  `latency_ms` int(11) NOT NULL DEFAULT '0',
+  `error_class` varchar(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_audit_created` (`created_at`),
+  KEY `idx_ai_audit_use_case_created` (`use_case`, `created_at`),
+  KEY `idx_ai_audit_user_created` (`user_id`, `created_at`)
+) ENGINE=InnoDB COMMENT='Clinical co-pilot AI audit events (metadata; no message bodies)';
 
 -- --------------------------------------------------------
 

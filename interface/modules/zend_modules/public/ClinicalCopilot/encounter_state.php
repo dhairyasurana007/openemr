@@ -20,6 +20,7 @@ use OpenEMR\Common\Database\SqlQueryException;
 use OpenEMR\Common\Logging\EventAuditLogger;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotAgentChatAuditBinding;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotEncounterPrompts;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotEncounterStateRepository;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotUc2PregenEligibility;
@@ -115,7 +116,8 @@ function ccp_run_uc2_pregen_if_needed(
     ]), ClinicalCopilotEncounterPrompts::UC2_PREVISIT_FACTS);
 
     try {
-        $out = $bridge->forwardPayload($agentPayload, $handoff);
+        $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload($session, $agentPayload);
+        $out = $bridge->forwardPayload($agentPayload, $handoff, $audit);
         $reply = trim((string) ($out['reply'] ?? ''));
         $repository->markUc2Complete($pid, $encounterId, $reply);
         if ($auditOutcome) {

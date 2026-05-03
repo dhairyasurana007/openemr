@@ -20,9 +20,11 @@ class ClinicalCopilotUseCaseTest extends TestCase
     {
         $this->assertSame(22.0, ClinicalCopilotUseCase::UC1->agentHttpTimeoutSeconds());
         $this->assertSame(6.0, ClinicalCopilotUseCase::UC2->agentHttpTimeoutSeconds());
+        $this->assertSame(9.0, ClinicalCopilotUseCase::UC3->agentHttpTimeoutSeconds());
         $this->assertSame(9.0, ClinicalCopilotUseCase::UC4->agentHttpTimeoutSeconds());
         $this->assertSame(11.0, ClinicalCopilotUseCase::UC5->agentHttpTimeoutSeconds());
         $this->assertSame(16.0, ClinicalCopilotUseCase::UC6->agentHttpTimeoutSeconds());
+        $this->assertSame(16.0, ClinicalCopilotUseCase::UC7->agentHttpTimeoutSeconds());
     }
 
     public function testAgentSurfaceMapping(): void
