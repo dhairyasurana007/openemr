@@ -6,16 +6,6 @@ import json
 from typing import Any, Protocol, runtime_checkable
 
 
-def _citation(tool: str, domain: str, path: str) -> dict[str, str]:
-    return {
-        "type": "openemr_rest",
-        "tool": tool,
-        "domain": domain,
-        "method": "GET",
-        "path": path,
-    }
-
-
 @runtime_checkable
 class RetrievalBackend(Protocol):
     """Returns structured dicts matching ``schemas/retrieval/*.response.json`` shapes."""
@@ -38,11 +28,24 @@ class RetrievalBackend(Protocol):
     def get_referrals_orders_care_gaps(self, patient_uuid: str) -> dict[str, Any]:
         ...
 
+    def get_calendar(
+        self,
+        start_date: str,
+        end_date: str = "",
+        calendar_id: str = "",
+        facility_id: str = "",
+    ) -> dict[str, Any]:
+        ...
+
 
 class StubRetrievalBackend:
-    """Deterministic canned payloads for tests and offline agent wiring.
+    """Shape-only backend: valid JSON shells with **no chart rows** until OpenEMR REST is wired.
 
-    Replace with HTTP-backed backend when OpenEMR REST tool paths are implemented.
+    Only identifiers passed into tool arguments (e.g. ``patient_uuid``, ``date``) are echoed
+    where the schema requires a value; all clinical content arrays are empty. No demo patients,
+    vitals, labs, or narrative is invented here.
+
+    ``fail_tool`` simulates a tool error for tests that need a failure path.
     """
 
     def __init__(
@@ -64,23 +67,9 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "schedule", "/api/facility/appointment")],
+            "citations": [],
             "date": date,
-            "slots": [
-                {
-                    "slot_id": "1",
-                    "slot_uuid": "00000000-0000-4000-8000-000000000001",
-                    "patient_uuid": "00000000-0000-4000-8000-0000000000aa",
-                    "patient_display": "Demo, Dana",
-                    "start_date": date,
-                    "start_time": "09:00:00",
-                    "end_time": "09:15:00",
-                    "visit_type": "follow_up",
-                    "status_code": "booked",
-                    "facility_id": facility_id or "1",
-                    "facility_uuid": "00000000-0000-4000-8000-0000000000f1",
-                }
-            ],
+            "slots": [],
         }
         st = self._status(tool)
         if st:
@@ -92,17 +81,17 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "patient", f"/api/patient/{patient_uuid}")],
+            "citations": [],
             "demographics": {
                 "patient_uuid": patient_uuid,
-                "pid": "1001",
-                "first_name": "Dana",
-                "last_name": "Demo",
-                "DOB": "1975-04-01",
-                "sex": "F",
+                "pid": "",
+                "first_name": "",
+                "last_name": "",
+                "DOB": "",
+                "sex": "",
             },
-            "active_problems": [{"code": "E11.9", "description": "Type 2 diabetes mellitus"}],
-            "allergies": [{"substance": "Penicillin", "reaction": "rash", "status": "active"}],
+            "active_problems": [],
+            "allergies": [],
         }
         st = self._status(tool)
         if st:
@@ -114,19 +103,8 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "patient", f"/api/patient/{patient_uuid}/medication")],
-            "medications": [
-                {
-                    "uuid": "00000000-0000-4000-8000-0000000000m1",
-                    "drug": "Metformin",
-                    "dosage": "500 mg",
-                    "route": "oral",
-                    "interval": "BID",
-                    "active": True,
-                    "start_date": "2024-01-10",
-                    "end_date": "",
-                }
-            ],
+            "citations": [],
+            "medications": [],
         }
         st = self._status(tool)
         if st:
@@ -138,23 +116,9 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "fhir", f"/apis/default/fhir/Observation?patient={patient_uuid}")],
-            "vitals": [
-                {
-                    "name": "Glucose",
-                    "value": 118,
-                    "unit": "mg/dL",
-                    "effective_datetime": "2026-05-01T10:00:00Z",
-                }
-            ],
-            "laboratory": [
-                {
-                    "name": "LDL",
-                    "value": 145,
-                    "unit": "mg/dL",
-                    "effective_datetime": "2026-04-20T08:00:00Z",
-                }
-            ],
+            "citations": [],
+            "vitals": [],
+            "laboratory": [],
         }
         st = self._status(tool)
         if st:
@@ -166,22 +130,8 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "encounter", f"/api/patient/{patient_uuid}/encounter")],
-            "encounters": [
-                {
-                    "encounter_uuid": "00000000-0000-4000-8000-0000000000e1",
-                    "encounter_id": "501",
-                    "date": "2026-05-01",
-                    "reason": "Follow-up diabetes",
-                    "facility": "Main Clinic",
-                    "soap_notes": [
-                        {
-                            "section": "objective",
-                            "text": "Point-of-care glucose 118 mg/dL.",
-                        }
-                    ],
-                }
-            ],
+            "citations": [],
+            "encounters": [],
         }
         st = self._status(tool)
         if st:
@@ -193,10 +143,36 @@ class StubRetrievalBackend:
         base: dict[str, Any] = {
             "tool": tool,
             "schema_version": "1",
-            "citations": [_citation(tool, "order", f"/api/patient/{patient_uuid}/order")],
+            "citations": [],
             "referrals": [],
             "orders": [],
             "care_gaps": [],
+        }
+        st = self._status(tool)
+        if st:
+            base["retrieval_status"] = st
+        return base
+
+    def get_calendar(
+        self,
+        start_date: str,
+        end_date: str = "",
+        calendar_id: str = "",
+        facility_id: str = "",
+    ) -> dict[str, Any]:
+        tool = "get_calendar"
+        base: dict[str, Any] = {
+            "tool": tool,
+            "schema_version": "1",
+            "citations": [],
+            "query": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "calendar_id": calendar_id,
+                "facility_id": facility_id,
+            },
+            "calendars": [],
+            "events": [],
         }
         st = self._status(tool)
         if st:

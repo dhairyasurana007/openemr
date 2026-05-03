@@ -706,6 +706,9 @@ return [
     "GET /api/clinical-copilot/retrieval/list-schedule-slots" => function (HttpRestRequest $request) {
         return (new ClinicalCopilotRetrievalRestController())->listScheduleSlots($request);
     },
+    "GET /api/clinical-copilot/retrieval/calendar" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getCalendar($request);
+    },
     "GET /api/clinical-copilot/retrieval/patient-core-profile" => function (HttpRestRequest $request) {
         return (new ClinicalCopilotRetrievalRestController())->getPatientCoreProfile($request);
     },

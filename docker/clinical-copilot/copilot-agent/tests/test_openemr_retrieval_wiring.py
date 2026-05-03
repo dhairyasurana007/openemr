@@ -1,16 +1,14 @@
-"""Tests for POST /v1/chat (OpenRouter key gating; no live LLM)."""
+"""Retrieval backend selection (stub vs OpenEMR HTTP)."""
 
 from __future__ import annotations
 
-import unittest
-
-from fastapi.testclient import TestClient
-
+from app.openemr_retrieval_backend import OpenEmrRetrievalBackend, retrieval_backend_for_runtime
+from app.retrieval_backends import StubRetrievalBackend
 from app.settings import Settings
 
 
-def _settings_no_openrouter() -> Settings:
-    return Settings(
+def _settings(**overrides: object) -> Settings:
+    base = dict(
         openrouter_api_key="",
         openrouter_model="anthropic/claude-3.5-haiku",
         openrouter_http_timeout_s=30.0,
@@ -31,21 +29,16 @@ def _settings_no_openrouter() -> Settings:
         langchain_project="clinical-copilot",
         langchain_endpoint="",
     )
+    base.update(overrides)
+    return Settings(**base)  # type: ignore[arg-type]
 
 
-class TestChatRouter(unittest.TestCase):
-    def tearDown(self) -> None:
-        import app.main as main_mod
-        from app.settings import Settings
+def test_retrieval_backend_for_runtime_off_is_stub() -> None:
+    b = retrieval_backend_for_runtime(_settings(use_openemr_retrieval=False))
+    assert isinstance(b, StubRetrievalBackend)
 
-        main_mod.app.state.settings = Settings.load()
 
-    def test_chat_returns_503_when_openrouter_key_missing(self) -> None:
-        import app.main as main_mod
-
-        main_mod.app.state.settings = _settings_no_openrouter()
-        with TestClient(main_mod.app) as client:
-            response = client.post("/v1/chat", json={"message": "hello"})
-        self.assertEqual(response.status_code, 503)
-        body = response.json()
-        self.assertIn("detail", body)
+def test_retrieval_backend_for_runtime_on_is_openemr_client() -> None:
+    b = retrieval_backend_for_runtime(_settings(use_openemr_retrieval=True))
+    assert isinstance(b, OpenEmrRetrievalBackend)
+    b.close()

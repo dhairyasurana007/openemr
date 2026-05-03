@@ -3,10 +3,9 @@
 /**
  * Read-only retrieval bridge for Clinical Co-Pilot (stable JSON + citations).
  *
- * Implements the six schema-bound retrieval tools described in project
- * architecture: schedule slots, patient core profile, medications, observations
- * (vitals + laboratory), encounters with notes, and referrals/orders/care gaps.
- * Optional narrow routes: vitals-only and laboratory-results-only.
+ * Schema-bound retrieval tools: schedule slots, calendar window, patient core profile,
+ * medications, observations (vitals + laboratory), encounters with notes, and
+ * referrals/orders/care gaps. Optional narrow routes: vitals-only and laboratory-results-only.
  *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
@@ -104,6 +103,95 @@ final class ClinicalCopilotRetrievalRestController
             ],
             'date' => $date,
             'slots' => $slots,
+        ];
+
+        return new JsonResponse($body, Response::HTTP_OK);
+    }
+
+    public function getCalendar(HttpRestRequest $request): JsonResponse
+    {
+        ClinicalCopilotInternalAuth::assertConfiguredSecretMatches($request);
+        RestConfig::request_authorization_check($request, 'patients', 'appt');
+
+        $startDate = (string) $request->query->get('start_date', '');
+        $endDate = (string) $request->query->get('end_date', '');
+        if ($startDate === '') {
+            throw new BadRequestHttpException('Missing required query parameter: start_date');
+        }
+
+        if ($endDate === '') {
+            $endDate = $startDate;
+        }
+
+        $this->assertIsoYmd('start_date', $startDate);
+        $this->assertIsoYmd('end_date', $endDate);
+
+        $start = new \DateTimeImmutable($startDate);
+        $end = new \DateTimeImmutable($endDate);
+        if ($end < $start) {
+            throw new BadRequestHttpException('end_date must be on or after start_date');
+        }
+
+        if ($start->diff($end)->days > 120) {
+            throw new BadRequestHttpException('Date window exceeds maximum of 120 days');
+        }
+
+        $search = [
+            'pc_eventDate' => new DateSearchField(
+                'pc_eventDate',
+                ['ge' . $startDate, 'le' . $endDate],
+                DateSearchField::DATE_TYPE_DATE,
+                true
+            ),
+        ];
+
+        $facilityId = $request->query->get('facility_id');
+        if ($facilityId !== null && $facilityId !== '') {
+            $search['pc_facility'] = new StringSearchField('pc_facility', [(string) $facilityId], SearchModifier::EXACT);
+        }
+
+        $calendarId = (string) $request->query->get('calendar_id', '');
+        if ($calendarId !== '') {
+            $search['pc_catid'] = new StringSearchField('pc_catid', [$calendarId], SearchModifier::EXACT);
+        }
+
+        $processingResult = $this->appointmentService->search($search, true);
+        if ($processingResult->hasErrors()) {
+            return $this->processingResultJson($processingResult);
+        }
+
+        $events = [];
+        foreach ($processingResult->getData() as $row) {
+            $events[] = $this->normalizeCalendarEvent($row);
+        }
+
+        $categorySearch = [];
+        if ($calendarId !== '') {
+            $categorySearch['pc_catid'] = new StringSearchField('pc_catid', [$calendarId], SearchModifier::EXACT);
+        }
+
+        $calendars = [];
+        $categoryResult = $this->appointmentService->searchCalendarCategories($categorySearch);
+        if (!$categoryResult->hasErrors()) {
+            foreach ($categoryResult->getData() as $catRow) {
+                $calendars[] = $this->normalizeCalendarCategory($catRow);
+            }
+        }
+
+        $body = [
+            'tool' => 'get_calendar',
+            'schema_version' => self::SCHEMA_VERSION,
+            'citations' => [
+                self::citation('get_calendar', 'calendar', '/api/clinical-copilot/retrieval/calendar'),
+            ],
+            'query' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'calendar_id' => $calendarId,
+                'facility_id' => $facilityId !== null && $facilityId !== '' ? (string) $facilityId : '',
+            ],
+            'calendars' => $calendars,
+            'events' => $events,
         ];
 
         return new JsonResponse($body, Response::HTTP_OK);
@@ -374,6 +462,41 @@ final class ClinicalCopilotRetrievalRestController
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */
+    private function assertIsoYmd(string $name, string $value): void
+    {
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $value);
+        if ($dt === false || $dt->format('Y-m-d') !== $value) {
+            throw new BadRequestHttpException('Invalid query parameter ' . $name . ' (expected YYYY-MM-DD)');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeCalendarCategory(array $row): array
+    {
+        return [
+            'calendar_id' => (string) ($row['pc_catid'] ?? ''),
+            'name' => (string) ($row['pc_catname'] ?? ''),
+            'color' => (string) ($row['pc_catcolor'] ?? ''),
+            'type' => (string) ($row['pc_cattype'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeCalendarEvent(array $row): array
+    {
+        $base = $this->normalizeScheduleSlot($row);
+
+        return array_merge($base, [
+            'calendar_category_id' => (string) ($row['pc_catid'] ?? ''),
+        ]);
+    }
+
     private function normalizeScheduleSlot(array $row): array
     {
         return [

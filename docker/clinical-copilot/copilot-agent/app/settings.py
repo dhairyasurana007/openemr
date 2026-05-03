@@ -32,7 +32,7 @@ class Settings:
     """Runtime configuration loaded once at process start."""
 
     openrouter_api_key: str
-    """API key for OpenRouter (OpenAI-compatible base URL). Empty disables chat."""
+    """OpenRouter API key (Chat Completions-compatible HTTP API; model id e.g. anthropic/claude-*). Empty disables chat."""
     openrouter_model: str
     """OpenRouter model id, e.g. ``anthropic/claude-3.5-haiku``."""
     openrouter_http_timeout_s: float
@@ -52,6 +52,8 @@ class Settings:
     """Semaphore limit for concurrent agent→OpenEMR HTTP calls (backpressure)."""
     readyz_probe_openemr: bool
     """When True, /meta/health/readyz awaits OpenEMR /meta/health/livez (stricter deploy ordering)."""
+    use_openemr_retrieval: bool
+    """When True, retrieval tools call OpenEMR ``/api/clinical-copilot/retrieval/*`` (HTTP). When False, empty stub."""
     copilot_max_inflight: int
     """When >0, cap concurrent non-health requests (503 when saturated)."""
     langchain_api_key: str
@@ -96,6 +98,7 @@ class Settings:
             openemr_http_max_keepalive=_int("OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS", 10),
             openemr_max_concurrent_requests=_int("OPENEMR_MAX_CONCURRENT_REQUESTS", 8),
             readyz_probe_openemr=_bool("COPILOT_READYZ_PROBE_OPENEMR", False),
+            use_openemr_retrieval=_bool("COPILOT_USE_OPENEMR_RETRIEVAL", True),
             copilot_max_inflight=_int("COPILOT_MAX_INFLIGHT", 0),
             langchain_api_key=api_key,
             langchain_tracing_v2=langchain_tracing_v2,

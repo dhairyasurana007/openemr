@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_calendar",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "query", "calendars", "events"],
+  "properties": {
+    "tool": { "const": "get_calendar" },
+    "schema_version": { "type": "string" },
+    "citations": { "type": "array" },
+    "query": {
+      "type": "object",
+      "description": "Echo of request bounds and filters (no invented clinical content)."
+    },
+    "calendars": {
+      "type": "array",
+      "description": "Calendars visible in scope (metadata rows)."
+    },
+    "events": {
+      "type": "array",
+      "description": "Calendar events in the requested window (start/end, title, status as returned by OpenEMR)."
+    }
+  }
+}

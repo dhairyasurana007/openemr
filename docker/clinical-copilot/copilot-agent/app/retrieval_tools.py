@@ -1,4 +1,4 @@
-"""LangChain-bound read-only retrieval tools (six JSON-shaped payloads)."""
+"""LangChain-bound read-only retrieval tools (JSON-shaped payloads)."""
 
 from __future__ import annotations
 
@@ -25,6 +25,18 @@ class PatientScopedArgs(BaseModel):
     patient_uuid: str = Field(description="Patient UUID scoped by the caller authorization.")
 
 
+class GetCalendarArgs(BaseModel):
+    """Date-bounded calendar read (calendars metadata + events)."""
+
+    start_date: str = Field(description="ISO date YYYY-MM-DD start of the window (inclusive).")
+    end_date: str = Field(
+        default="",
+        description="ISO date YYYY-MM-DD end of the window (inclusive); empty means same as start_date.",
+    )
+    calendar_id: str = Field(default="", description="Optional calendar identifier filter.")
+    facility_id: str = Field(default="", description="Optional facility identifier filter.")
+
+
 def build_retrieval_tools(backend: RetrievalBackend) -> list[StructuredTool]:
     """Create tools whose **model** chooses names/args; execution is delegated to ``backend``."""
 
@@ -47,6 +59,25 @@ def build_retrieval_tools(backend: RetrievalBackend) -> list[StructuredTool]:
             func=_wrap(
                 "list_schedule_slots",
                 lambda date, facility_id="": backend.list_schedule_slots(date=date, facility_id=facility_id),
+            ),
+        ),
+        StructuredTool.from_function(
+            name="get_calendar",
+            description=(
+                "Read-only: OpenEMR calendar context for a date window—calendars visible in scope "
+                "and events (times, titles, statuses as returned by the backend). Use for calendar "
+                "views, blocks, and non-slot calendar questions; combine with list_schedule_slots when "
+                "appointment slots are needed."
+            ),
+            args_schema=GetCalendarArgs,
+            func=_wrap(
+                "get_calendar",
+                lambda start_date, end_date="", calendar_id="", facility_id="": backend.get_calendar(
+                    start_date,
+                    end_date=end_date,
+                    calendar_id=calendar_id,
+                    facility_id=facility_id,
+                ),
             ),
         ),
         StructuredTool.from_function(

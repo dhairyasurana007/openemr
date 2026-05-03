@@ -30,7 +30,9 @@ _SCHEDULE_COLUMN_PRIMARY = re.compile(
     r"\b("
     r"day\x27?s\s+schedule|schedule\s+for|my\s+schedule|morning\s+column|afternoon\s+column|"
     r"clinic\s+list\s+for\s+the\s+day|appointment(s)?\s+today|list\s+of\s+slots|"
-    r"who\s+is\s+on\s+my\s+schedule"
+    r"who\s+is\s+on\s+my\s+schedule|"
+    r"my\s+calendar|the\s+calendar|calendar\s+for|what\x27?s\s+on\s+the\s+calendar|"
+    r"openemr\s+calendar|\bcalendar\s+events?\b"
     r")\b",
     re.IGNORECASE,
 )

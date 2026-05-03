@@ -31,6 +31,7 @@ def _settings_with_langsmith(
         openemr_http_max_keepalive=2,
         openemr_max_concurrent_requests=2,
         readyz_probe_openemr=False,
+        use_openemr_retrieval=False,
         copilot_max_inflight=0,
         langchain_api_key=api_key,
         langchain_tracing_v2=tracing,

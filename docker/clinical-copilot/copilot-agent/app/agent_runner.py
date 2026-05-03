@@ -26,6 +26,7 @@ from app.verification import (
 
 
 def _default_llm_factory(settings: Settings) -> BaseChatModel:
+    # OpenRouter speaks the OpenAI Chat Completions wire format; ``ChatOpenAI`` is that client—not “OpenAI models”.
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
@@ -45,7 +46,8 @@ _TOOL_LOOP_INSTRUCTION = (
     "**Mandatory tool-first behavior:** for **patient chart** questions, call patient-scoped tools "
     "(get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
     "get_referrals_orders_care_gaps) as needed. For **schedule / day / column** questions, call "
-    "list_schedule_slots. "
+    "list_schedule_slots. For **calendar** views, blocks, and calendar events (not only appointment "
+    "slots), call get_calendar with an appropriate start/end date window. "
     "Call the **minimal** set that covers the question. If a tool returns retrieval_status.ok=false, "
     "do not invent replacements—stop or try a different read. "
     "**No assumptions** in this phase—retrieve facts via tools only."
