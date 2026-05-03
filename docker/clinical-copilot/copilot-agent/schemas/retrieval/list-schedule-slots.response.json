@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_schedule_slots",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "date", "slots"],
+  "properties": {
+    "tool": { "const": "list_schedule_slots" },
+    "schema_version": { "type": "string" },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "tool", "domain", "method", "path"],
+        "properties": {
+          "type": { "const": "openemr_rest" },
+          "tool": { "type": "string" },
+          "domain": { "type": "string" },
+          "method": { "type": "string" },
+          "path": { "type": "string" }
+        }
+      }
+    },
+    "date": { "type": "string", "format": "date" },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slot_id",
+          "slot_uuid",
+          "patient_uuid",
+          "patient_display",
+          "start_date",
+          "start_time",
+          "end_time",
+          "visit_type",
+          "status_code",
+          "facility_id",
+          "facility_uuid"
+        ]
+      }
+    }
+  }
+}
