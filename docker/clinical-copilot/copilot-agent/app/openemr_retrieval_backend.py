@@ -20,6 +20,7 @@ class OpenEmrRetrievalBackend:
         self._prefix = f"{api_base}/clinical-copilot/retrieval"
         self._client = httpx.Client(
             base_url=settings.openemr_base_url().rstrip("/"),
+            verify=settings.openemr_http_verify,
             timeout=httpx.Timeout(
                 connect=settings.openemr_http_timeout_connect_s,
                 read=settings.openemr_http_timeout_read_s,

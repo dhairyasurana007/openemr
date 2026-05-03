@@ -55,6 +55,8 @@ class Settings:
     """Host:port or full URL for OpenEMR HTTP (e.g. ``openemr-web:80``). Document root; not the API prefix."""
     openemr_standard_api_path_prefix: str
     """Path prefix for OpenEMR standard REST API (e.g. ``/apis/default/api``). Retrieval URLs are under this + ``/clinical-copilot/retrieval/``."""
+    openemr_http_verify: bool
+    """Verify TLS certificates for agent→OpenEMR HTTPS. Set false only for private self-signed (e.g. ``openemr-web:443`` in Compose)."""
     openemr_http_timeout_connect_s: float
     openemr_http_timeout_read_s: float
     openemr_http_max_connections: int
@@ -104,6 +106,7 @@ class Settings:
                 "OPENEMR_INTERNAL_HOSTPORT", "openemr-web:80"
             ).strip(),
             openemr_standard_api_path_prefix=_standard_api_path_prefix(),
+            openemr_http_verify=_bool("OPENEMR_HTTP_VERIFY", True),
             openemr_http_timeout_connect_s=_float("OPENEMR_HTTP_TIMEOUT_CONNECT_S", 2.0),
             openemr_http_timeout_read_s=_float("OPENEMR_HTTP_TIMEOUT_READ_S", 30.0),
             openemr_http_max_connections=_int("OPENEMR_HTTP_MAX_CONNECTIONS", 20),

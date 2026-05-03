@@ -6,12 +6,14 @@
 #
 # Usage (from this directory):
 #   docker compose up --build --detach
+#   First run builds ``openemr-web`` from the repo root Dockerfile (can take several minutes).
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
 #   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
 #   (liveness: /meta/health/livez — cheap; readiness defaults to process-only unless
 #   COPILOT_READYZ_PROBE_OPENEMR=true probes OpenEMR /meta/health/livez)
 #
-# Agent→OpenEMR HTTP bounds (optional env on copilot-agent):
+# Agent→OpenEMR (optional env on copilot-agent):
+#   OPENEMR_INTERNAL_HOSTPORT default ``https://openemr-web:443``; OPENEMR_HTTP_VERIFY default ``false`` (image TLS).
 #   COPILOT_USE_OPENEMR_RETRIEVAL=true (default) — tools call /apis/default/api/clinical-copilot/retrieval/* on openemr-web.
 #   OPENEMR_STANDARD_API_PATH_PREFIX=/apis/default/api (default) if your site id is not ``default``.
 #   Set to false for empty stub-only responses (e.g. some automated tests).
@@ -27,6 +29,12 @@
 #   OPENROUTER_API_KEY=...
 #   LANGCHAIN_API_KEY=...   # LangSmith
 #   LANGCHAIN_TRACING_V2=true
+#
+# ``openemr-web`` is built from the **repository root** ``Dockerfile`` (not the
+# published ``openemr/openemr`` image alone) so this checkout’s PHP routes —
+# including ``/apis/default/api/clinical-copilot/retrieval/*`` — exist inside
+# the container. Override with ``image: openemr/openemr:latest`` only if your
+# upstream tag already ships those endpoints.
 #
 # Skipping setup.php (automatic install):
 # The official `openemr/openemr` image runs `openemr.sh` on start. It reads
@@ -64,7 +72,10 @@ services:
   openemr-web:
     container_name: openemr-web
     restart: unless-stopped
-    image: openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: openemr-clinical-copilot:local
     expose:
       - '80'
       - '443'
@@ -136,8 +147,10 @@ services:
       LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
       LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-clinical-copilot}
       REDIS_URL: ${REDIS_URL:-}
-      # Agent → OpenEMR REST (internal HTTP to app container).
-      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-openemr-web:80}
+      # Agent → OpenEMR: use HTTPS on :443 inside the mesh (Apache). HTTP :80 often
+# redirects with a Location that breaks server-side clients; TLS verify is off for the image CA.
+      OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-https://openemr-web:443}
+      OPENEMR_HTTP_VERIFY: ${OPENEMR_HTTP_VERIFY:-false}
       COPILOT_USE_OPENEMR_RETRIEVAL: ${COPILOT_USE_OPENEMR_RETRIEVAL:-true}
       CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
       COPILOT_READYZ_PROBE_OPENEMR: ${COPILOT_READYZ_PROBE_OPENEMR:-false}

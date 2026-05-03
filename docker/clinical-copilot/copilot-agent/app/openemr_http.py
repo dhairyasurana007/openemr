@@ -27,7 +27,12 @@ class OpenEmrHttpPool:
             max_connections=settings.openemr_http_max_connections,
             max_keepalive_connections=settings.openemr_http_max_keepalive,
         )
-        self._client = httpx.AsyncClient(timeout=timeout, limits=limits, follow_redirects=True)
+        self._client = httpx.AsyncClient(
+            timeout=timeout,
+            limits=limits,
+            follow_redirects=True,
+            verify=settings.openemr_http_verify,
+        )
 
     @property
     def base_url(self) -> str:
