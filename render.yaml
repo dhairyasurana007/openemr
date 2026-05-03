@@ -10,7 +10,12 @@
 #    - `openemr-mysql` — private MariaDB (not on the public internet).
 #    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
 #    - `clinical-copilot-redis` — Render Key Value (Redis®-compatible); private mesh only (`ipAllowList: []`).
-#    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); readiness `/meta/health/readyz`.
+#    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); Render
+#      `healthCheckPath` uses `/meta/health/readyz` (readiness). The agent also exposes
+#      `/meta/health/livez` for cheap liveness only (process up). Default readiness does
+#      not call OpenEMR; set `COPILOT_READYZ_PROBE_OPENEMR=true` on `copilot-agent` to gate
+#      routing on OpenEMR `/meta/health/livez` (avoid OpenEMR `readyz` here — it bootstraps
+#      the app and can be slow / circular during deploy).
 #
 #    **MVP without managed Redis:** delete the `clinical-copilot-redis` entry below and on `copilot-agent`
 #    replace the `REDIS_URL` `fromService` block with `- key: REDIS_URL` / `sync: false` (set in Dashboard
@@ -160,3 +165,20 @@ services:
           property: connectionString
       - key: CLINICAL_COPILOT_INTERNAL_SECRET
         sync: false
+      # Optional: stricter readiness (agent 503 until OpenEMR livez responds).
+      - key: COPILOT_READYZ_PROBE_OPENEMR
+        value: "false"
+      # Agent→OpenEMR client bounds (timeouts, pool size, concurrent REST cap).
+      - key: OPENEMR_HTTP_TIMEOUT_CONNECT_S
+        value: "2"
+      - key: OPENEMR_HTTP_TIMEOUT_READ_S
+        value: "30"
+      - key: OPENEMR_HTTP_MAX_CONNECTIONS
+        value: "20"
+      - key: OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS
+        value: "10"
+      - key: OPENEMR_MAX_CONCURRENT_REQUESTS
+        value: "8"
+      # Inbound backpressure for non-health routes (0 = unlimited).
+      - key: COPILOT_MAX_INFLIGHT
+        value: "0"

@@ -8,6 +8,14 @@
 #   docker compose up --build --detach
 #   OpenEMR (via nginx TLS): https://localhost:${COPILOT_HTTPS_PORT:-8443}/  (admin / pass)
 #   Copilot agent health:    http://localhost:${COPILOT_AGENT_PORT:-8000}/meta/health/readyz
+#   (liveness: /meta/health/livez — cheap; readiness defaults to process-only unless
+#   COPILOT_READYZ_PROBE_OPENEMR=true probes OpenEMR /meta/health/livez)
+#
+# Agent→OpenEMR HTTP bounds (optional env on copilot-agent):
+#   OPENEMR_HTTP_TIMEOUT_CONNECT_S, OPENEMR_HTTP_TIMEOUT_READ_S,
+#   OPENEMR_HTTP_MAX_CONNECTIONS, OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS,
+#   OPENEMR_MAX_CONCURRENT_REQUESTS (semaphore for REST tool calls),
+#   COPILOT_MAX_INFLIGHT (inbound 503 cap for non-health paths; 0 = off)
 #
 # Optional Redis (5th container) for agent replicas / job queues:
 #   docker compose --profile redis up --build --detach
@@ -125,6 +133,13 @@ services:
       # Agent → OpenEMR REST (internal HTTP to app container).
       OPENEMR_INTERNAL_HOSTPORT: ${OPENEMR_INTERNAL_HOSTPORT:-openemr-web:80}
       CLINICAL_COPILOT_INTERNAL_SECRET: ${CLINICAL_COPILOT_INTERNAL_SECRET:-}
+      COPILOT_READYZ_PROBE_OPENEMR: ${COPILOT_READYZ_PROBE_OPENEMR:-false}
+      OPENEMR_HTTP_TIMEOUT_CONNECT_S: ${OPENEMR_HTTP_TIMEOUT_CONNECT_S:-2}
+      OPENEMR_HTTP_TIMEOUT_READ_S: ${OPENEMR_HTTP_TIMEOUT_READ_S:-30}
+      OPENEMR_HTTP_MAX_CONNECTIONS: ${OPENEMR_HTTP_MAX_CONNECTIONS:-20}
+      OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS: ${OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS:-10}
+      OPENEMR_MAX_CONCURRENT_REQUESTS: ${OPENEMR_MAX_CONCURRENT_REQUESTS:-8}
+      COPILOT_MAX_INFLIGHT: ${COPILOT_MAX_INFLIGHT:-0}
 
   redis:
     container_name: copilot-redis
