@@ -21,6 +21,7 @@ def _minimal_settings() -> Settings:
         openrouter_app_title="OpenEMR Clinical Co-Pilot",
         clinical_copilot_internal_secret="",
         openemr_internal_hostport="openemr-web:80",
+        openemr_standard_api_path_prefix="/apis/default/api",
         openemr_http_timeout_connect_s=1.0,
         openemr_http_timeout_read_s=2.0,
         openemr_http_max_connections=4,

@@ -12,7 +12,8 @@
 #   COPILOT_READYZ_PROBE_OPENEMR=true probes OpenEMR /meta/health/livez)
 #
 # Agent→OpenEMR HTTP bounds (optional env on copilot-agent):
-#   COPILOT_USE_OPENEMR_RETRIEVAL=true (default) — tools call /api/clinical-copilot/retrieval/* on openemr-web.
+#   COPILOT_USE_OPENEMR_RETRIEVAL=true (default) — tools call /apis/default/api/clinical-copilot/retrieval/* on openemr-web.
+#   OPENEMR_STANDARD_API_PATH_PREFIX=/apis/default/api (default) if your site id is not ``default``.
 #   Set to false for empty stub-only responses (e.g. some automated tests).
 #   OPENEMR_HTTP_TIMEOUT_CONNECT_S, OPENEMR_HTTP_TIMEOUT_READ_S,
 #   OPENEMR_HTTP_MAX_CONNECTIONS, OPENEMR_HTTP_MAX_KEEPALIVE_CONNECTIONS,

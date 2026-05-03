@@ -27,6 +27,14 @@ def _bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _standard_api_path_prefix() -> str:
+    """OpenEMR serves the standard API at ``/apis/{site_id}/api/...`` (default site: ``default``)."""
+    raw = (os.environ.get("OPENEMR_STANDARD_API_PATH_PREFIX") or "/apis/default/api").strip()
+    if raw == "":
+        return "/apis/default/api"
+    return "/" + raw.strip("/")
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime configuration loaded once at process start."""
@@ -44,6 +52,9 @@ class Settings:
     clinical_copilot_internal_secret: str
     """When non-empty, ``POST /v1/chat`` requires matching ``X-Clinical-Copilot-Internal-Secret``."""
     openemr_internal_hostport: str
+    """Host:port or full URL for OpenEMR HTTP (e.g. ``openemr-web:80``). Document root; not the API prefix."""
+    openemr_standard_api_path_prefix: str
+    """Path prefix for OpenEMR standard REST API (e.g. ``/apis/default/api``). Retrieval URLs are under this + ``/clinical-copilot/retrieval/``."""
     openemr_http_timeout_connect_s: float
     openemr_http_timeout_read_s: float
     openemr_http_max_connections: int
@@ -53,7 +64,7 @@ class Settings:
     readyz_probe_openemr: bool
     """When True, /meta/health/readyz awaits OpenEMR /meta/health/livez (stricter deploy ordering)."""
     use_openemr_retrieval: bool
-    """When True, retrieval tools call OpenEMR ``/api/clinical-copilot/retrieval/*`` (HTTP). When False, empty stub."""
+    """When True, retrieval tools call OpenEMR standard API under ``openemr_standard_api_path_prefix``. When False, empty stub."""
     copilot_max_inflight: int
     """When >0, cap concurrent non-health requests (503 when saturated)."""
     langchain_api_key: str
@@ -92,6 +103,7 @@ class Settings:
             openemr_internal_hostport=os.environ.get(
                 "OPENEMR_INTERNAL_HOSTPORT", "openemr-web:80"
             ).strip(),
+            openemr_standard_api_path_prefix=_standard_api_path_prefix(),
             openemr_http_timeout_connect_s=_float("OPENEMR_HTTP_TIMEOUT_CONNECT_S", 2.0),
             openemr_http_timeout_read_s=_float("OPENEMR_HTTP_TIMEOUT_READ_S", 30.0),
             openemr_http_max_connections=_int("OPENEMR_HTTP_MAX_CONNECTIONS", 20),

@@ -12,12 +12,12 @@ from app.settings import Settings
 
 
 class OpenEmrRetrievalBackend:
-    """Sync httpx client to ``/api/clinical-copilot/retrieval/*`` (same contract as ``StubRetrievalBackend``)."""
-
-    _PREFIX = "/api/clinical-copilot/retrieval"
+    """Sync httpx client to OpenEMR standard API ``…/clinical-copilot/retrieval/*`` (same contract as ``StubRetrievalBackend``)."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        api_base = settings.openemr_standard_api_path_prefix.rstrip("/")
+        self._prefix = f"{api_base}/clinical-copilot/retrieval"
         self._client = httpx.Client(
             base_url=settings.openemr_base_url().rstrip("/"),
             timeout=httpx.Timeout(
@@ -84,7 +84,7 @@ class OpenEmrRetrievalBackend:
 
     def list_schedule_slots(self, date: str, facility_id: str = "") -> dict[str, Any]:
         return self._get_json(
-            f"{self._PREFIX}/list-schedule-slots",
+            f"{self._prefix}/list-schedule-slots",
             {"date": date, "facility_id": facility_id},
             "list_schedule_slots",
         )
@@ -97,7 +97,7 @@ class OpenEmrRetrievalBackend:
         facility_id: str = "",
     ) -> dict[str, Any]:
         return self._get_json(
-            f"{self._PREFIX}/calendar",
+            f"{self._prefix}/calendar",
             {
                 "start_date": start_date,
                 "end_date": end_date,
@@ -108,24 +108,24 @@ class OpenEmrRetrievalBackend:
         )
 
     def get_patient_core_profile(self, patient_uuid: str) -> dict[str, Any]:
-        return self._get_json(f"{self._PREFIX}/patient-core-profile", {"patient": patient_uuid}, "get_patient_core_profile")
+        return self._get_json(f"{self._prefix}/patient-core-profile", {"patient": patient_uuid}, "get_patient_core_profile")
 
     def get_medication_list(self, patient_uuid: str) -> dict[str, Any]:
-        return self._get_json(f"{self._PREFIX}/medication-list", {"patient": patient_uuid}, "get_medication_list")
+        return self._get_json(f"{self._prefix}/medication-list", {"patient": patient_uuid}, "get_medication_list")
 
     def get_observations(self, patient_uuid: str) -> dict[str, Any]:
-        return self._get_json(f"{self._PREFIX}/observations", {"patient": patient_uuid}, "get_observations")
+        return self._get_json(f"{self._prefix}/observations", {"patient": patient_uuid}, "get_observations")
 
     def get_encounters_and_notes(self, patient_uuid: str) -> dict[str, Any]:
         return self._get_json(
-            f"{self._PREFIX}/encounters-and-notes",
+            f"{self._prefix}/encounters-and-notes",
             {"patient": patient_uuid},
             "get_encounters_and_notes",
         )
 
     def get_referrals_orders_care_gaps(self, patient_uuid: str) -> dict[str, Any]:
         return self._get_json(
-            f"{self._PREFIX}/referrals-orders-care-gaps",
+            f"{self._prefix}/referrals-orders-care-gaps",
             {"patient": patient_uuid},
             "get_referrals_orders_care_gaps",
         )
