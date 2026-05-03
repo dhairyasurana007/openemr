@@ -1,4 +1,4 @@
-# Render Blueprint — clinical-copilot topology: private MariaDB + OpenEMR web + copilot-agent.
+# Render Blueprint — clinical-copilot topology: private MariaDB + OpenEMR web + Key Value Redis + copilot-agent.
 # Aligns with docker/clinical-copilot/docker-compose.yml (minus nginx/TLS edge on PaaS).
 #
 # ## Apply this (first time or switching from manual services)
@@ -6,16 +6,22 @@
 # 1. Commit and push this file to the branch Render builds from (often `main`).
 # 2. Dashboard → Blueprints → **New Blueprint** → select this GitHub/GitLab repo.
 # 3. Render detects `render.yaml` at the repo root (or set **Blueprint Path** if you moved it).
-# 4. Review the **preview**: it creates/updates **three** services:
+# 4. Review the **preview**: it creates/updates **four** services:
 #    - `openemr-mysql` — private MariaDB (not on the public internet).
 #    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
+#    - `clinical-copilot-redis` — Render Key Value (Redis®-compatible); private mesh only (`ipAllowList: []`).
 #    - `copilot-agent` — FastAPI agent (`docker/clinical-copilot/copilot-agent`); readiness `/meta/health/readyz`.
+#
+#    **MVP without managed Redis:** delete the `clinical-copilot-redis` entry below and on `copilot-agent`
+#    replace the `REDIS_URL` `fromService` block with `- key: REDIS_URL` / `sync: false` (set in Dashboard
+#    or leave unset until you add an external Redis / enable the Key Value service again).
 # 5. **Create / update** the Blueprint. First apply can take several minutes (DB disk + image pulls).
 # 6. After deploy: open the **openemr-web** public URL; bootstrap runs `openemr-auto-install.php` when env is correct.
 #
 # ## Secrets (Dashboard: set on each service, same value where noted)
 #
-# - **copilot-agent:** `OPENROUTER_API_KEY` (required for LLM calls). Optional: LangSmith keys, `REDIS_URL`.
+# - **copilot-agent:** `OPENROUTER_API_KEY` (required for LLM calls). Optional: LangSmith keys.
+#   `REDIS_URL` is wired from `clinical-copilot-redis` when that service is present (see MVP note above).
 # - **Both web services:** `CLINICAL_COPILOT_INTERNAL_SECRET` — optional shared secret for server-to-server auth
 #   (set the same value on `openemr-web` and `copilot-agent` when you enforce it in the agent module).
 # - **openemr-web:** `CLINICAL_COPILOT_AGENT_PUBLIC_URL` — optional; public agent URL if the browser calls the
@@ -115,6 +121,14 @@ services:
       - key: OE_PASS
         sync: false
 
+  # Optional cost/complexity tradeoff: remove this block + fix `REDIS_URL` on `copilot-agent` for MVP (see header).
+  - type: keyvalue
+    name: clinical-copilot-redis
+    region: virginia
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
   - type: web
     name: copilot-agent
     runtime: docker
@@ -140,6 +154,9 @@ services:
       - key: LANGCHAIN_PROJECT
         value: clinical-copilot
       - key: REDIS_URL
-        sync: false
+        fromService:
+          name: clinical-copilot-redis
+          type: keyvalue
+          property: connectionString
       - key: CLINICAL_COPILOT_INTERNAL_SECRET
         sync: false
