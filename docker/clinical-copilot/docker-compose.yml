@@ -108,7 +108,9 @@ services:
       # OpenEMR username for ACL on retrieval when using CLINICAL_COPILOT_INTERNAL_SECRET (match ``OE_USER`` in practice).
       CLINICAL_COPILOT_SERVICE_USERNAME: ${CLINICAL_COPILOT_SERVICE_USERNAME:-admin}
       # Optional idempotent seed users (Physicians / Clinicians built-in ACL groups). Demo passwords — change for real use.
+      # If physician* logins fail after a partial install, set OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS=true once.
       OPENEMR_AUTO_SEED_STANDARD_ROLES: ${OPENEMR_AUTO_SEED_STANDARD_ROLES:-true}
+      OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS: ${OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS:-false}
       OE_SEED_PHYSICIAN1_USERNAME: ${OE_SEED_PHYSICIAN1_USERNAME:-physician1}
       OE_SEED_PHYSICIAN2_USERNAME: ${OE_SEED_PHYSICIAN2_USERNAME:-physician2}
       OE_SEED_PHYSICIAN_PASSWORD: ${OE_SEED_PHYSICIAN_PASSWORD:-pass}

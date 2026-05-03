@@ -113,6 +113,14 @@ services:
         value: openemr
       - key: MANUAL_SETUP
         value: "no"
+      # Demo physicians (physician1 / physician2) + clinician: same bootstrap as Compose; set on **openemr-web** only.
+      - key: OPENEMR_AUTO_SEED_STANDARD_ROLES
+        value: "true"
+      - key: OE_SEED_PHYSICIAN_PASSWORD
+        value: pass
+      # One-time truthy if physician users already exist with a wrong hash: forces password resync from OE_SEED_* then disable.
+      - key: OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS
+        value: "false"
       - key: CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT
         fromService:
           name: copilot-agent

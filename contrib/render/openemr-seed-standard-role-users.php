@@ -33,6 +33,11 @@
  *
  * ``*_FACILITY_ID``: optional explicit ``facility.id``; empty = first facility in DB.
  *
+ * **Troubleshooting physician login:** if ``users`` rows exist but login still fails, ensure a matching
+ * ``users_secure`` row exists (this script **inserts** one when missing). To overwrite an existing hash
+ * (e.g. stale password from an earlier install), set ``OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS``
+ * to a truthy value for **one** deploy, then turn it off.
+ *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
  * @copyright Copyright (c) 2026 OpenCoreEMR Inc <https://opencoreemr.com/>
@@ -260,6 +265,44 @@ function defaultFacilityId(): int
 }
 
 /**
+ * Ensure ``users_secure`` exists and optionally reset the password hash for an existing seeded account.
+ *
+ * OpenEMR authenticates against ``users_secure``; a ``users`` row without a matching ``users_secure`` row
+ * produces a login that never succeeds. Older partial installs can also leave a stale hash while the
+ * seed script skips creation ("already exists").
+ */
+function syncExistingSeedUserCredentials(int $userId, string $username, string $password, bool $forcePasswordReset): void
+{
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    if ($hash === false) {
+        fwrite(STDERR, "openemr-seed-standard-role-users: password_hash failed for existing '{$username}'.\n");
+        exit(1);
+    }
+
+    $secure = sqlQuery('SELECT `id` FROM `users_secure` WHERE `id` = ? LIMIT 1', [$userId]);
+    if (!is_array($secure) || empty($secure['id'])) {
+        sqlStatement(
+            'INSERT INTO `users_secure` (`id`, `username`, `password`, `last_update_password`) VALUES (?, ?, ?, NOW())',
+            [$userId, $username, $hash]
+        );
+        fwrite(
+            STDOUT,
+            "openemr-seed-standard-role-users: repaired missing `users_secure` row for existing '{$username}' (id={$userId}).\n"
+        );
+
+        return;
+    }
+
+    if ($forcePasswordReset) {
+        sqlStatement(
+            'UPDATE `users_secure` SET `password` = ?, `last_update_password` = NOW() WHERE `id` = ?',
+            [$hash, $userId]
+        );
+        fwrite(STDOUT, "openemr-seed-standard-role-users: reset password hash for existing '{$username}' (id={$userId}).\n");
+    }
+}
+
+/**
  * @param list<string> $aclGroupTitles
  * @param array{see_auth:int,calendar:int,cal_ui:int,facility_id:int} $prefs
  */
@@ -273,7 +316,10 @@ function seedOneUser(
 ): void {
     $exists = sqlQuery('SELECT `id` FROM `users` WHERE BINARY `username` = ?', [$username]);
     if (is_array($exists) && !empty($exists['id'])) {
-        fwrite(STDOUT, "openemr-seed-standard-role-users: user '{$username}' already exists, skipping.\n");
+        $userId = (int) $exists['id'];
+        $forceReset = isEnvTruthy(getenv('OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS'));
+        syncExistingSeedUserCredentials($userId, $username, $password, $forceReset);
+        fwrite(STDOUT, "openemr-seed-standard-role-users: user '{$username}' already exists, skipping create.\n");
 
         return;
     }
