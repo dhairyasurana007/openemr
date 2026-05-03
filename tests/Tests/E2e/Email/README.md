@@ -95,7 +95,7 @@ The email tests are integrated into the GitHub Actions CI pipeline:
 2. Email tests run after other test suites
 3. Results are uploaded to Codecov
 
-The tests run on all configured PHP/database combinations defined in `.github/workflows/test.yml`.
+The tests run on all configured PHP/database combinations defined in `.github/workflows/reusable-openemr-docker-tests.yml`.
 
 ## Configuration
 

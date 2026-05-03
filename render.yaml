@@ -9,8 +9,7 @@
 # 4. Review the **preview**: it creates/updates **four** services:
 #    - `openemr-mysql` — private MariaDB (not on the public internet).
 #    - `openemr-web` — OpenEMR (root `./Dockerfile`); health uses readiness path `/meta/health/readyz`.
-#      **Track A isolated tests** run during the **image build** (`./vendor/bin/phpunit -c phpunit-isolated.xml --testsuite track-a` in the
-#      Dockerfile; list lives under `<testsuite name="track-a">` in phpunit-isolated.xml). Disable: `docker build --build-arg OPENEMR_RUN_TRACK_A_TESTS=0 .`
+#      Run automated tests in CI (e.g. `composer phpunit-isolated` / GitHub Actions), not during this image build.
 #      Other GitHub workflow YAML may live under `.github/future-workflows/` and is not executed until moved back to
 #      `.github/workflows/`.
 #    - `clinical-copilot-redis` — Render Key Value (Redis®-compatible); private mesh only (`ipAllowList: []`).

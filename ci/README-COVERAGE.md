@@ -71,7 +71,7 @@ The existing `phpcov merge` command combines all `.cov` files (unit, api, e2e, e
 
 ## GitHub Actions Workflow
 
-In `.github/workflows/test.yml`, the coverage process happens in these steps:
+In `.github/workflows/reusable-openemr-docker-tests.yml`, the coverage process happens in these steps:
 
 ### For API Tests:
 1. **Api testing** - Runs API tests via `build_test api`
