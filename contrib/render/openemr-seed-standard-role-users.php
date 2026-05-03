@@ -39,7 +39,9 @@
  * ``*_FACILITY_ID``: optional explicit ``facility.id``; empty = first facility in DB.
  *
  * **Troubleshooting physician login:** if ``users`` rows exist but login still fails, ensure a matching
- * ``users_secure`` row exists (this script **inserts** one when missing). To overwrite an existing hash
+ * ``users_secure`` row exists (this script **inserts** one when missing), a ``groups`` row for the
+ * username (OpenEMR rejects login otherwise), and phpGACL membership (``AclExtended::setUserAro``). This
+ * script repairs all three when an expected seed username already exists. To overwrite an existing hash
  * (e.g. stale password from an earlier install), set ``OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS``
  * to a truthy value for **one** deploy, then turn it off.
  *
@@ -276,6 +278,35 @@ function defaultFacilityId(): int
 }
 
 /**
+ * OpenEMR login requires a ``groups`` row and at least one phpGACL ARO group; a ``users`` row alone is not enough.
+ * Repair idempotently when a seed username already existed from a partial or legacy install.
+ *
+ * @param list<string> $aclGroupTitles
+ */
+function ensureSeedUserLoginPrerequisites(int $userId, string $username, array $aclGroupTitles, string $fname, string $lname): void
+{
+    $groupRow = sqlQuery('SELECT `name` FROM `groups` WHERE BINARY `user` = ? LIMIT 1', [$username]);
+    if (!is_array($groupRow) || $groupRow['name'] === null || $groupRow['name'] === '') {
+        sqlStatement('INSERT INTO `groups` (`name`, `user`) VALUES (?, ?)', ['Default', $username]);
+        fwrite(STDOUT, "openemr-seed-standard-role-users: repaired missing `groups` row for '{$username}'.\n");
+    }
+
+    $aclTitles = AclExtended::aclGetGroupTitles($username);
+    if (empty($aclTitles)) {
+        $userRow = sqlQuery('SELECT `fname`, `mname`, `lname` FROM `users` WHERE `id` = ?', [$userId]);
+        $useFname = (is_array($userRow) && isset($userRow['fname']) && (string) $userRow['fname'] !== '')
+            ? (string) $userRow['fname']
+            : $fname;
+        $useMname = (is_array($userRow) && isset($userRow['mname'])) ? (string) $userRow['mname'] : '';
+        $useLname = (is_array($userRow) && isset($userRow['lname']) && (string) $userRow['lname'] !== '')
+            ? (string) $userRow['lname']
+            : $lname;
+        AclExtended::setUserAro($aclGroupTitles, $username, $useFname, $useMname, $useLname);
+        fwrite(STDOUT, "openemr-seed-standard-role-users: repaired missing phpGACL group membership for '{$username}'.\n");
+    }
+}
+
+/**
  * Ensure ``users_secure`` exists and optionally reset the password hash for an existing seeded account.
  *
  * OpenEMR authenticates against ``users_secure``; a ``users`` row without a matching ``users_secure`` row
@@ -330,6 +361,7 @@ function seedOneUser(
         $userId = (int) $exists['id'];
         $forceReset = isEnvTruthy(getenv('OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS'));
         syncExistingSeedUserCredentials($userId, $username, $password, $forceReset);
+        ensureSeedUserLoginPrerequisites($userId, $username, $aclGroupTitles, $fname, $lname);
         fwrite(STDOUT, "openemr-seed-standard-role-users: user '{$username}' already exists, skipping create.\n");
 
         return;

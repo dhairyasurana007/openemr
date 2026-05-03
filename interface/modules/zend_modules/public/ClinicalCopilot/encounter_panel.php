@@ -55,7 +55,7 @@ $agentReady = $handoff->isConfigured();
         #ccp-enc-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: var(--white, #fff); }
         #ccp-enc-composer { flex: 0 0 auto; border-top: 1px solid rgba(0, 0, 0, 0.1); background: var(--light, #f8f9fa); }
         .ccp-bubble { padding: 0.5rem 0.85rem; margin: 0.35rem 0; white-space: pre-wrap; word-break: break-word; }
-        .ccp-msg { max-width: 52rem; margin-left: auto; margin-right: auto; }
+        .ccp-msg { width: 100%; max-width: 100%; box-sizing: border-box; }
         .ccp-msg-user { text-align: right; }
         .ccp-msg-user .ccp-bubble { display: inline-block; text-align: left; background: var(--primary, #007bff); color: #fff; border-radius: 1rem 1rem 0.25rem 1rem; }
         .ccp-msg-assistant .ccp-bubble { display: inline-block; background: var(--light, #e9ecef); border-radius: 1rem 1rem 1rem 0.25rem; }

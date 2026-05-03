@@ -63,9 +63,9 @@ $agentReady = $handoff->isConfigured();
             background: var(--light, #f8f9fa);
         }
         .clinical-copilot-msg {
-            max-width: 52rem;
-            margin-left: auto;
-            margin-right: auto;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .clinical-copilot-msg-user {
             text-align: right;
