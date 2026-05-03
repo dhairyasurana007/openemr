@@ -113,12 +113,22 @@ services:
         value: openemr
       - key: MANUAL_SETUP
         value: "no"
-      # Demo physicians (physician1 / physician2) + clinician: same bootstrap as Compose; set on **openemr-web** only.
+      # Initial admin (same vars as openemr-auto-install.php / flex images).
+      - key: OE_USER
+        value: admin
+      # Demo physicians + clinician; passwords are hardcoded in openemr-seed-standard-role-users.php (``pass``).
       - key: OPENEMR_AUTO_SEED_STANDARD_ROLES
         value: "true"
-      - key: OE_SEED_PHYSICIAN_PASSWORD
+      - key: OE_SEED_PHYSICIAN1_USERNAME
+        value: physician1
+      - key: OE_SEED_PHYSICIAN2_USERNAME
+        value: physician2
+      - key: OE_SEED_CLINICIAN_USERNAME
+        value: clinician
+      # Admin + DB installer (openemr-auto-install.php); same weak demo default as local Compose.
+      - key: OE_PASS
         value: pass
-      # One-time truthy if physician users already exist with a wrong hash: forces password resync from OE_SEED_* then disable.
+      # One-time truthy if seeded users already exist with a wrong hash: forces password resync then disable.
       - key: OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS
         value: "false"
       - key: CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT
@@ -132,9 +142,6 @@ services:
         sync: false
       # Set in Dashboard after first deploy if you need a fixed public OAuth URL.
       - key: OPENEMR_SETTING_site_addr_oath
-        sync: false
-      # Optional: set a strong initial OpenEMR admin password (otherwise default is weak).
-      - key: OE_PASS
         sync: false
 
   # Optional cost/complexity tradeoff: remove this block + fix `REDIS_URL` on `copilot-agent` for MVP (see header).

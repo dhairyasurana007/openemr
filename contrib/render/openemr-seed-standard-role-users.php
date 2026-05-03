@@ -7,6 +7,10 @@
  * Runs after the database is configured. Runs by default whenever this script executes; set
  * ``OPENEMR_AUTO_SEED_STANDARD_ROLES`` to ``false``, ``no``, ``off``, or ``0`` to skip.
  *
+ * **Defaults:** two physicians (``physician1``, ``physician2``) and one clinician (``clinician``) whenever this script
+ * runs, unless you set ``OE_SEED_CLINICIAN_USERNAME`` to an empty value to skip the clinician row only.
+ * **Passwords for these seeded users are hardcoded to ``pass``** (demo only — edit this file to change them).
+ *
  * ## Policy you can approximate (not automatic law — tune ACL under Administration → ACL)
  *
  * - **Administrators** (``OE_USER`` / ``openemr-auto-install.php``): full access via that group’s ACLs.
@@ -24,7 +28,7 @@
  * | Env prefix | Role | Typical intent |
  * |------------|------|----------------|
  * | ``OE_SEED_PHYSICIAN1_*`` / ``OE_SEED_PHYSICIAN2_*`` | Built-in **Physicians** ACL group | Defaults ``physician1`` / ``physician2``. Per-slot env overrides shared ``OE_SEED_PHYSICIAN_*`` (e.g. ``OE_SEED_PHYSICIAN_SEE_AUTH``) when the slot-specific variable is unset. |
- * | ``OE_SEED_CLINICIAN_*`` | Built-in **Clinicians** ACL group | Scheduler; default ``see_auth=3`` (All) on authorizations; ``calendar=0``. |
+ * | ``OE_SEED_CLINICIAN_*`` | Built-in **Clinicians** ACL group | Default username ``clinician`` when unset (set to empty string to skip). Scheduler; default ``see_auth=3`` (All); ``calendar=0``. |
  *
  * ``see_auth``: ``1`` = None, ``2`` = Only Mine, ``3`` = All — **See Authorizations** (``interface/main/authorizations``), not every screen.
  *
@@ -85,6 +89,9 @@ if (!isset($config) || (int) $config !== 1) {
 $ignoreAuth = true;
 require_once $openemrRoot . '/interface/globals.php';
 
+/** @var non-empty-string */
+const SEED_STANDARD_ROLE_DEMO_PASSWORD = 'pass';
+
 /**
  * @return list<array{
  *     username:string,
@@ -104,10 +111,7 @@ function seedDefinitionsFromEnv(): array
     foreach ([1, 2] as $slot) {
         $pUser = getenv('OE_SEED_PHYSICIAN' . $slot . '_USERNAME');
         $username = ($pUser !== false && trim((string) $pUser) !== '') ? trim((string) $pUser) : ('physician' . $slot);
-        $pPass = getenv('OE_SEED_PHYSICIAN' . $slot . '_PASSWORD');
-        $password = ($pPass !== false && trim((string) $pPass) !== '')
-            ? trim((string) $pPass)
-            : (trim((string) (getenv('OE_SEED_PHYSICIAN_PASSWORD') ?: 'pass')));
+        $password = SEED_STANDARD_ROLE_DEMO_PASSWORD;
 
         $pFname = getenv('OE_SEED_PHYSICIAN' . $slot . '_FNAME');
         $fname = ($pFname !== false && trim((string) $pFname) !== '')
@@ -143,11 +147,17 @@ function seedDefinitionsFromEnv(): array
         ];
     }
 
-    $clinUser = trim((string) (getenv('OE_SEED_CLINICIAN_USERNAME') ?: ''));
+    $rawClinicianUsername = getenv('OE_SEED_CLINICIAN_USERNAME');
+    if ($rawClinicianUsername === false) {
+        $clinUser = 'clinician';
+    } else {
+        $clinUser = trim((string) $rawClinicianUsername);
+    }
+
     if ($clinUser !== '') {
         $out[] = [
             'username' => $clinUser,
-            'password' => (string) (getenv('OE_SEED_CLINICIAN_PASSWORD') ?: 'pass'),
+            'password' => SEED_STANDARD_ROLE_DEMO_PASSWORD,
             'fname' => trim((string) (getenv('OE_SEED_CLINICIAN_FNAME') ?: 'Clinician')),
             'lname' => trim((string) (getenv('OE_SEED_CLINICIAN_LNAME') ?: 'Demo')),
             'acl' => ['Clinicians'],
@@ -410,10 +420,6 @@ function isEnvTruthy(string|false $raw): bool
 fwrite(STDOUT, "openemr-seed-standard-role-users: starting (idempotent).\n");
 
 $defs = seedDefinitionsFromEnv();
-if ($defs === []) {
-    fwrite(STDOUT, "openemr-seed-standard-role-users: no OE_SEED_* usernames set, nothing to do.\n");
-    exit(0);
-}
 
 $neededAclTitles = [];
 foreach ($defs as $def) {

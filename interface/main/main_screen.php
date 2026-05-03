@@ -467,6 +467,22 @@ if ($is_expired) {
     ];
 }
 
+// First visible tab after login: Clinical Co-Pilot (no DB list / upgrade required).
+if (!$is_expired) {
+    $copilotNotes = 'interface/modules/zend_modules/public/ClinicalCopilot/panel.php';
+    $_tabs = array_values(array_filter(
+        $_tabs,
+        static function ($tab) use ($copilotNotes): bool {
+            return ($tab['notes'] ?? '') !== $copilotNotes;
+        }
+    ));
+    array_unshift($_tabs, [
+        'notes' => $copilotNotes,
+        'option_id' => 'cpl',
+        'title' => 'Clinical Co-Pilot',
+    ]);
+}
+
 // Will set Session variables to communicate settings to tab layout
 $session->set('default_open_tabs', $_tabs);
 // mdsupport - Apps processing invoked for valid app selections from list

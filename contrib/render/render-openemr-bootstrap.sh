@@ -134,7 +134,7 @@ if ! php "${OE_ROOT}/contrib/render/openemr-seed-standard-role-users.php"; then
     echo "render-openemr-bootstrap: WARNING: openemr-seed-standard-role-users.php failed (check ACL group titles match your locale)." >&2
 fi
 
-echo "render-openemr-bootstrap: openemr-seed-copilot-demo-schedule.php (no-op unless OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE is enabled)..."
+echo "render-openemr-bootstrap: openemr-seed-copilot-demo-schedule.php (skipped only when OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE is false/no/off/0)..."
 if ! php "${OE_ROOT}/contrib/render/openemr-seed-copilot-demo-schedule.php"; then
     echo "render-openemr-bootstrap: WARNING: openemr-seed-copilot-demo-schedule.php failed (check facility/calendar category exist)." >&2
 fi

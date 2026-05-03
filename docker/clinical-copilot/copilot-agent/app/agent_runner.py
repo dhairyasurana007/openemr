@@ -43,16 +43,16 @@ def _default_llm_factory(settings: Settings) -> BaseChatModel:
 
 
 _TOOL_LOOP_INSTRUCTION = (
-    "**Mandatory tool-first behavior:** use **only** the seven registered tools by **exact** name "
-    "(see system prompt); names like ``get`` are invalid. For **patient chart** questions with a "
-    "``patient_uuid``, call patient-scoped tools "
-    "(get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
-    "get_referrals_orders_care_gaps) as needed. Without a patient UUID, do **not** call those. For "
-    "**schedule / day / column** questions, call list_schedule_slots. For **calendar** views, call "
-    "get_calendar with an appropriate start/end date window. "
-    "Call the **minimal** set that covers the question. If a tool returns retrieval_status.ok=false, "
-    "do not invent replacements—stop or try a different read. "
-    "**No assumptions** in this phase—retrieve facts via tools only."
+    "Retrieval checklist:\n"
+    "1) Tool names must match the system prompt exactly—never ``get``/generic names.\n"
+    "2) If ``patient_uuid`` is present and the question is chart data: call the needed tools among "
+    "get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
+    "get_referrals_orders_care_gaps.\n"
+    "3) No patient UUID → do not call those five.\n"
+    "4) Schedule/day/column → list_schedule_slots first.\n"
+    "5) Calendar beyond slots → get_calendar with a sensible date window.\n"
+    "6) Minimal tool set only. retrieval_status.ok=false → stop or try another read; never invent data.\n"
+    "7) This phase: tool calls only—no assumptions."
 )
 
 

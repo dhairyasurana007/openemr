@@ -1,14 +1,17 @@
 <?php
 
 /**
- * Optional first-boot seeding of **20 demo patients** (diverse names) and **back-to-back** calendar
- * appointments on one day (idempotent via ``pubpid`` prefix ``CCSEED-`` and ``pc_hometext`` marker).
+ * First-boot seeding of **40 demo patients** (20 for ``physician1``, 20 for ``physician2``) and **back-to-back**
+ * calendar appointments on one day (idempotent via ``pubpid`` prefixes ``CCSEED-P1-`` / ``CCSEED-P2-`` and
+ * ``pc_hometext`` marker ``CCSEED_DEMO_APPT``).
  *
- * Runs after the database is configured. Disabled unless ``OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE`` is truthy.
+ * Runs after the database is configured whenever this script executes, including flex ``auto_configure.php``
+ * first boot. Set ``OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE`` to ``false``, ``no``, ``off``, or ``0`` to skip.
  *
  * Environment (optional):
  *
- * - ``OE_SEED_COPILOT_PROVIDER_USERNAME`` — calendar provider (``users.username``); default ``physician1``.
+ * - ``OE_SEED_COPILOT_PROVIDER_USERNAME`` — first calendar provider (``users.username``); default ``physician1``.
+ * - ``OE_SEED_COPILOT_PHYSICIAN2_USERNAME`` — second provider; default ``physician2``.
  * - ``OE_SEED_COPILOT_SCHEDULE_DATE`` — ``YYYY-MM-DD``; empty = **today** (PHP ``date('Y-m-d')`` in container TZ).
  * - ``OE_SEED_COPILOT_FIRST_START`` — first appointment start ``HH:MM:SS``; default ``09:00:00``.
  * - ``OE_SEED_COPILOT_SLOT_SECONDS`` — duration per slot in seconds; default ``900`` (15 minutes).
@@ -26,18 +29,18 @@ use OpenEMR\Common\Uuid\UuidRegistry;
 $openemrRoot = dirname(__DIR__, 2);
 chdir($openemrRoot);
 
-/** @param string|false $raw */
-function copilotDemoIsEnvTruthy(string|false $raw): bool
+function isCopilotDemoSeedExplicitlyDisabled(): bool
 {
+    $raw = getenv('OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE');
     if ($raw === false) {
         return false;
     }
 
-    return in_array(strtolower(trim($raw)), ['1', 'true', 'yes', 'on'], true);
+    return in_array(strtolower(trim((string) $raw)), ['0', 'false', 'no', 'off'], true);
 }
 
-if (!copilotDemoIsEnvTruthy(getenv('OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE'))) {
-    fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE not enabled, skipping.\n");
+if (isCopilotDemoSeedExplicitlyDisabled()) {
+    fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: OPENEMR_AUTO_SEED_COPILOT_DEMO_SCHEDULE is false/no/off/0, skipping.\n");
     exit(0);
 }
 
@@ -71,7 +74,7 @@ require_once $openemrRoot . '/interface/globals.php';
 /**
  * @return list<array{fname:string,lname:string,sex:string,dob:string}>
  */
-function copilotDemoPatientDefs(): array
+function copilotDemoPatientDefsPhysician1(): array
 {
     return [
         ['Amara', 'Okafor', 'Female', '1988-02-11'],
@@ -94,6 +97,35 @@ function copilotDemoPatientDefs(): array
         ['Ivan', 'Petrov', 'Male', '1981-03-19'],
         ['Sofia', 'Andersson', 'Female', '1998-01-25'],
         ['Kwame', 'Asante', 'Male', '1993-05-13'],
+    ];
+}
+
+/**
+ * @return list<array{fname:string,lname:string,sex:string,dob:string}>
+ */
+function copilotDemoPatientDefsPhysician2(): array
+{
+    return [
+        ['Yuki', 'Nakamura', 'Female', '1987-04-22'],
+        ['Omar', 'Benali', 'Male', '1976-11-03'],
+        ['Ingrid', 'Bergström', 'Female', '1969-08-14'],
+        ['Tendai', 'Moyo', 'Male', '1996-02-19'],
+        ['Lucía', 'Fernández', 'Female', '1991-09-07'],
+        ['Viktor', 'Popov', 'Male', '1984-12-30'],
+        ['Naledi', 'Dlamini', 'Female', '2001-06-25'],
+        ['Geoffrey', 'Okonkwo', 'Male', '1973-03-11'],
+        ['Anika', 'Krishnan', 'Female', '1998-10-08'],
+        ['Tomasz', 'Wójcik', 'Male', '1982-05-16'],
+        ['Brigitte', 'Dubois', 'Female', '1965-01-29'],
+        ['Samir', 'Haddad', 'Male', '1990-07-21'],
+        ['Fiona', 'MacLeod', 'Female', '1977-12-04'],
+        ['Diego', 'Castillo', 'Male', '1994-04-13'],
+        ['Akosua', 'Mensah', 'Female', '1989-08-18'],
+        ['Stefan', 'Jovanović', 'Male', '1980-02-02'],
+        ['Mirela', 'Ionescu', 'Female', '1993-11-27'],
+        ['Chen', 'Wei', 'Male', '1971-06-09'],
+        ['Bridget', "O'Connor", 'Female', '1999-03-15'],
+        ['Aziz', 'Rahman', 'Male', '1985-09-01'],
     ];
 }
 
@@ -260,10 +292,7 @@ function copilotScheduleDate(): string
 
 fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: starting (idempotent).\n");
 
-$defs = copilotDemoPatientDefs();
 $scheduleDate = copilotScheduleDate();
-$providerUsername = trim((string) (getenv('OE_SEED_COPILOT_PROVIDER_USERNAME') ?: 'physician1'));
-$providerId = copilotResolveProviderUserId($providerUsername);
 $catId = copilotResolveOfficeVisitCategoryId();
 $facilityId = copilotResolveDefaultFacilityId();
 $slotSeconds = (int) (getenv('OE_SEED_COPILOT_SLOT_SECONDS') ?: '900');
@@ -284,28 +313,48 @@ $noRecur = copilotNoRecurrspec();
 $locSpec = serialize(copilotEmptyLocationSpec());
 $recSerialized = serialize($noRecur);
 
-for ($i = 0; $i < 20; $i++) {
-    $slot = $i + 1;
-    $pubpid = sprintf('CCSEED-%02d', $slot);
-    $dem = $defs[$i];
-    $pid = copilotEnsurePatient($pubpid, $dem);
+/** @var list<array{username:string, defs:list<array{fname:string,lname:string,sex:string,dob:string}>, physicianLabel:string}> */
+$providerBlocks = [
+    [
+        'username' => trim((string) (getenv('OE_SEED_COPILOT_PROVIDER_USERNAME') ?: 'physician1')),
+        'defs' => copilotDemoPatientDefsPhysician1(),
+        'physicianLabel' => 'P1',
+    ],
+    [
+        'username' => trim((string) (getenv('OE_SEED_COPILOT_PHYSICIAN2_USERNAME') ?: 'physician2')),
+        'defs' => copilotDemoPatientDefsPhysician2(),
+        'physicianLabel' => 'P2',
+    ],
+];
 
-    $start = $firstStart->modify('+' . ($i * $slotSeconds) . ' seconds');
-    $startSql = $start->format('H:i:s');
-    $end = $start->modify('+' . $slotSeconds . ' seconds');
-    $endSql = $end->format('H:i:s');
+foreach ($providerBlocks as $block) {
+    $providerUsername = $block['username'];
+    $defs = $block['defs'];
+    $pLabel = $block['physicianLabel'];
+    $providerId = copilotResolveProviderUserId($providerUsername);
 
-    if (copilotAppointmentExists($pid, $scheduleDate, $startSql)) {
-        fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: appointment exists pid={$pid} {$scheduleDate} {$startSql}, skipping slot {$slot}.\n");
-        continue;
-    }
+    for ($i = 0; $i < 20; $i++) {
+        $slot = $i + 1;
+        $pubpid = sprintf('CCSEED-%s-%02d', $pLabel, $slot);
+        $dem = $defs[$i];
+        $pid = copilotEnsurePatient($pubpid, $dem);
 
-    $eventUuid = (new UuidRegistry(['table_name' => 'openemr_postcalendar_events']))->createUuid();
-    $eventUuidBin = UuidRegistry::uuidToBytes($eventUuid);
-    $title = 'Office visit (demo ' . $slot . ')';
+        $start = $firstStart->modify('+' . ($i * $slotSeconds) . ' seconds');
+        $startSql = $start->format('H:i:s');
+        $end = $start->modify('+' . $slotSeconds . ' seconds');
+        $endSql = $end->format('H:i:s');
 
-    sqlStatement(
-        'INSERT INTO `openemr_postcalendar_events` (
+        if (copilotAppointmentExists($pid, $scheduleDate, $startSql)) {
+            fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: appointment exists pid={$pid} {$scheduleDate} {$startSql}, skipping {$pLabel} slot {$slot}.\n");
+            continue;
+        }
+
+        $eventUuid = (new UuidRegistry(['table_name' => 'openemr_postcalendar_events']))->createUuid();
+        $eventUuidBin = UuidRegistry::uuidToBytes($eventUuid);
+        $title = 'Office visit (demo ' . $pLabel . ' ' . $slot . ')';
+
+        sqlStatement(
+            'INSERT INTO `openemr_postcalendar_events` (
             `uuid`,
             `pc_catid`, `pc_multiple`, `pc_aid`, `pc_pid`, `pc_gid`,
             `pc_title`, `pc_time`, `pc_hometext`,
@@ -321,27 +370,28 @@ for ($i = 0; $i < 20; $i++) {
             ?, 0, ?, 1, 1,
             ?, ?, ?
         )',
-        [
-            $eventUuidBin,
-            $catId,
-            (string) $providerId,
-            (string) $pid,
-            $title,
-            'CCSEED_DEMO_APPT',
-            $scheduleDate,
-            $slotSeconds,
-            $recSerialized,
-            $startSql,
-            $endSql,
-            '-',
-            $locSpec,
-            $facilityId,
-            $facilityId,
-            '',
-        ]
-    );
+            [
+                $eventUuidBin,
+                $catId,
+                (string) $providerId,
+                (string) $pid,
+                $title,
+                'CCSEED_DEMO_APPT',
+                $scheduleDate,
+                $slotSeconds,
+                $recSerialized,
+                $startSql,
+                $endSql,
+                '-',
+                $locSpec,
+                $facilityId,
+                $facilityId,
+                '',
+            ]
+        );
 
-    fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: created appointment pid={$pid} {$scheduleDate} {$startSql}–{$endSql} provider_id={$providerId}.\n");
+        fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: created appointment pid={$pid} {$scheduleDate} {$startSql}–{$endSql} provider={$providerUsername} provider_id={$providerId}.\n");
+    }
 }
 
 fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: completed.\n");
