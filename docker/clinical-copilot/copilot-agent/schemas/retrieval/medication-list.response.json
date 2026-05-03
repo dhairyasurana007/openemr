@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_medication_list",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "medications"],
+  "properties": {
+    "tool": { "const": "get_medication_list" },
+    "schema_version": { "type": "string" },
+    "medications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "drug",
+          "dosage",
+          "route",
+          "interval",
+          "active",
+          "start_date",
+          "end_date"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_observations",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "vitals", "laboratory"],
+  "properties": {
+    "tool": { "enum": ["get_observations", "get_vitals", "get_laboratory_results"] },
+    "schema_version": { "type": "string" },
+    "vitals": { "type": "array" },
+    "laboratory": { "type": "array" }
+  }
+}

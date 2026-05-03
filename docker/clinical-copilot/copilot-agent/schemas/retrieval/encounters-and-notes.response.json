@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_encounters_and_notes",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "encounters"],
+  "properties": {
+    "tool": { "const": "get_encounters_and_notes" },
+    "schema_version": { "type": "string" },
+    "encounters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "encounter_uuid",
+          "encounter_id",
+          "date",
+          "reason",
+          "facility",
+          "soap_notes"
+        ]
+      }
+    }
+  }
+}

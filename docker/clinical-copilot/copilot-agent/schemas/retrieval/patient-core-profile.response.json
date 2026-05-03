@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_patient_core_profile",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "demographics", "active_problems", "allergies"],
+  "properties": {
+    "tool": { "const": "get_patient_core_profile" },
+    "schema_version": { "type": "string" },
+    "demographics": {
+      "type": "object",
+      "required": ["patient_uuid", "pid", "first_name", "last_name", "DOB", "sex"]
+    },
+    "active_problems": { "type": "array" },
+    "allergies": { "type": "array" }
+  }
+}

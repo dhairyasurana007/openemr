@@ -23,6 +23,7 @@ use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\RestControllers\AllergyIntoleranceRestController;
 use OpenEMR\RestControllers\AppointmentRestController;
 use OpenEMR\RestControllers\BackgroundServiceRestController;
+use OpenEMR\RestControllers\ClinicalCopilot\ClinicalCopilotRetrievalRestController;
 use OpenEMR\RestControllers\ConditionRestController;
 // TODO: Remove this import when the OpenEMR\RestControllers\Config\RestConfig is no longer needed
 use OpenEMR\RestControllers\Config\RestConfig;
@@ -701,6 +702,30 @@ return [
             $data = is_array($decoded) ? $decoded : [];
         }
         return (new BackgroundServiceRestController())->runService($name, $data);
+    },
+    "GET /api/clinical-copilot/retrieval/list-schedule-slots" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->listScheduleSlots($request);
+    },
+    "GET /api/clinical-copilot/retrieval/patient-core-profile" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getPatientCoreProfile($request);
+    },
+    "GET /api/clinical-copilot/retrieval/medication-list" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getMedicationList($request);
+    },
+    "GET /api/clinical-copilot/retrieval/observations" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getObservations($request);
+    },
+    "GET /api/clinical-copilot/retrieval/vitals" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getVitals($request);
+    },
+    "GET /api/clinical-copilot/retrieval/laboratory-results" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getLaboratoryResults($request);
+    },
+    "GET /api/clinical-copilot/retrieval/encounters-and-notes" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getEncountersAndNotes($request);
+    },
+    "GET /api/clinical-copilot/retrieval/referrals-orders-care-gaps" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->getReferralsOrdersCareGaps($request);
     },
     // No request_authorization_check on "/api/background_service/$run":
     // this endpoint advances only services that are due, cannot force-run,

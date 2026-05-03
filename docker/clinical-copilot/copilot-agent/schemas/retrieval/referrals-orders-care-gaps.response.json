@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_referrals_orders_care_gaps",
+  "type": "object",
+  "required": ["tool", "schema_version", "citations", "referrals", "orders", "care_gaps"],
+  "properties": {
+    "tool": { "const": "get_referrals_orders_care_gaps" },
+    "schema_version": { "type": "string" },
+    "referrals": { "type": "array" },
+    "orders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "order_uuid",
+          "procedure_name",
+          "order_status",
+          "date_ordered",
+          "order_type"
+        ]
+      }
+    },
+    "care_gaps": { "type": "array" }
+  }
+}

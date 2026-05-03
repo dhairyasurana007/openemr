@@ -31,6 +31,18 @@ def _bool(name: str, default: bool) -> bool:
 class Settings:
     """Runtime configuration loaded once at process start."""
 
+    openrouter_api_key: str
+    """API key for OpenRouter (OpenAI-compatible base URL). Empty disables chat."""
+    openrouter_model: str
+    """OpenRouter model id, e.g. ``anthropic/claude-3.5-haiku``."""
+    openrouter_http_timeout_s: float
+    """Total-ish timeout for a single completion (passed to LangChain client)."""
+    openrouter_http_referer: str
+    """OpenRouter optional ``HTTP-Referer`` header."""
+    openrouter_app_title: str
+    """OpenRouter optional ``X-Title`` header."""
+    clinical_copilot_internal_secret: str
+    """When non-empty, ``POST /v1/chat`` requires matching ``X-Clinical-Copilot-Internal-Secret``."""
     openemr_internal_hostport: str
     openemr_http_timeout_connect_s: float
     openemr_http_timeout_read_s: float
@@ -46,6 +58,16 @@ class Settings:
     @staticmethod
     def load() -> Settings:
         return Settings(
+            openrouter_api_key=(os.environ.get("OPENROUTER_API_KEY") or "").strip(),
+            openrouter_model=(os.environ.get("OPENROUTER_MODEL") or "anthropic/claude-3.5-haiku").strip(),
+            openrouter_http_timeout_s=_float("OPENROUTER_HTTP_TIMEOUT_S", 90.0),
+            openrouter_http_referer=(
+                os.environ.get("OPENROUTER_HTTP_REFERER") or "https://www.open-emr.org/"
+            ).strip(),
+            openrouter_app_title=(os.environ.get("OPENROUTER_APP_TITLE") or "OpenEMR Clinical Co-Pilot").strip(),
+            clinical_copilot_internal_secret=(
+                os.environ.get("CLINICAL_COPILOT_INTERNAL_SECRET") or ""
+            ).strip(),
             openemr_internal_hostport=os.environ.get(
                 "OPENEMR_INTERNAL_HOSTPORT", "openemr-web:80"
             ).strip(),
