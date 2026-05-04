@@ -471,10 +471,10 @@ function seedOneUser(
         [$newUserId, $username, $hash]
     );
 
-    $uuidString = UuidRegistry::getRegistryForTable('users')->createUuid();
+    $uuidBytes = UuidRegistry::getRegistryForTable('users')->createUuid();
     sqlStatement(
         'UPDATE `users` SET `uuid` = ? WHERE `id` = ?',
-        [UuidRegistry::uuidToBytes($uuidString), $newUserId]
+        [$uuidBytes, $newUserId]
     );
 
     if ($facilityId > 0) {
