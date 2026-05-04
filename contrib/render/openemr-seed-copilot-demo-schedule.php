@@ -269,8 +269,26 @@ function copilotEnsurePatient(string $pubpid, array $dem): int
         $nextPid = (int) $pidRow['lastpid'] + 1;
     }
 
+    $fname = trim((string) ($dem['fname'] ?? ''));
+    $lname = trim((string) ($dem['lname'] ?? ''));
+    $sex = trim((string) ($dem['sex'] ?? ''));
+    $dob = trim((string) ($dem['dob'] ?? ''));
+    if ($fname === '') {
+        $fname = 'Seed';
+    }
+    if ($lname === '') {
+        $lname = 'Patient';
+    }
+    if ($sex === '') {
+        $sex = 'Unknown';
+    }
+    $dobDt = \DateTimeImmutable::createFromFormat('Y-m-d', $dob);
+    if ($dobDt === false || $dobDt->format('Y-m-d') !== $dob) {
+        $dob = '1980-01-01';
+    }
+
     $uuidBin = (new UuidRegistry(['table_name' => 'patient_data']))->createUuid();
-    $email = strtolower(preg_replace('/[^a-z0-9]+/i', '.', $dem['fname'] . '.' . $dem['lname']))
+    $email = strtolower(preg_replace('/[^a-z0-9]+/i', '.', $fname . '.' . $lname))
         . '@seed.copilot.openemr.invalid';
 
     sqlStatement(
@@ -286,11 +304,11 @@ function copilotEnsurePatient(string $pubpid, array $dem): int
             `created_by` = 1, `updated_by` = 1',
         [
             $uuidBin,
-            $dem['fname'],
-            $dem['lname'],
+            $fname,
+            $lname,
             '',
-            $dem['dob'],
-            $dem['sex'],
+            $dob,
+            $sex,
             '1 Demo Clinic Way',
             'Boston',
             'MA',
@@ -306,7 +324,7 @@ function copilotEnsurePatient(string $pubpid, array $dem): int
         ]
     );
 
-    fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: created patient pid={$nextPid} pubpid={$pubpid} ({$dem['fname']} {$dem['lname']}).\n");
+    fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: created patient pid={$nextPid} pubpid={$pubpid} ({$fname} {$lname}).\n");
 
     return $nextPid;
 }
@@ -390,7 +408,12 @@ foreach ($providerBlocks as $block) {
     for ($i = 0; $i < 20; $i++) {
         $slot = $i + 1;
         $pubpid = sprintf('CCSEED-%s-%02d', $pLabel, $slot);
-        $dem = $defs[$i];
+        $dem = (isset($defs[$i]) && is_array($defs[$i])) ? $defs[$i] : [
+            'fname' => 'Seed',
+            'lname' => sprintf('%s%02d', $pLabel, $slot),
+            'sex' => 'Unknown',
+            'dob' => '1980-01-01',
+        ];
         $pid = copilotEnsurePatient($pubpid, $dem);
 
         $start = $firstStart->modify('+' . ($i * $slotSeconds) . ' seconds');
