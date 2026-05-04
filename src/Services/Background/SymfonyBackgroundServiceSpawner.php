@@ -96,6 +96,7 @@ final readonly class SymfonyBackgroundServiceSpawner implements BackgroundServic
         private string $phpBinary = PHP_BINARY,
     ) {
         $this->logger = $logger ?? ServiceContainer::getLogger();
+        $this->phpBinary = $this->resolvePhpBinary($this->phpBinary);
     }
 
     public function spawn(string $name, bool $force, int $timeoutSeconds): array
@@ -324,5 +325,29 @@ final readonly class SymfonyBackgroundServiceSpawner implements BackgroundServic
             $sanitized = substr($sanitized, 0, self::SERVICE_NAME_LOG_MAX) . '…[truncated]';
         }
         return $sanitized;
+    }
+
+    /**
+     * Resolve a runnable PHP binary path for subprocess spawning.
+     *
+     * Prefer the injected binary, then PHP_BINDIR/php, then PATH lookup
+     * via "php".
+     */
+    private function resolvePhpBinary(string $candidate): string
+    {
+        $candidate = trim($candidate);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        $phpBindir = \defined('PHP_BINDIR') ? trim((string) PHP_BINDIR) : '';
+        if ($phpBindir !== '') {
+            $fallback = $phpBindir . DIRECTORY_SEPARATOR . 'php';
+            if (@is_file($fallback) && @is_executable($fallback)) {
+                return $fallback;
+            }
+        }
+
+        return 'php';
     }
 }
