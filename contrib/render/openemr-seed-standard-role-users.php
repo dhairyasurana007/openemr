@@ -41,9 +41,8 @@
  * **Troubleshooting physician login:** if ``users`` rows exist but login still fails, ensure a matching
  * ``users_secure`` row exists (this script **inserts** one when missing), a ``groups`` row for the
  * username (OpenEMR rejects login otherwise), and phpGACL membership (``AclExtended::setUserAro``). This
- * script repairs all three when an expected seed username already exists. To overwrite an existing hash
- * (e.g. stale password from an earlier install), set ``OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS``
- * to a truthy value for **one** deploy, then turn it off.
+ * script repairs all three when an expected seed username already exists. For deterministic demo behavior,
+ * this script always re-syncs the seeded users' password hash to the demo password on every run.
  *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
@@ -371,7 +370,7 @@ function ensureSeedUserLoginPrerequisites(int $userId, string $username, array $
  * produces a login that never succeeds. Older partial installs can also leave a stale hash while the
  * seed script skips creation ("already exists").
  */
-function syncExistingSeedUserCredentials(int $userId, string $username, string $password, bool $forcePasswordReset): void
+function syncExistingSeedUserCredentials(int $userId, string $username, string $password): void
 {
     $hash = password_hash($password, PASSWORD_DEFAULT);
     if ($hash === false) {
@@ -393,13 +392,18 @@ function syncExistingSeedUserCredentials(int $userId, string $username, string $
         return;
     }
 
-    if ($forcePasswordReset) {
-        sqlStatement(
-            'UPDATE `users_secure` SET `password` = ?, `last_update_password` = NOW() WHERE `id` = ?',
-            [$hash, $userId]
-        );
-        fwrite(STDOUT, "openemr-seed-standard-role-users: reset password hash for existing '{$username}' (id={$userId}).\n");
-    }
+    // Keep seeded demo-user credentials deterministic across redeploys.
+    sqlStatement(
+        'UPDATE `users_secure` SET `password` = ?, `last_update_password` = NOW() WHERE `id` = ?',
+        [$hash, $userId]
+    );
+    fwrite(STDOUT, "openemr-seed-standard-role-users: reset password hash for existing '{$username}' (id={$userId}).\n");
+
+    // If prior failed attempts blocked the account, clear counters during seed repair.
+    sqlStatement(
+        'UPDATE `users_secure` SET `login_fail_counter` = 0, `last_login_fail` = NULL, `auto_block_emailed` = 0 WHERE `id` = ?',
+        [$userId]
+    );
 }
 
 /**
@@ -417,8 +421,7 @@ function seedOneUser(
     $exists = sqlQuery('SELECT `id` FROM `users` WHERE BINARY `username` = ?', [$username]);
     if (is_array($exists) && !empty($exists['id'])) {
         $userId = (int) $exists['id'];
-        $forceReset = isEnvTruthy(getenv('OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS'));
-        syncExistingSeedUserCredentials($userId, $username, $password, $forceReset);
+        syncExistingSeedUserCredentials($userId, $username, $password);
         ensureSeedUserLoginPrerequisites($userId, $username, $aclGroupTitles, $fname, $lname);
         fwrite(STDOUT, "openemr-seed-standard-role-users: user '{$username}' already exists, skipping create.\n");
 
@@ -495,16 +498,6 @@ function isStandardRoleSeedExplicitlyDisabled(): bool
     }
 
     return in_array(strtolower(trim((string) $raw)), ['0', 'false', 'no', 'off'], true);
-}
-
-/** @param string|false $raw */
-function isEnvTruthy(string|false $raw): bool
-{
-    if ($raw === false) {
-        return false;
-    }
-
-    return in_array(strtolower(trim($raw)), ['1', 'true', 'yes', 'on'], true);
 }
 
 fwrite(STDOUT, "openemr-seed-standard-role-users: starting (idempotent).\n");
