@@ -22,11 +22,16 @@ require_once("$srcdir/patient.inc.php");
 require_once 'includes/pnAPI.php';
 
 use OpenEMR\Common\Acl\AclMain;
+use OpenEMR\Common\Acl\AclExtended;
 use OpenEMR\Common\Session\SessionUtil;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\OEGlobalsBag;
 
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
+
+$authUser = (string) ($session->get('authUser') ?? '');
+$authUserGroups = $authUser !== '' ? AclExtended::aclGetGroupTitles($authUser) : [];
+$isPhysicianCalendarRestricted = is_array($authUserGroups) && in_array('Physicians', $authUserGroups, true);
 
 // these will be used in below SessionUtil::setSession to set applicable session variables
 $sessionSetArray = [];
@@ -45,6 +50,11 @@ if (isset($_POST['all_users'])) {
 // added 'if..POST' check -- JRM
 if (isset($_REQUEST['pc_username']) && $_REQUEST['pc_username']) {
     $sessionSetArray['pc_username'] = $_REQUEST['pc_username'];
+}
+
+// Physicians are restricted to their own calendars only.
+if ($isPhysicianCalendarRestricted && $authUser !== '') {
+    $sessionSetArray['pc_username'] = [$authUser];
 }
 
 // FACILITY FILTERING (lemonsoftware) (CHEMED)

@@ -1,8 +1,8 @@
 <?php
 
 /**
- * First-boot seeding of **up to 40 demo patients** (20 per configured calendar provider by default:
- * ``physician1`` and ``physician2``) and **back-to-back** calendar appointments on one day (idempotent via
+ * First-boot seeding of **20 demo patients** for ``physician1`` by default and **back-to-back** calendar
+ * appointments on one day (idempotent via
  * ``pubpid`` prefixes such as ``CCSEED-P1-``, ``CCSEED-P2-``, ``CCSEED-ADMIN-`` and ``pc_hometext`` marker
  * ``CCSEED_DEMO_APPT``).
  *
@@ -16,6 +16,7 @@
  * - ``OE_SEED_COPILOT_SKIP_SECOND_PROVIDER`` — ``true`` / ``yes`` / ``1`` / ``on`` to seed **only** the first provider
  *   (for example 20 patients + back-to-back slots on ``admin`` when combined with
  *   ``OE_SEED_COPILOT_PROVIDER_USERNAME=admin``).
+ *   When unset, this script now defaults to skipping the second provider.
  * - ``OE_SEED_COPILOT_SCHEDULE_DATE`` — ``YYYY-MM-DD``; empty = **today** (PHP ``date('Y-m-d')`` in container TZ).
  * - ``OE_SEED_COPILOT_FIRST_START`` — first appointment start ``HH:MM:SS``; default ``09:00:00``.
  * - ``OE_SEED_COPILOT_SLOT_SECONDS`` — duration per slot in seconds; default ``900`` (15 minutes).
@@ -215,7 +216,7 @@ function copilotSkipSecondProviderBlock(): bool
 {
     $raw = getenv('OE_SEED_COPILOT_SKIP_SECOND_PROVIDER');
     if ($raw === false) {
-        return false;
+        return true;
     }
 
     return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
@@ -258,8 +259,7 @@ function copilotEnsurePatient(string $pubpid, array $dem): int
         $nextPid = (int) $pidRow['lastpid'] + 1;
     }
 
-    $uuidString = (new UuidRegistry(['table_name' => 'patient_data']))->createUuid();
-    $uuidBin = UuidRegistry::uuidToBytes($uuidString);
+    $uuidBin = (new UuidRegistry(['table_name' => 'patient_data']))->createUuid();
     $email = strtolower(preg_replace('/[^a-z0-9]+/i', '.', $dem['fname'] . '.' . $dem['lname']))
         . '@seed.copilot.openemr.invalid';
 
@@ -393,8 +393,7 @@ foreach ($providerBlocks as $block) {
             continue;
         }
 
-        $eventUuid = (new UuidRegistry(['table_name' => 'openemr_postcalendar_events']))->createUuid();
-        $eventUuidBin = UuidRegistry::uuidToBytes($eventUuid);
+        $eventUuidBin = (new UuidRegistry(['table_name' => 'openemr_postcalendar_events']))->createUuid();
         $title = 'Office visit (demo ' . $pLabel . ' ' . $slot . ')';
 
         sqlStatement(

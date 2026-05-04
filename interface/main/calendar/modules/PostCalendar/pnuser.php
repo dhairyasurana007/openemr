@@ -1,5 +1,6 @@
 <?php
 
+use OpenEMR\Common\Acl\AclExtended;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\OEGlobalsBag;
 
@@ -168,6 +169,14 @@ function postcalendar_user_search()
 
     // then override the setting if we have a value from the submitted form
     $ProviderID = pnVarCleanFromInput("provider_id");
+    $session = SessionWrapperFactory::getInstance()->getActiveSession();
+    $authUser = (string) ($session->get('authUser') ?? '');
+    $authUserID = (int) ($session->get('authUserID') ?? 0);
+    $authUserGroups = $authUser !== '' ? AclExtended::aclGetGroupTitles($authUser) : [];
+    $isPhysicianCalendarRestricted = is_array($authUserGroups) && in_array('Physicians', $authUserGroups, true);
+    if ($isPhysicianCalendarRestricted && $authUserID > 0) {
+        $ProviderID = (string) $authUserID;
+    }
     if (is_numeric($ProviderID)) {
         $tpl->assign('ProviderID', $ProviderID);
     } elseif ($ProviderID == "_ALL_") {
@@ -184,10 +193,16 @@ function postcalendar_user_search()
         $provider_options .= " SELECTED ";
     }
 
-    $session = SessionWrapperFactory::getInstance()->getActiveSession();
     $sessionPcUsername = $session->get('pc_username', []);
-    $provider_options .= ">" . xlt('All Providers') . "</option>";
+    if (!$isPhysicianCalendarRestricted) {
+        $provider_options .= ">" . xlt('All Providers') . "</option>";
+    } else {
+        $provider_options = '';
+    }
     foreach ($provinfo as $provider) {
+        if ($isPhysicianCalendarRestricted && (int) $provider['id'] !== $authUserID) {
+            continue;
+        }
         $selected = "";
         // if we don't have a ProviderID chosen, pick the first one from the
         // pc_username Session variable

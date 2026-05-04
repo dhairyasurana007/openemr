@@ -13,6 +13,7 @@
 */
 
 use OpenEMR\Common\Session\SessionWrapperFactory;
+use OpenEMR\Common\Acl\AclExtended;
 use OpenEMR\Core\OEGlobalsBag;
 use OpenEMR\Events\Appointments\CalendarFilterEvent;
 use OpenEMR\Events\Appointments\CalendarUserGetEventsFilter;
@@ -121,6 +122,12 @@ function postcalendar_userapi_buildView($args)
     // $pc_username = pnVarCleanFromInput('pc_username');
     $session = SessionWrapperFactory::getInstance()->getActiveSession();
     $pc_username = $session->get('pc_username') ?? ''; // from Michael Brinson 2006-09-19
+    $authUser = (string) ($session->get('authUser') ?? '');
+    $authUserGroups = $authUser !== '' ? AclExtended::aclGetGroupTitles($authUser) : [];
+    $isPhysicianCalendarRestricted = is_array($authUserGroups) && in_array('Physicians', $authUserGroups, true);
+    if ($isPhysicianCalendarRestricted && $authUser !== '') {
+        $pc_username = [$authUser];
+    }
     $category = pnVarCleanFromInput('pc_category');
     $topic    = pnVarCleanFromInput('pc_topic');
 
@@ -843,6 +850,12 @@ function &postcalendar_userapi_pcQueryEvents($args)
   // $pc_username = pnVarCleanFromInput('pc_username');
     $session = SessionWrapperFactory::getInstance()->getActiveSession();
     $pc_username = $session->get('pc_username') ?? ''; // from Michael Brinson 2006-09-19
+    $authUser = (string) ($session->get('authUser') ?? '');
+    $authUserGroups = $authUser !== '' ? AclExtended::aclGetGroupTitles($authUser) : [];
+    $isPhysicianCalendarRestricted = is_array($authUserGroups) && in_array('Physicians', $authUserGroups, true);
+    if ($isPhysicianCalendarRestricted && $authUser !== '') {
+        $pc_username = $authUser;
+    }
     if (empty($pc_username) || is_array($pc_username)) {
         $pc_username = "__PC_ALL__";
     }
