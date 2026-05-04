@@ -130,7 +130,7 @@ services:
         value: pass
       # One-time truthy if seeded users already exist with a wrong hash: forces password resync then disable.
       - key: OE_SEED_STANDARD_ROLES_RESET_EXISTING_PASSWORDS
-        value: "false"
+        value: "true"
       - key: CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT
         fromService:
           name: copilot-agent

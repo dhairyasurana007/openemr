@@ -246,24 +246,82 @@ function readFacilityIdEnvPreferringSlot(string $slotSpecific, string $shared): 
 }
 
 /**
+ * Ensure phpGACL ARO groups exist, creating any that are missing rather than hard-failing.
+ *
+ * When install_gacl() fails mid-deploy the "Physicians" / "Clinicians" ARO groups may be absent even
+ * though $config=1 is already written and the admin user exists.  Instead of exiting(1) and leaving
+ * physicians permanently uncreatable, we create the missing groups directly via GaclApi so that
+ * setUserAro() can succeed on the immediately following seedOneUser() call.
+ *
  * @param list<string> $wantedTitles
  */
-function assertAclTitlesExist(array $wantedTitles): void
+function ensurePhpGaclAroGroups(array $wantedTitles): void
 {
     if ($wantedTitles === []) {
         return;
     }
 
     $available = array_values(AclExtended::aclGetGroupTitleList(true));
-    foreach ($wantedTitles as $title) {
-        if (!in_array($title, $available, true)) {
-            fwrite(
-                STDERR,
-                "openemr-seed-standard-role-users: ACL group title not found: {$title}. Available: "
-                . implode(', ', $available) . "\n"
-            );
+    $missing   = array_diff($wantedTitles, $available);
+
+    if (empty($missing)) {
+        return;
+    }
+
+    fwrite(
+        STDOUT,
+        "openemr-seed-standard-role-users: phpGACL ARO groups missing: ["
+        . implode(', ', $missing) . "] — creating them now.\n"
+    );
+
+    $gacl = new \OpenEMR\Gacl\GaclApi();
+
+    // Locate the root group so we can navigate to the 'Users' sub-group.
+    $rootId = $gacl->get_root_group_id();
+    if (!$rootId) {
+        fwrite(STDERR, "openemr-seed-standard-role-users: phpGACL root group not found; DB may not be fully initialised.\n");
+        exit(1);
+    }
+
+    // The standard phpGACL hierarchy: root → Users → Physicians/Clinicians.
+    $usersGroupId = $gacl->get_group_id('users', null, 'ARO');
+    if (!$usersGroupId) {
+        $usersGroupId = $gacl->get_group_id(null, 'Users', 'ARO');
+    }
+
+    if (!$usersGroupId) {
+        // 'Users' parent is also missing; create it directly under root.
+        fwrite(STDOUT, "openemr-seed-standard-role-users: phpGACL 'Users' ARO group missing — creating under root.\n");
+        $usersGroupId = $gacl->add_group('users', 'Users', $rootId, 'ARO');
+        if (!$usersGroupId) {
+            fwrite(STDERR, "openemr-seed-standard-role-users: Failed to create phpGACL 'Users' ARO group.\n");
             exit(1);
         }
+    }
+
+    // Canonical value (short name) for known role groups that install_gacl() would have created.
+    $knownValues = [
+        'Physicians' => 'doc',
+        'Clinicians' => 'clin',
+    ];
+
+    foreach ($missing as $title) {
+        $value   = $knownValues[$title] ?? strtolower(substr($title, 0, 10));
+        $newId   = $gacl->add_group($value, $title, $usersGroupId, 'ARO');
+        if (!$newId) {
+            // add_group returns false if the value already exists under a different name or had a
+            // transient error.  Check whether it actually exists before giving up.
+            $existingId = $gacl->get_group_id($value, null, 'ARO');
+            if ($existingId) {
+                fwrite(STDOUT, "openemr-seed-standard-role-users: phpGACL group '{$title}' (value='{$value}') already exists as id={$existingId}.\n");
+                continue;
+            }
+
+            fwrite(STDERR, "openemr-seed-standard-role-users: Failed to create phpGACL ARO group '{$title}'.\n");
+            exit(1);
+        }
+
+        fwrite(STDOUT, "openemr-seed-standard-role-users: Created phpGACL ARO group '{$title}' (id={$newId}).\n");
     }
 }
 
@@ -460,7 +518,7 @@ foreach ($defs as $def) {
     }
 }
 
-assertAclTitlesExist(array_keys($neededAclTitles));
+ensurePhpGaclAroGroups(array_keys($neededAclTitles));
 
 foreach ($defs as $def) {
     $prefs = [
