@@ -87,6 +87,16 @@ if (!isset($config) || (int) $config !== 1) {
     exit(0);
 }
 
+// In CLI bootstrap contexts (Render startup), globals.php expects HTTP_HOST for site resolution.
+if (PHP_SAPI === 'cli') {
+    if (empty($_SERVER['HTTP_HOST'])) {
+        $_SERVER['HTTP_HOST'] = 'default';
+    }
+    if (empty($_SERVER['REQUEST_URI'])) {
+        $_SERVER['REQUEST_URI'] = '/';
+    }
+}
+
 $ignoreAuth = true;
 require_once $openemrRoot . '/interface/globals.php';
 
