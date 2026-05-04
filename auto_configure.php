@@ -55,6 +55,38 @@ if (file_exists($passwordHashing)) {
 
 use OpenEMR\Common\Logging\SystemLogger;
 
+// Guard: if sqlconf.php already has $config=1 (written by openemr-auto-install.php or a
+// prior run), the database is already set up. Running quick_install() again would DROP
+// every table and recreate the schema, wiping seeded users (physicians, clinicians).
+$sqlconfPath = __DIR__ . '/sites/default/sqlconf.php';
+if (is_readable($sqlconfPath)) {
+    require $sqlconfPath;
+    if (isset($config) && (int) $config === 1) {
+        echo "auto_configure: already configured (\$config=1 in sqlconf.php), skipping.\n";
+        exit(0);
+    }
+}
+
+// Second guard: even if sqlconf.php still has $config=0, the DB itself may already be
+// populated (e.g. persistent disk across re-deploys). Probe for the admin user row.
+$probeHost = getenv('MYSQL_HOST') ?: (getenv('server') ?: '');
+if ($probeHost !== '') {
+    $probePort = (int) (getenv('MYSQL_PORT') ?: '3306');
+    $probeUser = getenv('MYSQL_USER') ?: 'openemr';
+    $probePass = getenv('MYSQL_PASS') ?: 'openemr';
+    $probeDb   = getenv('MYSQL_DATABASE') ?: 'openemr';
+    $probeConn = @mysqli_connect($probeHost, $probeUser, $probePass, $probeDb, $probePort);
+    if ($probeConn !== false) {
+        $probeResult = @mysqli_query($probeConn, "SELECT 1 FROM `users` WHERE `username` = 'admin' LIMIT 1");
+        if ($probeResult !== false && mysqli_num_rows($probeResult) > 0) {
+            mysqli_close($probeConn);
+            echo "auto_configure: DB already has admin user, skipping quick_install().\n";
+            exit(0);
+        }
+        mysqli_close($probeConn);
+    }
+}
+
 // ============================================================================
 // DEFAULT CONFIGURATION SETTINGS
 // ============================================================================
