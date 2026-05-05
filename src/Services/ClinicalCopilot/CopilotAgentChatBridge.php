@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace OpenEMR\Services\ClinicalCopilot;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\GuzzleException;
 use OpenEMR\RestControllers\ClinicalCopilot\ClinicalCopilotInternalAuth;
 
@@ -34,13 +35,14 @@ final class CopilotAgentChatBridge
         string $message,
         AgentRuntimeHandoff $handoff,
         ?ClinicalCopilotAgentChatAuditBinding $audit = null,
+        string $requestId = '',
     ): array {
         $payload = new ClinicalCopilotAgentChatPayload(
             message: $message,
             useCase: ClinicalCopilotUseCase::UC4,
         );
 
-        return $this->forwardPayload($payload, $handoff, $audit);
+        return $this->forwardPayload($payload, $handoff, $audit, $requestId);
     }
 
     /**
@@ -53,6 +55,7 @@ final class CopilotAgentChatBridge
         ClinicalCopilotAgentChatPayload $payload,
         AgentRuntimeHandoff $handoff,
         ?ClinicalCopilotAgentChatAuditBinding $audit = null,
+        string $requestId = '',
     ): array {
         $base = $handoff->privateAgentBaseUrl;
         if ($base === '') {
@@ -68,16 +71,19 @@ final class CopilotAgentChatBridge
         if ($secret !== '') {
             $headers[ClinicalCopilotInternalAuth::HEADER_NAME] = $secret;
         }
+        if ($requestId !== '') {
+            $headers['X-Request-Id'] = $requestId;
+        }
 
         $timeout = $payload->effectiveHttpTimeoutSeconds();
-        $client = new Client(['timeout' => $timeout]);
+        $client = new Client([
+            'timeout' => $timeout,
+            'connect_timeout' => min(3.0, $timeout),
+        ]);
 
         $start = microtime(true);
         try {
-            $response = $client->post($url, [
-                'headers' => $headers,
-                'json' => $payload->toAgentJsonArray(),
-            ]);
+            $response = $this->postWithRetry($client, $url, $headers, $payload->toAgentJsonArray());
         } catch (GuzzleException $e) {
             $this->maybeRecordAudit(
                 $audit,
@@ -106,7 +112,52 @@ final class CopilotAgentChatBridge
 
         $this->maybeRecordAudit($audit, $payload->useCase, 'success', $latencyMs, $status, null);
 
-        return ['reply' => $decoded['reply']];
+        $meta = [];
+        if (isset($decoded['tool_rounds_used'])) {
+            $meta['tool_rounds_used'] = (int) $decoded['tool_rounds_used'];
+        }
+        if (isset($decoded['tool_payload_count'])) {
+            $meta['tool_payload_count'] = (int) $decoded['tool_payload_count'];
+        }
+        if (isset($decoded['summarization_mode']) && is_string($decoded['summarization_mode'])) {
+            $meta['summarization_mode'] = $decoded['summarization_mode'];
+        }
+
+        return ['reply' => $decoded['reply'], 'meta' => $meta];
+    }
+
+    /**
+     * @param array<string, string> $headers
+     * @param array<string, mixed> $jsonBody
+     * @throws GuzzleException
+     */
+    private function postWithRetry(Client $client, string $url, array $headers, array $jsonBody): \Psr\Http\Message\ResponseInterface
+    {
+        $attempt = 0;
+        $maxAttempts = 2;
+        $last = null;
+        while ($attempt < $maxAttempts) {
+            $attempt++;
+            try {
+                return $client->post($url, [
+                    'headers' => $headers,
+                    'json' => $jsonBody,
+                ]);
+            } catch (GuzzleException $e) {
+                $last = $e;
+                $isRetriable = $e instanceof ConnectException;
+                if (!$isRetriable || $attempt >= $maxAttempts) {
+                    throw $e;
+                }
+                usleep(200000);
+            }
+        }
+
+        if ($last instanceof GuzzleException) {
+            throw $last;
+        }
+
+        throw new \RuntimeException('Unexpected co-pilot bridge retry state.');
     }
 
     private function readInternalSecret(): string

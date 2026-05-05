@@ -100,29 +100,46 @@ class OpenEmrRetrievalBackend:
 
     def _get_json(self, path: str, params: dict[str, str], tool: str) -> dict[str, Any]:
         q = {k: v for k, v in params.items() if v != ""}
-        try:
-            response = self._client.get(path, params=q, headers=self._headers())
-        except httpx.HTTPError as exc:
-            # region agent log
-            _agent_debug_ndjson(
-                hypothesis_id="H1-H5",
-                location="openemr_retrieval_backend.py:_get_json",
-                message="retrieval_http_transport_error",
-                data={
-                    "tool": tool,
-                    "path": path,
-                    "param_keys": sorted(q.keys()),
-                    "base_url": str(self._client.base_url),
-                    "exc_type": type(exc).__name__,
-                    "exc_str": str(exc)[:500],
-                },
-            )
-            # endregion
+        response = None
+        last_exc: httpx.HTTPError | None = None
+        for attempt in range(2):
+            try:
+                response = self._client.get(path, params=q, headers=self._headers())
+                last_exc = None
+                break
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt == 0:
+                    time.sleep(0.2)
+                    continue
+                # region agent log
+                _agent_debug_ndjson(
+                    hypothesis_id="H1-H5",
+                    location="openemr_retrieval_backend.py:_get_json",
+                    message="retrieval_http_transport_error",
+                    data={
+                        "tool": tool,
+                        "path": path,
+                        "param_keys": sorted(q.keys()),
+                        "base_url": str(self._client.base_url),
+                        "exc_type": type(exc).__name__,
+                        "exc_str": str(exc)[:500],
+                    },
+                )
+                # endregion
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                break
+        if response is None and last_exc is not None:
             return {
                 "tool": tool,
                 "schema_version": "1",
                 "citations": [],
-                "retrieval_status": {"ok": False, "code": "http_transport", "detail": str(exc)},
+                "retrieval_status": {
+                    "ok": False,
+                    "code": "http_transport",
+                    "detail": "OpenEMR retrieval transport failed",
+                },
             }
         try:
             data = response.json()

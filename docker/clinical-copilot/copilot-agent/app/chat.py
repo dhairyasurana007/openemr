@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
+import time
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -19,6 +21,7 @@ from app.retrieval_backends import RetrievalBackend
 from app.settings import Settings
 
 router = APIRouter(prefix="/v1", tags=["chat"])
+_LOG = logging.getLogger("clinical_copilot.chat")
 
 
 class CallerContext(BaseModel):
@@ -76,6 +79,10 @@ async def chat(
         str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
     ] = None,
 ) -> dict[str, Any]:
+    req_start = time.perf_counter()
+    request_id = (request.headers.get("X-Request-Id") or "").strip()
+    if request_id == "":
+        request_id = f"agent-{int(time.time() * 1000)}"
     settings: Settings = request.app.state.settings
     _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
 
@@ -108,6 +115,14 @@ async def chat(
     except HTTPException:
         raise
     except Exception as exc:
+        _LOG.exception(
+            "clinical_copilot_agent_chat_failed",
+            extra={
+                "request_id": request_id,
+                "surface": body.surface,
+                "total_ms": int((time.perf_counter() - req_start) * 1000.0),
+            },
+        )
         # Do not leak vendor or network details to clients.
         raise HTTPException(status_code=502, detail="Upstream language model request failed.") from exc
 
@@ -126,5 +141,15 @@ async def chat(
     safety = _output_safety_findings(body.surface, reply)
     if safety:
         out["output_safety_findings"] = safety
+
+    _LOG.info(
+        "clinical_copilot_agent_chat_ok request_id=%s surface=%s total_ms=%d tool_rounds_used=%d tool_payload_count=%d summarization_mode=%s",
+        request_id,
+        body.surface,
+        int((time.perf_counter() - req_start) * 1000.0),
+        int(diagnostics.get("tool_rounds_used", 0)),
+        int(diagnostics.get("tool_payload_count", 0)),
+        str(diagnostics.get("summarization_mode", "")),
+    )
 
     return out

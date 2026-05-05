@@ -27,6 +27,9 @@ use OpenEMR\Services\ClinicalCopilot\CopilotAgentChatBridge;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 header('Content-Type: application/json; charset=utf-8');
+$logger = ServiceContainer::getLogger();
+$requestId = uniqid('ccp_', true);
+$reqStart = microtime(true);
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
@@ -80,7 +83,15 @@ try {
             $session,
             new ClinicalCopilotAgentChatPayload($message, ClinicalCopilotUseCase::UC4),
         );
-        $out = $bridge->forwardMessage($message, $handoff, $audit);
+        $out = $bridge->forwardMessage($message, $handoff, $audit, $requestId);
+        $logger->info('clinical_copilot_chat_proxy_ok', [
+            'request_id' => $requestId,
+            'use_case' => 'UC4',
+            'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+            'tool_rounds_used' => (int) (($out['meta']['tool_rounds_used'] ?? 0)),
+            'tool_payload_count' => (int) (($out['meta']['tool_payload_count'] ?? 0)),
+            'summarization_mode' => (string) (($out['meta']['summarization_mode'] ?? '')),
+        ]);
         echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
         exit;
     }
@@ -101,7 +112,16 @@ try {
     $composer = new ClinicalCopilotWebChatComposer();
     $agentPayload = $composer->compose($session, $payload, $message);
     $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload($session, $agentPayload);
-    $out = $bridge->forwardPayload($agentPayload, $handoff, $audit);
+    $out = $bridge->forwardPayload($agentPayload, $handoff, $audit, $requestId);
+    $logger->info('clinical_copilot_chat_proxy_ok', [
+        'request_id' => $requestId,
+        'use_case' => $agentPayload->useCase->value,
+        'surface' => $agentPayload->useCase->agentSurface(),
+        'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+        'tool_rounds_used' => (int) (($out['meta']['tool_rounds_used'] ?? 0)),
+        'tool_payload_count' => (int) (($out['meta']['tool_payload_count'] ?? 0)),
+        'summarization_mode' => (string) (($out['meta']['summarization_mode'] ?? '')),
+    ]);
     echo json_encode(['reply' => $out['reply']], JSON_THROW_ON_ERROR);
 } catch (HttpExceptionInterface $e) {
     $msg = $e->getMessage();
@@ -109,15 +129,35 @@ try {
         $msg = 'Request rejected';
     }
     http_response_code($e->getStatusCode());
+    $logger->warning('clinical_copilot_chat_proxy_http_exception', [
+        'request_id' => $requestId,
+        'status' => $e->getStatusCode(),
+        'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+        'message' => $msg,
+    ]);
     echo json_encode(['error' => $msg], JSON_THROW_ON_ERROR);
 } catch (\DomainException $e) {
     http_response_code(503);
+    $logger->error('clinical_copilot_chat_proxy_domain_exception', [
+        'request_id' => $requestId,
+        'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+        'exception' => $e,
+    ]);
     echo json_encode(['error' => 'Clinical co-pilot is not configured.']);
 } catch (\RuntimeException $e) {
-    ServiceContainer::getLogger()->error('clinical_copilot_chat_proxy_failed', ['exception' => $e]);
+    $logger->error('clinical_copilot_chat_proxy_failed', [
+        'request_id' => $requestId,
+        'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+        'exception' => $e,
+    ]);
     http_response_code(502);
     echo json_encode(['error' => 'Clinical co-pilot is temporarily unavailable.']);
 } catch (\JsonException $e) {
     http_response_code(500);
+    $logger->error('clinical_copilot_chat_proxy_json_exception', [
+        'request_id' => $requestId,
+        'total_ms' => (int) round((microtime(true) - $reqStart) * 1000.0),
+        'exception' => $e,
+    ]);
     echo json_encode(['error' => 'Encoding error']);
 }

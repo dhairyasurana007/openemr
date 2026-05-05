@@ -65,7 +65,7 @@ def run_chat_with_tools(
     backend: RetrievalBackend,
     *,
     llm_factory: Callable[[Settings], BaseChatModel] | None = None,
-    max_tool_rounds: int = 6,
+    max_tool_rounds: int = 4,
 ) -> tuple[str, dict[str, Any]]:
     """Force at least one tool call on the first turn, then answer **only** from retrieved JSON.
 
