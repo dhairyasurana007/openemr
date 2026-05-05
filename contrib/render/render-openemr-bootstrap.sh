@@ -139,11 +139,5 @@ if ! php "${OE_ROOT}/contrib/render/openemr-seed-copilot-demo-schedule.php"; the
     echo "render-openemr-bootstrap: WARNING: openemr-seed-copilot-demo-schedule.php failed (check facility/calendar category exist)." >&2
 fi
 
-# Render private service mesh: Blueprint may set CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT (host:port).
-# Derive a full URL for PHP / modules without string templating in render.yaml.
-if [ -n "${CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT:-}" ]; then
-    export CLINICAL_COPILOT_AGENT_BASE_URL="http://${CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT}"
-fi
-
 cd "$OE_ROOT"
 exec ./openemr.sh
