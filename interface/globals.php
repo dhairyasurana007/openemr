@@ -260,20 +260,16 @@ if (empty($siteId) || !empty($_GET['site'])) {
     if (!empty($_GET['site'])) {
         $tmp = $_GET['site'];
     } else {
-        if (empty($ignoreAuth) && empty($ignoreAuth_onsite_portal)) {
-            // mdsupport - Don't die if logout menu link is called from expired session.
-            // Eliminate this code when close method is available for session management.
-            if ((isset($_GET['auth'])) && ($_GET['auth'] == "logout")) {
-                $globalsBag->set('login_screen', "login_screen.php");
-                $srcdir = "../library";
-                $globalsBag->set('srcdir', $srcdir);
-                require_once("$srcdir/auth.inc.php");
-            }
-            http_response_code(400);
-            die("Site ID is missing from session data!");
+        // Keep logout behavior compatible with prior flow when session has expired.
+        if ((isset($_GET['auth'])) && ($_GET['auth'] == "logout")) {
+            $globalsBag->set('login_screen', "login_screen.php");
+            $srcdir = "../library";
+            $globalsBag->set('srcdir', $srcdir);
+            require_once("$srcdir/auth.inc.php");
         }
 
-        $tmp = $_SERVER['HTTP_HOST'];
+        // Recover site selection from host/default instead of hard-failing when session site_id is missing.
+        $tmp = $_SERVER['HTTP_HOST'] ?? '';
         if (!is_dir($GLOBALS['OE_SITES_BASE'] . "/$tmp")) {
             $tmp = "default";
         }
