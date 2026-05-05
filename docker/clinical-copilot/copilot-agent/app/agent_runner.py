@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from collections.abc import Callable
 from typing import Any
 
@@ -44,6 +45,8 @@ def _default_llm_factory(settings: Settings) -> BaseChatModel:
 
 _TOOL_LOOP_INSTRUCTION = (
     "Retrieval checklist:\n"
+    "0) Resolve relative dates from CURRENT_DATE. Interpret 'today', 'tomorrow', 'yesterday', "
+    "'this week', and similar terms using CURRENT_DATE only.\n"
     "1) Tool names must match the system prompt exactly—never ``get``/generic names.\n"
     "2) If ``patient_uuid`` is present and the question is chart data: call the needed tools among "
     "get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
@@ -72,13 +75,22 @@ def run_chat_with_tools(
     tools = build_retrieval_tools(backend)
     factory = llm_factory or _default_llm_factory
     base_llm = factory(settings)
+    current_date_iso = date.today().isoformat()
 
     bound_required = base_llm.bind_tools(tools, tool_choice="required")
     bound_auto = base_llm.bind_tools(tools, tool_choice="auto")
 
     messages: list[BaseMessage] = [
-        SystemMessage(content=RETRIEVAL_PHASE_SYSTEM_PROMPT + "\n\n" + _TOOL_LOOP_INSTRUCTION),
-        HumanMessage(content=user_message.strip()),
+        SystemMessage(
+            content=(
+                RETRIEVAL_PHASE_SYSTEM_PROMPT
+                + "\n\nCURRENT_DATE: "
+                + current_date_iso
+                + "\n\n"
+                + _TOOL_LOOP_INSTRUCTION
+            )
+        ),
+        HumanMessage(content="CURRENT_DATE: " + current_date_iso + "\n\n" + user_message.strip()),
     ]
 
     tool_payloads: list[dict[str, Any]] = []
@@ -197,6 +209,7 @@ def run_chat_with_tools(
 
     human2 = (
         "Compose the clinician-facing answer using **only** RETRIEVED_JSON.\n\n"
+        f"CURRENT_DATE:\n{current_date_iso}\n\n"
         f"USER_QUESTION:\n{user_message.strip()}\n\n"
         "RETRIEVED_JSON:\n"
         + json.dumps(retrieval_bundle, ensure_ascii=False)

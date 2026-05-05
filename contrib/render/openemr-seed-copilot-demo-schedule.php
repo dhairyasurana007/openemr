@@ -648,21 +648,41 @@ function copilotFallbackPatientDem(int $slot, string $pLabel): array
 }
 
 /**
+ * Accepts either keyed patient definitions or legacy positional rows:
+ * [fname, lname, sex, dob]. Always returns keyed CopilotPatientDem.
+ */
+function copilotNormalizePatientDem(array $dem, int $slot, string $pLabel): array
+{
+    $fallback = copilotFallbackPatientDem($slot, $pLabel);
+
+    // Legacy positional format from older seed arrays.
+    if (!array_key_exists('fname', $dem) && array_key_exists(0, $dem)) {
+        $dem = [
+            'fname' => (string) ($dem[0] ?? ''),
+            'lname' => (string) ($dem[1] ?? ''),
+            'sex' => (string) ($dem[2] ?? ''),
+            'dob' => (string) ($dem[3] ?? ''),
+        ];
+    }
+
+    $out = $dem;
+    foreach (['fname', 'lname', 'sex', 'dob', 'street', 'city', 'state', 'postal_code', 'country_code', 'phone_home', 'language'] as $k) {
+        if (!isset($out[$k]) && isset($fallback[$k])) {
+            $out[$k] = $fallback[$k];
+        }
+    }
+    if (!isset($out['vitals']) || !is_array($out['vitals'])) {
+        $out['vitals'] = $fallback['vitals'];
+    }
+
+    return $out;
+}
+
+/**
  * @phpstan-param CopilotPatientDem $dem
  */
 function copilotEnsurePatient(string $pubpid, array $dem): int
 {
-    $existing = sqlQuery('SELECT `pid` FROM `patient_data` WHERE `pubpid` = ? LIMIT 1', [$pubpid]);
-    if (is_array($existing) && isset($existing['pid'])) {
-        return (int) $existing['pid'];
-    }
-
-    $pidRow = sqlQuery('SELECT MAX(`pid`) AS lastpid FROM `patient_data`');
-    $nextPid = 1;
-    if (is_array($pidRow) && isset($pidRow['lastpid']) && $pidRow['lastpid'] !== null) {
-        $nextPid = (int) $pidRow['lastpid'] + 1;
-    }
-
     $fname = trim((string) ($dem['fname'] ?? ''));
     $lname = trim((string) ($dem['lname'] ?? ''));
     $sex = trim((string) ($dem['sex'] ?? ''));
@@ -708,6 +728,50 @@ function copilotEnsurePatient(string $pubpid, array $dem): int
     }
     if ($language === '') {
         $language = 'english';
+    }
+
+    $existing = sqlQuery('SELECT `pid` FROM `patient_data` WHERE `pubpid` = ? LIMIT 1', [$pubpid]);
+    if (is_array($existing) && isset($existing['pid'])) {
+        $pid = (int) $existing['pid'];
+        sqlStatement(
+            'UPDATE `patient_data` SET
+                `fname` = ?,
+                `lname` = ?,
+                `DOB` = ?,
+                `sex` = ?,
+                `street` = ?,
+                `city` = ?,
+                `state` = ?,
+                `postal_code` = ?,
+                `country_code` = ?,
+                `phone_home` = ?,
+                `language` = ?,
+                `updated_by` = 1
+             WHERE `pid` = ?',
+            [
+                $fname,
+                $lname,
+                $dob,
+                $sex,
+                $street,
+                $city,
+                $state,
+                $postal,
+                $country,
+                $phone,
+                $language,
+                $pid,
+            ]
+        );
+        fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: updated patient pid={$pid} pubpid={$pubpid} ({$fname} {$lname}).\n");
+
+        return $pid;
+    }
+
+    $pidRow = sqlQuery('SELECT MAX(`pid`) AS lastpid FROM `patient_data`');
+    $nextPid = 1;
+    if (is_array($pidRow) && isset($pidRow['lastpid']) && $pidRow['lastpid'] !== null) {
+        $nextPid = (int) $pidRow['lastpid'] + 1;
     }
 
     $uuidBin = (new UuidRegistry(['table_name' => 'patient_data']))->createUuid();
@@ -832,6 +896,7 @@ foreach ($providerBlocks as $block) {
         $slot = $i + 1;
         $pubpid = sprintf('CCSEED-%s-%02d', $pLabel, $slot);
         $dem = (isset($defs[$i]) && is_array($defs[$i])) ? $defs[$i] : copilotFallbackPatientDem($slot, $pLabel);
+        $dem = copilotNormalizePatientDem($dem, $slot, $pLabel);
         $pid = copilotEnsurePatient($pubpid, $dem);
         $vitalsDem = is_array($dem['vitals'] ?? null) ? $dem['vitals'] : copilotFallbackPatientDem($slot, $pLabel)['vitals'];
         copilotEnsureDemoVitals($pid, $providerId, $facilityId, $catId, $vitalsDem);
