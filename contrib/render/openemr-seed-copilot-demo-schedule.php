@@ -60,6 +60,7 @@ declare(strict_types=1);
 
 use OpenEMR\Common\Database\QueryUtils;
 use OpenEMR\Common\Forms\BmiCategory;
+use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\Services\VitalsService;
 
@@ -580,6 +581,16 @@ function copilotEnsureDemoVitals(int $pid, int $providerId, int $facilityId, int
     $weight = (float) ($vitals['weight'] ?? 170.0);
     $bmi = copilotBmiFromUsa($weight, $height);
     $bmiCategory = BmiCategory::fromBmi($bmi);
+    $session = SessionWrapperFactory::getInstance()->getActiveSession();
+    $providerRow = sqlQuery('SELECT `username` FROM `users` WHERE `id` = ? LIMIT 1', [$providerId]);
+    $providerUsername = (is_array($providerRow) && !empty($providerRow['username']))
+        ? (string) $providerRow['username']
+        : 'admin';
+    $session->set('authUserID', $providerId);
+    $session->set('authUser', $providerUsername);
+    $session->set('authProvider', 'Default');
+    $session->set('userauthorized', 1);
+    $session->set('facilityId', $facilityId);
 
     $vitalsService = new VitalsService();
     $vitalsService->setShouldConvertVitalMeasurementsFlag(false);
