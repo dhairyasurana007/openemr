@@ -178,7 +178,7 @@ services:
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-3.5-haiku}
-      OPENROUTER_MODEL_UC4: ${OPENROUTER_MODEL_UC4:-anthropic/claude-3.5-sonnet}
+      OPENROUTER_MODEL_UC4: ${OPENROUTER_MODEL_UC4:-~anthropic/claude-sonnet-latest}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
       LANGCHAIN_ENDPOINT: ${LANGCHAIN_ENDPOINT:-https://api.smith.langchain.com}
