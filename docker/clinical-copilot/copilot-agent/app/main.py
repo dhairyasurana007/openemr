@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.chat import router as chat_router
 from app.langsmith_env import apply_langchain_runtime_env
+from app.middleware_access_log import AccessLogMiddleware
 from app.middleware_inflight import InflightLimitMiddleware
 from app.openemr_http import OpenEmrHttpPool
 from app.openemr_retrieval_backend import OpenEmrRetrievalBackend, retrieval_backend_for_runtime
@@ -39,6 +40,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=_lifespan,
 )
+
+app.add_middleware(AccessLogMiddleware)
 
 if _SETTINGS.copilot_max_inflight > 0:
     app.add_middleware(InflightLimitMiddleware, max_inflight=_SETTINGS.copilot_max_inflight)

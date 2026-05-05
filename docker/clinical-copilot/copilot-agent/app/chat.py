@@ -56,8 +56,13 @@ def _verify_internal_secret(settings: Settings, header_value: str | None) -> Non
         raise HTTPException(status_code=403, detail="Clinical co-pilot internal authentication failed")
 
 
-def _run_copilot_chat_sync(message: str, settings: Settings, backend: RetrievalBackend) -> tuple[str, dict[str, Any]]:
-    return run_chat_with_tools(message, settings, backend)
+def _run_copilot_chat_sync(
+    message: str,
+    settings: Settings,
+    backend: RetrievalBackend,
+    use_case: str | None,
+) -> tuple[str, dict[str, Any]]:
+    return run_chat_with_tools(message, settings, backend, use_case=use_case)
 
 
 def _output_safety_findings(surface: str, reply: str) -> list[dict[str, str]]:
@@ -95,6 +100,7 @@ async def chat(
     backend: RetrievalBackend = request.app.state.retrieval_backend
 
     user_message = body.message.strip()
+    use_case = (body.caller_context.use_case or "").strip() if body.caller_context else ""
     if body.caller_context is not None:
         ctx = body.caller_context.model_dump(exclude_none=True)
         if ctx:
@@ -111,6 +117,7 @@ async def chat(
             user_message,
             settings,
             backend,
+            use_case,
         )
     except HTTPException:
         raise
@@ -143,13 +150,15 @@ async def chat(
         out["output_safety_findings"] = safety
 
     _LOG.info(
-        "clinical_copilot_agent_chat_ok request_id=%s surface=%s total_ms=%d tool_rounds_used=%d tool_payload_count=%d summarization_mode=%s",
+        "clinical_copilot_agent_chat_ok request_id=%s surface=%s use_case=%s total_ms=%d tool_rounds_used=%d tool_payload_count=%d summarization_mode=%s model=%s",
         request_id,
         body.surface,
+        use_case,
         int((time.perf_counter() - req_start) * 1000.0),
         int(diagnostics.get("tool_rounds_used", 0)),
         int(diagnostics.get("tool_payload_count", 0)),
         str(diagnostics.get("summarization_mode", "")),
+        str(diagnostics.get("openrouter_model_effective", settings.openrouter_model)),
     )
 
     return out

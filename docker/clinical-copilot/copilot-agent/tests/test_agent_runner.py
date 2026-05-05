@@ -16,6 +16,7 @@ def _minimal_settings() -> Settings:
     return Settings(
         openrouter_api_key="dummy",
         openrouter_model="anthropic/claude-3.5-haiku",
+        openrouter_model_uc4="",
         openrouter_http_timeout_s=5.0,
         openrouter_http_referer="https://www.open-emr.org/",
         openrouter_app_title="OpenEMR Clinical Co-Pilot",
@@ -97,6 +98,37 @@ def test_two_phase_retrieval_then_grounded_summary() -> None:
     ]
     assert base.bind_tools.call_count == 2
     assert base.invoke.call_count == 1
+
+
+def test_uc4_uses_sonnet_default_model() -> None:
+    backend = StubRetrievalBackend()
+    msg_tools = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "get_observations",
+                "args": {"patient_uuid": "00000000-0000-4000-8000-0000000000aa"},
+                "id": "call_obs",
+                "type": "tool_call",
+            }
+        ],
+    )
+    msg_planner = AIMessage(content="", tool_calls=[])
+    msg_final = AIMessage(content="No findings.")
+    base = _configure_two_phase_mock(msg_tools=msg_tools, msg_planner_no_tools=msg_planner, msg_final=msg_final)
+
+    def factory(_s: Settings) -> BaseChatModel:
+        return base  # type: ignore[return-value]
+
+    _, diag = run_chat_with_tools(
+        "Any recent labs?",
+        _minimal_settings(),
+        backend,
+        llm_factory=factory,
+        use_case="UC4",
+    )
+
+    assert diag["openrouter_model_effective"] == "anthropic/claude-3.5-sonnet"
 
 
 def test_failed_tool_still_runs_phase2_with_footer_or_disclosure() -> None:

@@ -25,13 +25,16 @@ from app.verification import (
     verify_tool_failures_disclosed,
 )
 
+DEFAULT_MODEL_HAIKU = "anthropic/claude-3.5-haiku"
+DEFAULT_MODEL_SONNET = "anthropic/claude-3.5-sonnet"
 
-def _default_llm_factory(settings: Settings) -> BaseChatModel:
+
+def _default_llm_factory(settings: Settings, model_override: str | None = None) -> BaseChatModel:
     # OpenRouter speaks the OpenAI Chat Completions wire format; ``ChatOpenAI`` is that client—not “OpenAI models”.
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
-        model=settings.openrouter_model,
+        model=(model_override or settings.openrouter_model),
         api_key=settings.openrouter_api_key,
         base_url="https://openrouter.ai/api/v1",
         timeout=settings.openrouter_http_timeout_s,
@@ -66,6 +69,7 @@ def run_chat_with_tools(
     *,
     llm_factory: Callable[[Settings], BaseChatModel] | None = None,
     max_tool_rounds: int = 4,
+    use_case: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Force at least one tool call on the first turn, then answer **only** from retrieved JSON.
 
@@ -73,8 +77,20 @@ def run_chat_with_tools(
     new tool calls or stray from the provided ``RETRIEVED_JSON`` bundle.
     """
     tools = build_retrieval_tools(backend)
+    model_for_request = DEFAULT_MODEL_HAIKU
+    if (use_case or "").upper() == "UC4":
+        if settings.openrouter_model_uc4.strip() != "":
+            model_for_request = settings.openrouter_model_uc4
+        else:
+            model_for_request = DEFAULT_MODEL_SONNET
+    elif settings.openrouter_model.strip() != "":
+        model_for_request = settings.openrouter_model
+
     factory = llm_factory or _default_llm_factory
-    base_llm = factory(settings)
+    if llm_factory is None:
+        base_llm = _default_llm_factory(settings, model_for_request)
+    else:
+        base_llm = factory(settings)
     current_date_iso = date.today().isoformat()
 
     bound_required = base_llm.bind_tools(tools, tool_choice="required")
@@ -103,6 +119,7 @@ def run_chat_with_tools(
         "metadata": {
             "phase": "retrieval",
             "openrouter_model": settings.openrouter_model,
+            "openrouter_model_effective": model_for_request,
             "langsmith_project": settings.langchain_project,
         },
     }
@@ -224,6 +241,7 @@ def run_chat_with_tools(
         "metadata": {
             "phase": "grounded_summary",
             "openrouter_model": settings.openrouter_model,
+            "openrouter_model_effective": model_for_request,
             "langsmith_project": settings.langchain_project,
         },
     }
@@ -252,5 +270,6 @@ def run_chat_with_tools(
             {"code": f.code, "detail": f.detail}
             for f in (*grounded_issues, *disclosure_issues, *patient_tool_issues)
         ],
+        "openrouter_model_effective": model_for_request,
     }
     return last_text, diagnostics

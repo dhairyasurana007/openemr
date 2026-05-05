@@ -13,6 +13,7 @@ def _settings_no_openrouter() -> Settings:
     return Settings(
         openrouter_api_key="",
         openrouter_model="anthropic/claude-3.5-haiku",
+        openrouter_model_uc4="",
         openrouter_http_timeout_s=30.0,
         openrouter_http_referer="https://www.open-emr.org/",
         openrouter_app_title="OpenEMR Clinical Co-Pilot",

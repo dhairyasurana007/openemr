@@ -79,6 +79,7 @@ final readonly class SymfonyBackgroundServiceSpawner implements BackgroundServic
     private const NONCE_ENV_VAR = 'OPENEMR_BG_NONCE';
 
     private LoggerInterface $logger;
+    private string $phpBinary;
 
     /**
      * @param string      $projectDir Absolute path to the OpenEMR project
@@ -93,10 +94,10 @@ final readonly class SymfonyBackgroundServiceSpawner implements BackgroundServic
     public function __construct(
         private string $projectDir,
         ?LoggerInterface $logger = null,
-        private string $phpBinary = PHP_BINARY,
+        ?string $phpBinary = null,
     ) {
         $this->logger = $logger ?? ServiceContainer::getLogger();
-        $this->phpBinary = $this->resolvePhpBinary($this->phpBinary);
+        $this->phpBinary = $this->resolvePhpBinary($phpBinary ?? PHP_BINARY);
     }
 
     public function spawn(string $name, bool $force, int $timeoutSeconds): array
