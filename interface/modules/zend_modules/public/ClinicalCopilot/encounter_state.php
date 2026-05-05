@@ -22,6 +22,7 @@ use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotAgentChatAuditBinding;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotEncounterPrompts;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotLoginAppointmentSummaryResolver;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotEncounterStateRepository;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotUc2PregenEligibility;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotUseCase;
@@ -48,6 +49,13 @@ function ccp_encounter_intake_acl_ok(): bool
 function ccp_encounter_panel_read_acl_ok(): bool
 {
     return AclMain::aclCheckCore('encounters', 'notes') || AclMain::aclCheckCore('encounters', 'notes_a');
+}
+
+function ccp_release_session_lock(): void
+{
+    if (PHP_SESSION_ACTIVE === session_status()) {
+        session_write_close();
+    }
 }
 
 /**
@@ -114,6 +122,7 @@ function ccp_run_uc2_pregen_if_needed(
         'use_case' => ClinicalCopilotUseCase::UC2->value,
         'encounter_id' => (string) $encounterId,
     ]), ClinicalCopilotEncounterPrompts::UC2_PREVISIT_FACTS);
+    ccp_release_session_lock();
 
     try {
         $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload($session, $agentPayload);
@@ -193,6 +202,15 @@ try {
             exit;
         }
         $row = $repository->getRow($pid, $encounterId);
+        $uc2AutoTriggerEligible = false;
+        $authUserId = (int) ($session->get('authUserID') ?? 0);
+        if ($authUserId > 0) {
+            $resolver = new ClinicalCopilotLoginAppointmentSummaryResolver();
+            $match = $resolver->findForProvider($authUserId, new \DateTimeImmutable('now'));
+            if ($match !== null) {
+                $uc2AutoTriggerEligible = true;
+            }
+        }
         echo json_encode([
             'intake_completed' => $row !== null && $row['intake_completed_at'] !== null && $row['intake_completed_at'] !== '',
             'intake_completed_at' => $row['intake_completed_at'] ?? null,
@@ -201,6 +219,7 @@ try {
                 ? $row['uc2_briefing_cached'] : null,
             'uc2_pregen_status' => $row['uc2_pregen_status'] ?? 'none',
             'agent_configured' => $agentConfigured,
+            'uc2_autotrigger_eligible' => $uc2AutoTriggerEligible,
         ], JSON_THROW_ON_ERROR);
         exit;
     }

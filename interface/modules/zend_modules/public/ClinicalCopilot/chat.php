@@ -26,6 +26,13 @@ use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotWebChatComposer;
 use OpenEMR\Services\ClinicalCopilot\CopilotAgentChatBridge;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
+function ccpReleaseSessionLock(): void
+{
+    if (PHP_SESSION_ACTIVE === session_status()) {
+        session_write_close();
+    }
+}
+
 header('Content-Type: application/json; charset=utf-8');
 $logger = ServiceContainer::getLogger();
 $requestId = uniqid('ccp_', true);
@@ -83,6 +90,7 @@ try {
             $session,
             new ClinicalCopilotAgentChatPayload($message, ClinicalCopilotUseCase::UC4),
         );
+        ccpReleaseSessionLock();
         $out = $bridge->forwardMessage($message, $handoff, $audit, $requestId);
         $logger->info('clinical_copilot_chat_proxy_ok', [
             'request_id' => $requestId,
@@ -112,6 +120,7 @@ try {
     $composer = new ClinicalCopilotWebChatComposer();
     $agentPayload = $composer->compose($session, $payload, $message);
     $audit = ClinicalCopilotAgentChatAuditBinding::fromSessionAndPayload($session, $agentPayload);
+    ccpReleaseSessionLock();
     $out = $bridge->forwardPayload($agentPayload, $handoff, $audit, $requestId);
     $logger->info('clinical_copilot_chat_proxy_ok', [
         'request_id' => $requestId,

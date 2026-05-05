@@ -250,7 +250,8 @@ $agentReady = $handoff->isConfigured();
                 return;
             }
             var ac = data && data.agent_configured;
-            if (!ac) return;
+            var canAutoUc2 = data && data.uc2_autotrigger_eligible;
+            if (!ac || !canAutoUc2) return;
             var sk = 'ccp_uc2_fallback_' + encounterId;
             try {
                 if (sessionStorage.getItem(sk)) return;
