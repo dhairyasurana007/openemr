@@ -4,7 +4,9 @@
  * First-boot seeding of **20 demo patients** for ``physician1`` by default and **back-to-back** calendar
  * appointments on one day (idempotent via
  * ``pubpid`` prefixes such as ``CCSEED-P1-``, ``CCSEED-P2-``, ``CCSEED-ADMIN-`` and ``pc_hometext`` marker
- * ``CCSEED_DEMO_APPT``). Each seeded patient gets distinct international-style demographics and a **Vitals**
+ * ``CCSEED_DEMO_APPT``). Each seeded patient also gets deterministic **completed historical visits**
+ * (1-2 appointments at least 1 month before current date) and optional medical-problem entries with
+ * marker ``CCSEED_DEMO_ILLNESS``. Each seeded patient gets distinct international-style demographics and a **Vitals**
  * form (height, weight, BP, pulse, temperature, respiration, waist, SpO₂) tied to a lightweight
  * ``CCSEED demo intake`` encounter when vitals are not already present (``form_vitals.note`` =
  * ``CCSEED_DEMO_VITAL``).
@@ -828,6 +830,178 @@ function copilotAppointmentExists(int $pid, string $eventDate, string $startTime
     return is_array($row) && !empty($row['pc_eid']);
 }
 
+function copilotHistoricalAppointmentExists(int $pid, string $eventDate, string $startTime): bool
+{
+    $row = sqlQuery(
+        'SELECT `pc_eid` FROM `openemr_postcalendar_events`
+         WHERE `pc_pid` = ? AND `pc_eventDate` = ? AND `pc_startTime` = ? AND `pc_hometext` = ?
+         LIMIT 1',
+        [(string) $pid, $eventDate, $startTime, 'CCSEED_DEMO_APPT_HIST']
+    );
+
+    return is_array($row) && !empty($row['pc_eid']);
+}
+
+function copilotHistoricalProblemExists(int $pid, string $title): bool
+{
+    $row = sqlQuery(
+        'SELECT `id` FROM `lists`
+         WHERE `pid` = ? AND `type` = ? AND `title` = ? AND `comments` = ?
+         LIMIT 1',
+        [$pid, 'medical_problem', $title, 'CCSEED_DEMO_ILLNESS']
+    );
+
+    return is_array($row) && isset($row['id']);
+}
+
+/**
+ * @return list<string>
+ */
+function copilotIllnessCatalog(): array
+{
+    return [
+        'Chronic cough',
+        'Influenza',
+        'Flu-like illness',
+        'Muscle twitching',
+        'Seasonal allergic rhinitis',
+        'Migraine headaches',
+        'Low back pain',
+        'Gastroesophageal reflux symptoms',
+    ];
+}
+
+function copilotEnsureHistoricalIllnesses(int $pid, int $slot): void
+{
+    // Deterministic subset: roughly half of seeded patients get problem-list entries.
+    if ((($slot + $pid) % 2) !== 0) {
+        return;
+    }
+
+    $catalog = copilotIllnessCatalog();
+    $count = (($slot + $pid) % 2) + 1; // 1-2 problems
+    $today = new \DateTimeImmutable('today');
+
+    for ($index = 0; $index < $count; $index++) {
+        $catalogIndex = ($slot * 3 + $pid + $index) % count($catalog);
+        $title = $catalog[$catalogIndex];
+        if (copilotHistoricalProblemExists($pid, $title)) {
+            continue;
+        }
+
+        $begDate = $today->modify('-' . (35 + ($slot % 7) + ($index * 16)) . ' days')->format('Y-m-d H:i:s');
+        $uuidBin = (new UuidRegistry(['table_name' => 'lists']))->createUuid();
+
+        sqlStatement(
+            'INSERT INTO `lists` SET
+                `uuid` = ?,
+                `date` = ?,
+                `type` = ?,
+                `subtype` = ?,
+                `title` = ?,
+                `begdate` = ?,
+                `diagnosis` = ?,
+                `activity` = ?,
+                `comments` = ?,
+                `pid` = ?,
+                `user` = ?,
+                `groupname` = ?,
+                `outcome` = ?',
+            [
+                $uuidBin,
+                $begDate,
+                'medical_problem',
+                'diagnosis',
+                $title,
+                $begDate,
+                'CCSEED:' . $title,
+                1,
+                'CCSEED_DEMO_ILLNESS',
+                $pid,
+                'admin',
+                'Default',
+                0,
+            ]
+        );
+
+        sqlStatement(
+            'INSERT INTO `lists_touch` (`pid`, `type`, `date`)
+             VALUES (?, ?, NOW())
+             ON DUPLICATE KEY UPDATE `date` = VALUES(`date`)',
+            [$pid, 'medical_problem']
+        );
+
+        fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: seeded problem-list illness pid={$pid} title={$title}.\n");
+    }
+}
+
+function copilotEnsureHistoricalAppointmentsForPatient(
+    int $pid,
+    int $providerId,
+    int $catId,
+    int $facilityId,
+    string $physicianLabel,
+    int $slotSeconds,
+    int $slot
+): void {
+    $base = new \DateTimeImmutable('09:00:00');
+    $historyCount = (($slot + $providerId) % 2) + 1; // 1-2 completed visits
+    for ($index = 0; $index < $historyCount; $index++) {
+        // At least one month in the past.
+        $daysBack = 35 + ($slot * 2) + ($index * 19);
+        $eventDate = (new \DateTimeImmutable('today'))->modify("-{$daysBack} days")->format('Y-m-d');
+        $start = $base->modify('+' . (($slot + $index) * $slotSeconds) . ' seconds');
+        $startSql = $start->format('H:i:s');
+        $endSql = $start->modify('+' . $slotSeconds . ' seconds')->format('H:i:s');
+
+        if (copilotHistoricalAppointmentExists($pid, $eventDate, $startSql)) {
+            continue;
+        }
+
+        $eventUuidBin = (new UuidRegistry(['table_name' => 'openemr_postcalendar_events']))->createUuid();
+        $title = 'Completed office visit (history ' . $physicianLabel . ' ' . $slot . '-' . ($index + 1) . ')';
+
+        sqlStatement(
+            'INSERT INTO `openemr_postcalendar_events` (
+                `uuid`,
+                `pc_catid`, `pc_multiple`, `pc_aid`, `pc_pid`, `pc_gid`,
+                `pc_title`, `pc_time`, `pc_hometext`,
+                `pc_informant`, `pc_eventDate`, `pc_endDate`, `pc_duration`, `pc_recurrtype`,
+                `pc_recurrspec`, `pc_startTime`, `pc_endTime`, `pc_alldayevent`,
+                `pc_apptstatus`, `pc_prefcatid`, `pc_location`, `pc_eventstatus`, `pc_sharing`,
+                `pc_facility`, `pc_billing_location`, `pc_room`
+            ) VALUES (
+                ?, ?, 0, ?, ?, 0,
+                ?, NOW(), ?,
+                1, ?, NULL, ?, 0,
+                ?, ?, ?, 0,
+                ?, 0, ?, 1, 1,
+                ?, ?, ?
+            )',
+            [
+                $eventUuidBin,
+                $catId,
+                (string) $providerId,
+                (string) $pid,
+                $title,
+                'CCSEED_DEMO_APPT_HIST',
+                $eventDate,
+                $slotSeconds,
+                serialize(copilotNoRecurrspec()),
+                $startSql,
+                $endSql,
+                '@',
+                serialize(copilotEmptyLocationSpec()),
+                $facilityId,
+                $facilityId,
+                '',
+            ]
+        );
+
+        fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: created historical completed appointment pid={$pid} {$eventDate} {$startSql}-{$endSql} provider_id={$providerId}.\n");
+    }
+}
+
 /**
  * @return non-empty-string
  */
@@ -900,6 +1074,8 @@ foreach ($providerBlocks as $block) {
         $pid = copilotEnsurePatient($pubpid, $dem);
         $vitalsDem = is_array($dem['vitals'] ?? null) ? $dem['vitals'] : copilotFallbackPatientDem($slot, $pLabel)['vitals'];
         copilotEnsureDemoVitals($pid, $providerId, $facilityId, $catId, $vitalsDem);
+        copilotEnsureHistoricalAppointmentsForPatient($pid, $providerId, $catId, $facilityId, $pLabel, $slotSeconds, $slot);
+        copilotEnsureHistoricalIllnesses($pid, $slot);
 
         $start = $firstStart->modify('+' . ($i * $slotSeconds) . ' seconds');
         $startSql = $start->format('H:i:s');
