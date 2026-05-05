@@ -117,6 +117,7 @@ if (PHP_SAPI === 'cli') {
 
 $ignoreAuth = true;
 require_once $openemrRoot . '/interface/globals.php';
+require_once $openemrRoot . '/library/forms.inc.php';
 
 /**
  * Vitals are stored in USA units (inches, pounds, °F) to match typical demo installs.
