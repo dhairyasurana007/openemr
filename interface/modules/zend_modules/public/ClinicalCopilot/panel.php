@@ -32,6 +32,7 @@ $statusText = $handoff->isConfigured()
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
+$extractUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/extract.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
 
@@ -136,17 +137,37 @@ $agentReady = $handoff->isConfigured();
                 </div>
                 <small id="clinical-copilot-compose-help" class="form-text text-muted"><?php echo xlt('Requires OPENROUTER_API_KEY on the agent. Override model with OPENROUTER_MODEL.'); ?></small>
             </div>
+            <div class="form-group mb-0 mt-2 d-flex align-items-center">
+                <select id="ccp-doc-type" class="form-control form-control-sm mr-2" style="max-width: 150px;"
+                    aria-label="<?php echo xla('Document type'); ?>"
+                    <?php echo $agentReady ? '' : 'disabled'; ?>>
+                    <option value="lab_pdf"><?php echo xlt('Lab PDF'); ?></option>
+                    <option value="intake_form"><?php echo xlt('Intake Form'); ?></option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="ccp-upload-btn"
+                    <?php echo $agentReady ? '' : 'disabled'; ?>
+                    title="<?php echo $agentReady ? xla('Upload a lab PDF or intake form image for extraction') : xla('Configure CLINICAL_COPILOT_AGENT_BASE_URL first'); ?>"
+                    aria-label="<?php echo xla('Upload document for extraction'); ?>">
+                    <span class="fa fa-upload mr-1" aria-hidden="true"></span><?php echo xlt('Upload Document'); ?>
+                </button>
+                <input type="file" id="ccp-file-input" accept=".pdf,image/*" class="d-none"
+                    aria-label="<?php echo xla('Select file to extract'); ?>">
+            </div>
         </div>
     </div>
     <script>
         (function () {
             var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var extractUrl = <?php echo json_encode($extractUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var agentReady = <?php echo $agentReady ? 'true' : 'false'; ?>;
             var btn = document.getElementById('clinical-copilot-send');
             var input = document.getElementById('clinical-copilot-message');
             var messagesEl = document.getElementById('clinical-copilot-messages');
+            var uploadBtn = document.getElementById('ccp-upload-btn');
+            var fileInput = document.getElementById('ccp-file-input');
+            var docTypeSelect = document.getElementById('ccp-doc-type');
             if (!btn || !input || !messagesEl) {
                 return;
             }
@@ -181,6 +202,73 @@ $agentReady = $handoff->isConfigured();
                 if (intro) {
                     intro.remove();
                 }
+            }
+
+            if (uploadBtn && fileInput && docTypeSelect) {
+                uploadBtn.addEventListener('click', function () {
+                    if (!agentReady) {
+                        return;
+                    }
+                    fileInput.click();
+                });
+
+                fileInput.addEventListener('change', function () {
+                    var file = fileInput.files && fileInput.files[0];
+                    if (!file) {
+                        return;
+                    }
+                    if (typeof top.restoreSession === 'function') {
+                        top.restoreSession();
+                    }
+                    removeIntroIfPresent();
+
+                    var loadingRow = document.createElement('div');
+                    loadingRow.className = 'clinical-copilot-msg clinical-copilot-msg-assistant mb-2';
+                    loadingRow.id = 'ccp-extract-loading-row';
+                    var loadingBubble = document.createElement('div');
+                    loadingBubble.className = 'clinical-copilot-bubble text-muted border';
+                    loadingBubble.appendChild(document.createTextNode(<?php echo json_encode(xl('Extracting document') . '…'); ?>));
+                    loadingRow.appendChild(loadingBubble);
+                    messagesEl.appendChild(loadingRow);
+                    scrollToBottom();
+
+                    uploadBtn.disabled = true;
+
+                    var formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('doc_type', docTypeSelect.value);
+                    formData.append('csrf_token_form', csrfToken);
+
+                    fetch(extractUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        body: formData
+                    }).then(function (r) {
+                        return r.json().then(function (data) {
+                            return {ok: r.ok, status: r.status, data: data};
+                        });
+                    }).then(function (res) {
+                        var lr = document.getElementById('ccp-extract-loading-row');
+                        if (lr) {
+                            lr.remove();
+                        }
+                        if (res.ok && res.data && res.data.extracted) {
+                            appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
+                        } else {
+                            var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Extraction failed')); ?>;
+                            appendBubble('assistant', err, true);
+                        }
+                    }).catch(function () {
+                        var lr = document.getElementById('ccp-extract-loading-row');
+                        if (lr) {
+                            lr.remove();
+                        }
+                        appendBubble('assistant', <?php echo json_encode(xl('Network error during extraction')); ?>, true);
+                    }).finally(function () {
+                        uploadBtn.disabled = !agentReady;
+                        fileInput.value = '';
+                    });
+                });
             }
 
             btn.addEventListener('click', function () {

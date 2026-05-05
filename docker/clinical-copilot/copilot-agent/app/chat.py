@@ -9,7 +9,7 @@ import secrets
 import time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.agent_runner import run_chat_with_tools
@@ -162,3 +162,38 @@ async def chat(
     )
 
     return out
+
+
+_ALLOWED_DOC_TYPES = frozenset({"lab_pdf", "intake_form"})
+
+
+@router.post("/extract")
+async def extract(
+    request: Request,
+    file: UploadFile = File(...),
+    doc_type: str = Form(...),
+    x_clinical_copilot_internal_secret: Annotated[
+        str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
+    ] = None,
+) -> dict[str, Any]:
+    """Stub document extraction endpoint. Returns a clearly-marked stub response.
+
+    Real VLM extraction logic is added in Commit 3.
+    """
+    req_start = time.perf_counter()
+    settings: Settings = request.app.state.settings
+    _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
+
+    if doc_type not in _ALLOWED_DOC_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid doc_type. Allowed: lab_pdf, intake_form")
+
+    latency_ms = int((time.perf_counter() - req_start) * 1000.0)
+    return {
+        "extracted": {
+            "doc_type": doc_type,
+            "schema_version": "1.0.0",
+            "stub": True,
+            "message": "extraction not yet implemented",
+        },
+        "latency_ms": latency_ms,
+    }
