@@ -645,26 +645,31 @@ class ProcedureService extends BaseService
                 ON practitioner.id = porder.provider_id
             LEFT JOIN procedure_providers AS lab
                 ON lab.ppid = porder.lab_id
-            LEFT JOIN
             WHERE porder.activity = 1";
 
         if (!empty($search)) {
-            if (!empty($puuidBind)) {
-                $sql .= ' AND (';
-            }
             $whereClauses = [];
+            $searchHasPatientUuid = false;
             foreach ($search as $fieldName => $fieldValue) {
                 if ($fieldName === 'patient.uuid') {
                     array_push($whereClauses, 'patient.uuid = ?');
+                    $searchHasPatientUuid = true;
                 } else {
                     array_push($whereClauses, 'porder.' . $fieldName . ' = ?');
                 }
                 array_push($sqlBindArray, $fieldValue);
             }
             $sqlCondition = ($isAndCondition == true) ? 'AND' : 'OR';
-            $sql .= ' AND ' . implode(' ' . $sqlCondition . ' ', $whereClauses);
-            if (!empty($puuidBind)) {
-                $sql .= ") AND `patient`.`uuid` = ?";
+            if (!empty($whereClauses)) {
+                $searchClause = implode(' ' . $sqlCondition . ' ', $whereClauses);
+                if (!empty($puuidBind) && !$searchHasPatientUuid && $isAndCondition !== true && count($whereClauses) > 1) {
+                    $sql .= ' AND (' . $searchClause . ')';
+                } else {
+                    $sql .= ' AND ' . $searchClause;
+                }
+            }
+            if (!empty($puuidBind) && !$searchHasPatientUuid) {
+                $sql .= " AND `patient`.`uuid` = ?";
                 $sqlBindArray[] = UuidRegistry::uuidToBytes($puuidBind);
             }
         } elseif (!empty($puuidBind)) {
