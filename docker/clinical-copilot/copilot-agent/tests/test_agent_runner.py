@@ -128,7 +128,7 @@ def test_uc4_uses_sonnet_default_model() -> None:
         use_case="UC4",
     )
 
-    assert diag["openrouter_model_effective"] == "~anthropic/claude-sonnet-latest"
+    assert diag["openrouter_model_effective"] == "anthropic/claude-3.5-sonnet"
 
 
 def test_failed_tool_still_runs_phase2_with_footer_or_disclosure() -> None:

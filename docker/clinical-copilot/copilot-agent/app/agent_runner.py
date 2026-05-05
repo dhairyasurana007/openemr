@@ -26,7 +26,7 @@ from app.verification import (
 )
 
 DEFAULT_MODEL_HAIKU = "anthropic/claude-3.5-haiku"
-DEFAULT_MODEL_SONNET = "~anthropic/claude-sonnet-latest"
+DEFAULT_MODEL_SONNET = "anthropic/claude-3.5-sonnet"
 
 
 def _default_llm_factory(settings: Settings, model_override: str | None = None) -> BaseChatModel:
