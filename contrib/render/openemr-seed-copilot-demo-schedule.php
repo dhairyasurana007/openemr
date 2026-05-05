@@ -379,6 +379,30 @@ function copilotDemoPatientDefsPhysician2(): array
             'phone_home' => '+92-51-555-0199', 'language' => 'english',
             'vitals' => ['height' => 70.5, 'weight' => 176.0, 'bps' => '126', 'bpd' => '82', 'pulse' => 74.0, 'temperature' => 98.5, 'respiration' => 16.0, 'waist_circ' => 35.0, 'oxygen_saturation' => 96.0],
         ],
+        [
+            'fname' => 'Margaret L.', 'lname' => 'Chen', 'sex' => 'Female', 'dob' => '1967-08-14',
+            'street' => 'W Belmont Ave', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60657', 'country_code' => 'US',
+            'phone_home' => '+1-312-555-0461', 'language' => 'english',
+            'vitals' => ['height' => 63.0, 'weight' => 150.0, 'bps' => '124', 'bpd' => '80', 'pulse' => 72.0, 'temperature' => 98.2, 'respiration' => 16.0, 'waist_circ' => 33.0, 'oxygen_saturation' => 97.0],
+        ],
+        [
+            'fname' => 'James E.', 'lname' => 'Whitaker', 'sex' => 'Male', 'dob' => '1958-11-03',
+            'street' => 'N Clark St', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60613', 'country_code' => 'US',
+            'phone_home' => '+1-312-555-0462', 'language' => 'english',
+            'vitals' => ['height' => 70.0, 'weight' => 184.0, 'bps' => '130', 'bpd' => '84', 'pulse' => 70.0, 'temperature' => 98.1, 'respiration' => 15.0, 'waist_circ' => 37.0, 'oxygen_saturation' => 96.0],
+        ],
+        [
+            'fname' => 'Sofia M.', 'lname' => 'Reyes', 'sex' => 'Female', 'dob' => '1983-12-19',
+            'street' => 'S Lamar Blvd', 'city' => 'Austin', 'state' => 'TX', 'postal_code' => '78704', 'country_code' => 'US',
+            'phone_home' => '+1-512-555-0177', 'language' => 'english',
+            'vitals' => ['height' => 64.0, 'weight' => 162.0, 'bps' => '126', 'bpd' => '82', 'pulse' => 76.0, 'temperature' => 98.4, 'respiration' => 16.0, 'waist_circ' => 35.0, 'oxygen_saturation' => 97.0],
+        ],
+        [
+            'fname' => 'Robert J.', 'lname' => 'Kowalski', 'sex' => 'Male', 'dob' => '1971-06-08',
+            'street' => 'N Halsted St', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60614', 'country_code' => 'US',
+            'phone_home' => '+1-312-555-0142', 'language' => 'english',
+            'vitals' => ['height' => 71.0, 'weight' => 190.0, 'bps' => '132', 'bpd' => '86', 'pulse' => 74.0, 'temperature' => 98.3, 'respiration' => 15.0, 'waist_circ' => 38.0, 'oxygen_saturation' => 96.0],
+        ],
     ];
 }
 
@@ -1018,6 +1042,24 @@ function copilotScheduleDate(): string
     return date('Y-m-d');
 }
 
+/**
+ * @return non-empty-string
+ */
+function copilotVerificationTagForSlot(string $physicianLabel, int $slot): string
+{
+    if ($physicianLabel !== 'P2') {
+        return '';
+    }
+
+    return match ($slot) {
+        21 => 'CCSEED_VERIFY_P2_21_MARGARET_CHEN',
+        22 => 'CCSEED_VERIFY_P2_22_JAMES_WHITAKER',
+        23 => 'CCSEED_VERIFY_P2_23_SOFIA_REYES',
+        24 => 'CCSEED_VERIFY_P2_24_ROBERT_KOWALSKI',
+        default => '',
+    };
+}
+
 fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: starting (idempotent).\n");
 
 $scheduleDate = copilotScheduleDate();
@@ -1066,12 +1108,17 @@ foreach ($providerBlocks as $block) {
     $pLabel = $block['physicianLabel'];
     $providerId = copilotResolveProviderUserId($providerUsername);
 
-    for ($i = 0; $i < 20; $i++) {
+    $totalSlots = max(20, count($defs));
+    for ($i = 0; $i < $totalSlots; $i++) {
         $slot = $i + 1;
         $pubpid = sprintf('CCSEED-%s-%02d', $pLabel, $slot);
         $dem = (isset($defs[$i]) && is_array($defs[$i])) ? $defs[$i] : copilotFallbackPatientDem($slot, $pLabel);
         $dem = copilotNormalizePatientDem($dem, $slot, $pLabel);
         $pid = copilotEnsurePatient($pubpid, $dem);
+        $verifyTag = copilotVerificationTagForSlot($pLabel, $slot);
+        if ($verifyTag !== '') {
+            fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: {$verifyTag} pubpid={$pubpid} pid={$pid}.\n");
+        }
         $vitalsDem = is_array($dem['vitals'] ?? null) ? $dem['vitals'] : copilotFallbackPatientDem($slot, $pLabel)['vitals'];
         copilotEnsureDemoVitals($pid, $providerId, $facilityId, $catId, $vitalsDem);
         copilotEnsureHistoricalAppointmentsForPatient($pid, $providerId, $catId, $facilityId, $pLabel, $slotSeconds, $slot);
