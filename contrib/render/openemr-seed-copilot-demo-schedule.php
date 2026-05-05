@@ -21,7 +21,7 @@
  * - ``OE_SEED_COPILOT_SKIP_SECOND_PROVIDER`` — ``true`` / ``yes`` / ``1`` / ``on`` to seed **only** the first provider
  *   (for example 20 patients + back-to-back slots on ``admin`` when combined with
  *   ``OE_SEED_COPILOT_PROVIDER_USERNAME=admin``).
- *   When unset, this script now defaults to skipping the second provider.
+ *   When unset, this script defaults to seeding both providers.
  * - ``OE_SEED_COPILOT_SCHEDULE_DATE`` — ``YYYY-MM-DD``; empty = **today** (PHP ``date('Y-m-d')`` in container TZ).
  * - ``OE_SEED_COPILOT_FIRST_START`` — first appointment start ``HH:MM:SS``; default ``09:00:00``.
  * - ``OE_SEED_COPILOT_SLOT_SECONDS`` — duration per slot in seconds; default ``900`` (15 minutes).
@@ -260,126 +260,6 @@ function copilotDemoPatientDefsPhysician2(): array
 {
     return [
         [
-            'fname' => 'Yuki', 'lname' => 'Nakamura', 'sex' => 'Female', 'dob' => '1987-04-22',
-            'street' => 'Motomachi 3-5', 'city' => 'Yokohama', 'state' => '14', 'postal_code' => '231-0861', 'country_code' => 'JP',
-            'phone_home' => '+81-45-5550-0332', 'language' => 'english',
-            'vitals' => ['height' => 62.5, 'weight' => 115.0, 'bps' => '106', 'bpd' => '68', 'pulse' => 63.0, 'temperature' => 98.1, 'respiration' => 15.0, 'waist_circ' => 26.0, 'oxygen_saturation' => 99.0],
-        ],
-        [
-            'fname' => 'Omar', 'lname' => 'Benali', 'sex' => 'Male', 'dob' => '1976-11-03',
-            'street' => 'Rue Didouche Mourad 42', 'city' => 'Algiers', 'state' => '16', 'postal_code' => '16000', 'country_code' => 'DZ',
-            'phone_home' => '+213-21-555-0177', 'language' => 'english',
-            'vitals' => ['height' => 70.0, 'weight' => 182.0, 'bps' => '126', 'bpd' => '82', 'pulse' => 72.0, 'temperature' => 98.4, 'respiration' => 16.0, 'waist_circ' => 36.5, 'oxygen_saturation' => 96.0],
-        ],
-        [
-            'fname' => 'Ingrid', 'lname' => 'Bergström', 'sex' => 'Female', 'dob' => '1969-08-14',
-            'street' => 'Kungsgatan 3', 'city' => 'Uppsala', 'state' => 'C', 'postal_code' => '753 21', 'country_code' => 'SE',
-            'phone_home' => '+46-18-555-0129', 'language' => 'english',
-            'vitals' => ['height' => 65.0, 'weight' => 148.0, 'bps' => '118', 'bpd' => '76', 'pulse' => 67.0, 'temperature' => 98.0, 'respiration' => 14.0, 'waist_circ' => 32.5, 'oxygen_saturation' => 97.0],
-        ],
-        [
-            'fname' => 'Tendai', 'lname' => 'Moyo', 'sex' => 'Male', 'dob' => '1996-02-19',
-            'street' => 'Samora Machel Avenue', 'city' => 'Harare', 'state' => 'HA', 'postal_code' => '0000', 'country_code' => 'ZW',
-            'phone_home' => '+263-4-555-0144', 'language' => 'english',
-            'vitals' => ['height' => 71.5, 'weight' => 168.0, 'bps' => '114', 'bpd' => '74', 'pulse' => 75.0, 'temperature' => 98.2, 'respiration' => 17.0, 'waist_circ' => 32.0, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Lucía', 'lname' => 'Fernández', 'sex' => 'Female', 'dob' => '1991-09-07',
-            'street' => 'Calle Serrano 45', 'city' => 'Madrid', 'state' => 'M', 'postal_code' => '28001', 'country_code' => 'ES',
-            'phone_home' => '+34-91-555-0288', 'language' => 'spanish',
-            'vitals' => ['height' => 64.0, 'weight' => 131.0, 'bps' => '110', 'bpd' => '72', 'pulse' => 61.0, 'temperature' => 98.5, 'respiration' => 15.0, 'waist_circ' => 29.0, 'oxygen_saturation' => 99.0],
-        ],
-        [
-            'fname' => 'Viktor', 'lname' => 'Popov', 'sex' => 'Male', 'dob' => '1984-12-30',
-            'street' => 'Khreshchatyk 15', 'city' => 'Kyiv', 'state' => '30', 'postal_code' => '01001', 'country_code' => 'UA',
-            'phone_home' => '+380-44-555-0191', 'language' => 'english',
-            'vitals' => ['height' => 73.5, 'weight' => 205.0, 'bps' => '134', 'bpd' => '88', 'pulse' => 78.0, 'temperature' => 98.3, 'respiration' => 15.0, 'waist_circ' => 40.0, 'oxygen_saturation' => 94.0],
-        ],
-        [
-            'fname' => 'Naledi', 'lname' => 'Dlamini', 'sex' => 'Female', 'dob' => '2001-06-25',
-            'street' => 'West Street', 'city' => 'Durban', 'state' => 'KZN', 'postal_code' => '4001', 'country_code' => 'ZA',
-            'phone_home' => '+27-31-555-0233', 'language' => 'english',
-            'vitals' => ['height' => 63.5, 'weight' => 124.0, 'bps' => '108', 'bpd' => '70', 'pulse' => 80.0, 'temperature' => 98.0, 'respiration' => 16.0, 'waist_circ' => 28.5, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Geoffrey', 'lname' => 'Okonkwo', 'sex' => 'Male', 'dob' => '1973-03-11',
-            'street' => 'Awolowo Road', 'city' => 'Lagos', 'state' => 'LA', 'postal_code' => '101233', 'country_code' => 'NG',
-            'phone_home' => '+234-803-555-0155', 'language' => 'english',
-            'vitals' => ['height' => 68.5, 'weight' => 190.0, 'bps' => '130', 'bpd' => '84', 'pulse' => 70.0, 'temperature' => 98.4, 'respiration' => 15.0, 'waist_circ' => 38.0, 'oxygen_saturation' => 95.0],
-        ],
-        [
-            'fname' => 'Anika', 'lname' => 'Krishnan', 'sex' => 'Female', 'dob' => '1998-10-08',
-            'street' => 'Anna Salai', 'city' => 'Chennai', 'state' => 'TN', 'postal_code' => '600002', 'country_code' => 'IN',
-            'phone_home' => '+91-44-5550-0777', 'language' => 'english',
-            'vitals' => ['height' => 61.5, 'weight' => 112.0, 'bps' => '102', 'bpd' => '64', 'pulse' => 66.0, 'temperature' => 98.2, 'respiration' => 16.0, 'waist_circ' => 27.0, 'oxygen_saturation' => 99.0],
-        ],
-        [
-            'fname' => 'Tomasz', 'lname' => 'Wójcik', 'sex' => 'Male', 'dob' => '1982-05-16',
-            'street' => 'ul. Piotrkowska 80', 'city' => 'Łódź', 'state' => 'LD', 'postal_code' => '90-001', 'country_code' => 'PL',
-            'phone_home' => '+48-42-555-0166', 'language' => 'english',
-            'vitals' => ['height' => 72.0, 'weight' => 186.0, 'bps' => '124', 'bpd' => '80', 'pulse' => 73.0, 'temperature' => 98.1, 'respiration' => 15.0, 'waist_circ' => 36.0, 'oxygen_saturation' => 97.0],
-        ],
-        [
-            'fname' => 'Brigitte', 'lname' => 'Dubois', 'sex' => 'Female', 'dob' => '1965-01-29',
-            'street' => 'Rue de Rivoli 19', 'city' => 'Paris', 'state' => 'IDF', 'postal_code' => '75001', 'country_code' => 'FR',
-            'phone_home' => '+33-1-5550-0442', 'language' => 'english',
-            'vitals' => ['height' => 64.5, 'weight' => 144.0, 'bps' => '120', 'bpd' => '78', 'pulse' => 68.0, 'temperature' => 98.0, 'respiration' => 14.0, 'waist_circ' => 31.0, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Samir', 'lname' => 'Haddad', 'sex' => 'Male', 'dob' => '1990-07-21',
-            'street' => 'Hamra Street', 'city' => 'Beirut', 'state' => 'BA', 'postal_code' => '1103', 'country_code' => 'LB',
-            'phone_home' => '+961-1-555-0188', 'language' => 'english',
-            'vitals' => ['height' => 69.0, 'weight' => 171.0, 'bps' => '118', 'bpd' => '76', 'pulse' => 71.0, 'temperature' => 98.6, 'respiration' => 16.0, 'waist_circ' => 33.5, 'oxygen_saturation' => 97.0],
-        ],
-        [
-            'fname' => 'Fiona', 'lname' => 'MacLeod', 'sex' => 'Female', 'dob' => '1977-12-04',
-            'street' => 'Princes Street 120', 'city' => 'Edinburgh', 'state' => 'SCT', 'postal_code' => 'EH2 4AD', 'country_code' => 'GB',
-            'phone_home' => '+44-131-555-0299', 'language' => 'english',
-            'vitals' => ['height' => 66.5, 'weight' => 156.0, 'bps' => '122', 'bpd' => '78', 'pulse' => 64.0, 'temperature' => 97.9, 'respiration' => 15.0, 'waist_circ' => 33.0, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Diego', 'lname' => 'Castillo', 'sex' => 'Male', 'dob' => '1994-04-13',
-            'street' => 'Av. Corrientes 1234', 'city' => 'Buenos Aires', 'state' => 'C', 'postal_code' => 'C1043AAZ', 'country_code' => 'AR',
-            'phone_home' => '+54-11-5550-0555', 'language' => 'spanish',
-            'vitals' => ['height' => 67.5, 'weight' => 159.0, 'bps' => '116', 'bpd' => '74', 'pulse' => 69.0, 'temperature' => 98.3, 'respiration' => 16.0, 'waist_circ' => 32.5, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Akosua', 'lname' => 'Mensah', 'sex' => 'Female', 'dob' => '1989-08-18',
-            'street' => 'Oxford Street', 'city' => 'Accra', 'state' => 'AA', 'postal_code' => 'GA184', 'country_code' => 'GH',
-            'phone_home' => '+233-24-555-0311', 'language' => 'english',
-            'vitals' => ['height' => 62.0, 'weight' => 136.0, 'bps' => '114', 'bpd' => '74', 'pulse' => 77.0, 'temperature' => 98.4, 'respiration' => 17.0, 'waist_circ' => 30.0, 'oxygen_saturation' => 97.0],
-        ],
-        [
-            'fname' => 'Stefan', 'lname' => 'Jovanović', 'sex' => 'Male', 'dob' => '1980-02-02',
-            'street' => 'Knez Mihailova 48', 'city' => 'Belgrade', 'state' => '00', 'postal_code' => '11000', 'country_code' => 'RS',
-            'phone_home' => '+381-11-555-0144', 'language' => 'english',
-            'vitals' => ['height' => 74.0, 'weight' => 198.0, 'bps' => '128', 'bpd' => '84', 'pulse' => 76.0, 'temperature' => 98.2, 'respiration' => 15.0, 'waist_circ' => 38.5, 'oxygen_saturation' => 96.0],
-        ],
-        [
-            'fname' => 'Mirela', 'lname' => 'Ionescu', 'sex' => 'Female', 'dob' => '1993-11-27',
-            'street' => 'Strada Lipscani 55', 'city' => 'Bucharest', 'state' => 'B', 'postal_code' => '030031', 'country_code' => 'RO',
-            'phone_home' => '+40-21-555-0177', 'language' => 'english',
-            'vitals' => ['height' => 65.5, 'weight' => 129.0, 'bps' => '110', 'bpd' => '70', 'pulse' => 62.0, 'temperature' => 98.1, 'respiration' => 15.0, 'waist_circ' => 28.5, 'oxygen_saturation' => 99.0],
-        ],
-        [
-            'fname' => 'Chen', 'lname' => 'Wei', 'sex' => 'Male', 'dob' => '1971-06-09',
-            'street' => 'Nanjing Road 100', 'city' => 'Shanghai', 'state' => 'SH', 'postal_code' => '200003', 'country_code' => 'CN',
-            'phone_home' => '+86-21-5550-0888', 'language' => 'english',
-            'vitals' => ['height' => 68.0, 'weight' => 162.0, 'bps' => '120', 'bpd' => '78', 'pulse' => 67.0, 'temperature' => 98.0, 'respiration' => 15.0, 'waist_circ' => 33.0, 'oxygen_saturation' => 97.0],
-        ],
-        [
-            'fname' => 'Bridget', 'lname' => "O'Connor", 'sex' => 'Female', 'dob' => '1999-03-15',
-            'street' => 'Patrick Street 22', 'city' => 'Cork', 'state' => 'M', 'postal_code' => 'T12 XF62', 'country_code' => 'IE',
-            'phone_home' => '+353-21-555-0222', 'language' => 'english',
-            'vitals' => ['height' => 67.0, 'weight' => 149.0, 'bps' => '116', 'bpd' => '74', 'pulse' => 72.0, 'temperature' => 98.3, 'respiration' => 16.0, 'waist_circ' => 31.5, 'oxygen_saturation' => 98.0],
-        ],
-        [
-            'fname' => 'Aziz', 'lname' => 'Qureshi', 'sex' => 'Male', 'dob' => '1985-09-01',
-            'street' => 'Jinnah Avenue', 'city' => 'Islamabad', 'state' => 'IS', 'postal_code' => '44000', 'country_code' => 'PK',
-            'phone_home' => '+92-51-555-0199', 'language' => 'english',
-            'vitals' => ['height' => 70.5, 'weight' => 176.0, 'bps' => '126', 'bpd' => '82', 'pulse' => 74.0, 'temperature' => 98.5, 'respiration' => 16.0, 'waist_circ' => 35.0, 'oxygen_saturation' => 96.0],
-        ],
-        [
             'fname' => 'Margaret L.', 'lname' => 'Chen', 'sex' => 'Female', 'dob' => '1967-08-14',
             'street' => 'W Belmont Ave', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60657', 'country_code' => 'US',
             'phone_home' => '+1-312-555-0461', 'language' => 'english',
@@ -405,7 +285,6 @@ function copilotDemoPatientDefsPhysician2(): array
         ],
     ];
 }
-
 /** @return array{no: array<string, mixed>} */
 function copilotNoRecurrspec(): array
 {
@@ -488,7 +367,7 @@ function copilotSkipSecondProviderBlock(): bool
 {
     $raw = getenv('OE_SEED_COPILOT_SKIP_SECOND_PROVIDER');
     if ($raw === false) {
-        return true;
+        return false;
     }
 
     return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
@@ -1108,11 +987,19 @@ foreach ($providerBlocks as $block) {
     $pLabel = $block['physicianLabel'];
     $providerId = copilotResolveProviderUserId($providerUsername);
 
-    $totalSlots = max(20, count($defs));
+    $totalSlots = ($pLabel === 'P2') ? count($defs) : max(20, count($defs));
     for ($i = 0; $i < $totalSlots; $i++) {
         $slot = $i + 1;
         $pubpid = sprintf('CCSEED-%s-%02d', $pLabel, $slot);
-        $dem = (isset($defs[$i]) && is_array($defs[$i])) ? $defs[$i] : copilotFallbackPatientDem($slot, $pLabel);
+        if (!isset($defs[$i]) || !is_array($defs[$i])) {
+            if ($pLabel === 'P2') {
+                fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: missing physician2 patient definition at slot {$slot}, skipping.\n");
+                continue;
+            }
+            $dem = copilotFallbackPatientDem($slot, $pLabel);
+        } else {
+            $dem = $defs[$i];
+        }
         $dem = copilotNormalizePatientDem($dem, $slot, $pLabel);
         $pid = copilotEnsurePatient($pubpid, $dem);
         $verifyTag = copilotVerificationTagForSlot($pLabel, $slot);
@@ -1180,3 +1067,5 @@ foreach ($providerBlocks as $block) {
 
 fwrite(STDOUT, "openemr-seed-copilot-demo-schedule: completed.\n");
 exit(0);
+
+
