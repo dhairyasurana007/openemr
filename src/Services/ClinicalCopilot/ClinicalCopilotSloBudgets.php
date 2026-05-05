@@ -30,7 +30,7 @@ final class ClinicalCopilotSloBudgets
             ClinicalCopilotUseCase::UC1 => 20.0,
             ClinicalCopilotUseCase::UC2 => 5.0,
             ClinicalCopilotUseCase::UC3 => 8.0,
-            ClinicalCopilotUseCase::UC4 => 8.0,
+            ClinicalCopilotUseCase::UC4 => 43.0,
             ClinicalCopilotUseCase::UC5 => 10.0,
             ClinicalCopilotUseCase::UC6 => 15.0,
             ClinicalCopilotUseCase::UC7 => 15.0,

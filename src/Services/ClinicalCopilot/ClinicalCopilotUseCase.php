@@ -35,7 +35,7 @@ enum ClinicalCopilotUseCase: string
             self::UC1 => 22.0,
             self::UC2 => 6.0,
             self::UC3 => 9.0,
-            self::UC4 => 9.0,
+            self::UC4 => 45.0,
             self::UC5 => 11.0,
             self::UC6 => 16.0,
             self::UC7 => 16.0,
