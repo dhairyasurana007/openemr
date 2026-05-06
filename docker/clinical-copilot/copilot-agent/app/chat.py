@@ -170,6 +170,7 @@ class MultimodalChatRequestBody(BaseModel):
     patient_id: str | None = Field(default=None, max_length=64)
     extracted_facts: dict[str, Any] | None = None
     surface: str = Field(default="encounter", max_length=32)
+    use_rag: bool = True
 
 
 @router.post("/multimodal-chat")
@@ -193,7 +194,7 @@ async def multimodal_chat(
             detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
         )
 
-    rag_retriever = getattr(request.app.state, "rag_retriever", None)
+    rag_retriever = getattr(request.app.state, "rag_retriever", None) if body.use_rag else None
 
     from app.multimodal_graph import run_multimodal_graph
 

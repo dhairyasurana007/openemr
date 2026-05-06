@@ -107,6 +107,7 @@ try {
     if (isset($payload['surface']) && is_string($payload['surface'])) {
         $agentPayload['surface'] = $payload['surface'];
     }
+    $agentPayload['use_rag'] = isset($payload['use_rag']) ? (bool) $payload['use_rag'] : true;
 
     ccpMmReleaseSessionLock();
 

@@ -153,6 +153,13 @@ $agentReady = $handoff->isConfigured();
                 </button>
                 <input type="file" id="ccp-file-input" accept=".pdf,image/*" class="d-none"
                     aria-label="<?php echo xla('Select file to extract'); ?>">
+                <div class="custom-control custom-checkbox ml-3">
+                    <input type="checkbox" class="custom-control-input" id="ccp-use-rag"
+                        <?php echo $agentReady ? '' : 'disabled'; ?> checked>
+                    <label class="custom-control-label" for="ccp-use-rag">
+                        <?php echo xlt('Use clinical guidelines'); ?>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -171,6 +178,7 @@ $agentReady = $handoff->isConfigured();
             var uploadBtn = document.getElementById('ccp-upload-btn');
             var fileInput = document.getElementById('ccp-file-input');
             var docTypeSelect = document.getElementById('ccp-doc-type');
+            var useRagCheckbox = document.getElementById('ccp-use-rag');
             if (!btn || !input || !messagesEl) {
                 return;
             }
@@ -305,6 +313,7 @@ $agentReady = $handoff->isConfigured();
                 var requestBody = {message: msg, csrf_token_form: csrfToken};
                 if (useMultimodal) {
                     requestBody.extracted_facts = extractedFacts;
+                    requestBody.use_rag = !!(useRagCheckbox && useRagCheckbox.checked);
                 }
 
                 fetch(targetUrl, {
