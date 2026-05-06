@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -16,6 +17,7 @@ from app.openemr_http import OpenEmrHttpPool
 from app.openemr_retrieval_backend import OpenEmrRetrievalBackend, retrieval_backend_for_runtime
 from app.settings import Settings
 
+_LOG = logging.getLogger("clinical_copilot.main")
 _SETTINGS = Settings.load()
 apply_langchain_runtime_env(_SETTINGS)
 
@@ -27,6 +29,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.openemr_pool = pool
     retrieval_backend = retrieval_backend_for_runtime(_SETTINGS)
     app.state.retrieval_backend = retrieval_backend
+
+    try:
+        from app.rag_retriever import HybridRetriever
+        rag = HybridRetriever(
+            corpus_dir=_SETTINGS.guidelines_corpus_dir,
+            embedding_model_name=_SETTINGS.embedding_model,
+            cohere_api_key=_SETTINGS.cohere_api_key,
+        )
+        app.state.rag_retriever = rag
+        _LOG.info("rag_retriever_ready chunk_count=%d", rag.chunk_count)
+    except ImportError:
+        app.state.rag_retriever = None
+        _LOG.warning("rag_retriever_unavailable reason=missing_dependencies")
+
     try:
         yield
     finally:

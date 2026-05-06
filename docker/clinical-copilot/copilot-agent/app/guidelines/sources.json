@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hypertension-in-adults-screening",
+    "filename": "uspstf_hypertension_screening.txt",
+    "description": "USPSTF: Hypertension in Adults — Screening Recommendation"
+  },
+  {
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/diabetes-mellitus-type-2-in-adults-screening",
+    "filename": "uspstf_diabetes_screening.txt",
+    "description": "USPSTF: Type 2 Diabetes in Adults — Screening Recommendation"
+  },
+  {
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-for-the-primary-prevention-of-cardiovascular-events-in-adults-preventive-medication",
+    "filename": "uspstf_statin_lipid_screening.txt",
+    "description": "USPSTF: Statin Use for Primary Prevention of CVD — Lipid Screening Recommendation"
+  },
+  {
+    "url": "https://www.cdc.gov/blood-pressure/about/index.html",
+    "filename": "cdc_high_blood_pressure.txt",
+    "description": "CDC: About High Blood Pressure"
+  },
+  {
+    "url": "https://www.cdc.gov/diabetes/risk-factors/index.html",
+    "filename": "cdc_diabetes_risk_factors.txt",
+    "description": "CDC: Diabetes Risk Factors"
+  },
+  {
+    "url": "https://www.nhlbi.nih.gov/health/high-blood-pressure",
+    "filename": "nhlbi_high_blood_pressure.txt",
+    "description": "NHLBI: High Blood Pressure — What Is It?"
+  },
+  {
+    "url": "https://www.nhlbi.nih.gov/health/high-blood-cholesterol",
+    "filename": "nhlbi_high_blood_cholesterol.txt",
+    "description": "NHLBI: High Blood Cholesterol — What Is It?"
+  },
+  {
+    "url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
+    "filename": "who_hypertension_fact_sheet.txt",
+    "description": "WHO: Hypertension Fact Sheet"
+  },
+  {
+    "url": "https://www.who.int/news-room/fact-sheets/detail/diabetes",
+    "filename": "who_diabetes_fact_sheet.txt",
+    "description": "WHO: Diabetes Fact Sheet"
+  }
+]

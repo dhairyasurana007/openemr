@@ -1,0 +1,15 @@
+# Fetched guideline text files — populated at container build time by scripts/fetch_guidelines.py.
+# sources.json (the manifest) IS checked in; the downloaded .txt files are not.
+app/guidelines/*.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Sentence-transformers model cache (downloaded on first use)
+.cache/

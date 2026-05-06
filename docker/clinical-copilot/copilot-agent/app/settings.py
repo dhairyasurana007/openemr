@@ -73,6 +73,12 @@ class Settings:
     """When >0, cap concurrent non-health requests (503 when saturated)."""
     vlm_model: str
     """OpenRouter model id used for VLM document extraction (e.g. ``anthropic/claude-sonnet-4.6``)."""
+    cohere_api_key: str
+    """Cohere API key for optional reranking in the guideline RAG pipeline. Empty disables reranking."""
+    embedding_model: str
+    """Sentence-transformers model name for dense guideline retrieval (e.g. ``all-MiniLM-L6-v2``)."""
+    guidelines_corpus_dir: str
+    """Directory containing fetched guideline plain-text files (e.g. ``app/guidelines``)."""
     langchain_api_key: str
     """LangSmith API key (``LANGCHAIN_API_KEY``). Empty disables authenticated tracing."""
     langchain_tracing_v2: bool
@@ -121,6 +127,9 @@ class Settings:
             use_openemr_retrieval=_bool("COPILOT_USE_OPENEMR_RETRIEVAL", True),
             copilot_max_inflight=_int("COPILOT_MAX_INFLIGHT", 0),
             vlm_model=(os.environ.get("VLM_MODEL") or "anthropic/claude-sonnet-4.6").strip(),
+            cohere_api_key=(os.environ.get("COHERE_API_KEY") or "").strip(),
+            embedding_model=(os.environ.get("EMBEDDING_MODEL") or "all-MiniLM-L6-v2").strip(),
+            guidelines_corpus_dir=(os.environ.get("GUIDELINES_CORPUS_DIR") or "app/guidelines").strip(),
             langchain_api_key=api_key,
             langchain_tracing_v2=langchain_tracing_v2,
             langchain_project=(os.environ.get("LANGCHAIN_PROJECT") or "clinical-copilot").strip(),
