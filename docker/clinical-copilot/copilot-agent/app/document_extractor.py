@@ -154,7 +154,20 @@ async def extract_document(
             headers=headers,
             json=payload,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            response_body = response.text
+            if len(response_body) > 2000:
+                response_body = response_body[:2000] + "...<truncated>"
+            _LOG.error(
+                "document_extractor_openrouter_http_error status=%d model=%s doc_type=%s body=%s",
+                response.status_code,
+                model,
+                doc_type,
+                response_body,
+            )
+            raise exc
 
     resp_json = response.json()
     token_usage: dict[str, Any] = resp_json.get("usage", {})
@@ -185,4 +198,3 @@ async def extract_document(
     )
 
     return result, token_usage, latency_ms
-
