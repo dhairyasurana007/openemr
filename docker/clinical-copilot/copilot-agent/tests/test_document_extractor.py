@@ -311,7 +311,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
         assert isinstance(result, LabExtractionResult)
         assert result.results[0].citation.source_id == expected_sid
 
-    async def test_invalid_json_raises_value_error(self) -> None:
+    async def test_invalid_json_returns_safe_partial_result(self) -> None:
         settings = _settings()
         not_json = "This is not JSON at all."
 
@@ -321,13 +321,17 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            with self.assertRaises(ValueError):
-                await extract_document(
-                    file_bytes=b"img",
-                    mime_type="image/png",
-                    doc_type="lab_pdf",
-                    settings=settings,
-                )
+            result, _, _ = await extract_document(
+                file_bytes=b"img",
+                mime_type="image/png",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+        assert isinstance(result, LabExtractionResult)
+        assert result.doc_type == "lab_pdf"
+        assert result.results == []
+        assert len(result.extraction_warnings) == 1
 
     async def test_schema_mismatch_raises_validation_error(self) -> None:
         settings = _settings()
@@ -365,3 +369,29 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             )
 
         assert isinstance(result, LabExtractionResult)
+
+    async def test_schema_mode_unsupported_falls_back_to_plain_json(self) -> None:
+        settings = _settings()
+        tiny_jpg = b"\xff\xd8\xff"
+        http_error_response = httpx.Response(
+            400,
+            text='{"error":"response_format unsupported"}',
+            request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"),
+        )
+        first = httpx.HTTPStatusError("unsupported", request=http_error_response.request, response=http_error_response)
+
+        with patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[first, _openrouter_response(_VALID_INTAKE_JSON)])
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=tiny_jpg,
+                mime_type="image/jpeg",
+                doc_type="intake_form",
+                settings=settings,
+            )
+
+        assert isinstance(result, IntakeFormResult)
+        assert result.doc_type == "intake_form"
