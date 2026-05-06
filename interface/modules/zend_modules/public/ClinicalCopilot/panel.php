@@ -153,13 +153,6 @@ $agentReady = $handoff->isConfigured();
                 </button>
                 <input type="file" id="ccp-file-input" accept=".pdf,image/*" class="d-none"
                     aria-label="<?php echo xla('Select file to extract'); ?>">
-                <div class="custom-control custom-checkbox ml-3">
-                    <input type="checkbox" class="custom-control-input" id="ccp-use-rag"
-                        <?php echo $agentReady ? '' : 'disabled'; ?> checked>
-                    <label class="custom-control-label" for="ccp-use-rag">
-                        <?php echo xlt('Use clinical guidelines'); ?>
-                    </label>
-                </div>
             </div>
         </div>
     </div>
@@ -178,7 +171,6 @@ $agentReady = $handoff->isConfigured();
             var uploadBtn = document.getElementById('ccp-upload-btn');
             var fileInput = document.getElementById('ccp-file-input');
             var docTypeSelect = document.getElementById('ccp-doc-type');
-            var useRagCheckbox = document.getElementById('ccp-use-rag');
             if (!btn || !input || !messagesEl) {
                 return;
             }
@@ -308,15 +300,12 @@ $agentReady = $handoff->isConfigured();
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
 
-                var ragChecked = !!(useRagCheckbox && useRagCheckbox.checked);
-                var useMultimodal = extractedFacts !== null || ragChecked;
+                var useMultimodal = extractedFacts !== null;
                 var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
                 var requestBody = {message: msg, csrf_token_form: csrfToken};
-                if (extractedFacts !== null) {
-                    requestBody.extracted_facts = extractedFacts;
-                }
                 if (useMultimodal) {
-                    requestBody.use_rag = ragChecked;
+                    requestBody.extracted_facts = extractedFacts;
+                    requestBody.use_rag = true;
                 }
 
                 fetch(targetUrl, {

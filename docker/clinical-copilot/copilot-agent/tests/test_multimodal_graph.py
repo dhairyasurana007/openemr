@@ -279,6 +279,12 @@ class TestEvidenceRetrieverNode(unittest.TestCase):
         result = _make_evidence_retriever(None)(_empty_state())
         assert result["routing_log"][-1]["node"] == "evidence_retriever"
 
+    def test_skips_rag_without_uploaded_document(self) -> None:
+        rag = MagicMock()
+        result = _make_evidence_retriever(rag)(_empty_state(extracted_facts=None))
+        assert result["guideline_evidence"] == []
+        rag.retrieve.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Answer composer node
@@ -321,6 +327,20 @@ class TestAnswerComposerNode(unittest.TestCase):
         llm = _mock_llm([{"reply": "done", "citations": []}])
         result = _make_answer_composer(llm)(_empty_state())
         assert result["routing_log"][-1]["node"] == "answer_composer"
+
+    def test_falls_back_to_existing_state_citations(self) -> None:
+        llm = _mock_llm([{"reply": "done", "citations": []}])
+        state = _empty_state(
+            citations=[{
+                "source_type": "intake_form",
+                "source_id": "sha256:abc",
+                "page_or_section": "page 1",
+                "field_or_chunk_id": "chief_concern",
+                "quote_or_value": "headache",
+            }]
+        )
+        result = _make_answer_composer(llm)(state)
+        assert len(result["citations"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +417,50 @@ class TestBuildAndRunGraph(unittest.TestCase):
             _llm=llm,
         )
         routing_nodes = [e["node"] for e in result["routing_log"]]
+        assert "evidence_retriever" not in routing_nodes
+        rag.retrieve.assert_not_called()
+
+    def test_evidence_retriever_runs_after_upload(self) -> None:
+        rag = MagicMock()
+        rag.retrieve.return_value = [{"text": "BP target < 130.", "source": "uspstf.txt", "chunk_id": 0}]
+        llm = _mock_llm([
+            {"decision": "evidence_retriever", "reason": "needs guidelines"},
+            {"decision": "answer", "reason": "evidence retrieved"},
+            {"reply": "Guideline says...", "citations": []},
+        ])
+        result = run_multimodal_graph(
+            message="What is the BP target?",
+            settings=_settings(),
+            rag_retriever=rag,
+            extracted_facts={"doc_type": "lab_pdf", "results": []},
+            _llm=llm,
+        )
+        routing_nodes = [e["node"] for e in result["routing_log"]]
         assert "evidence_retriever" in routing_nodes
         rag.retrieve.assert_called_once()
+
+    def test_initializes_citations_from_extracted_facts(self) -> None:
+        llm = _mock_llm([
+            {"decision": "answer", "reason": "enough context"},
+            {"reply": "Done", "citations": []},
+        ])
+        extracted = {
+            "doc_type": "intake_form",
+            "citation": {
+                "source_type": "intake_form",
+                "source_id": "sha256:abc",
+                "page_or_section": "page 1",
+                "field_or_chunk_id": "intake_form_summary",
+                "quote_or_value": "Patient intake",
+            },
+        }
+        result = run_multimodal_graph(
+            message="Summarize this upload.",
+            settings=_settings(),
+            extracted_facts=extracted,
+            _llm=llm,
+        )
+        assert len(result["citations"]) >= 1
 
     def test_graph_terminates_on_max_steps(self) -> None:
         # LLM always says intake_extractor — graph must terminate via step guard.

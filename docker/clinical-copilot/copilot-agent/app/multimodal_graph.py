@@ -114,6 +114,42 @@ Respond ONLY with valid JSON: {"reply": "<answer>", "citations": [{"source_type"
 _MAX_ROUTING_STEPS = 6
 
 
+def _dedupe_citations(citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str, str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for citation in citations:
+        key = (
+            str(citation.get("source_type", "")),
+            str(citation.get("source_id", "")),
+            str(citation.get("page_or_section", "")),
+            str(citation.get("field_or_chunk_id", "")),
+            str(citation.get("quote_or_value", "")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(citation)
+    return out
+
+
+def _extract_citations_from_facts(extracted_facts: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(extracted_facts, dict):
+        return []
+
+    out: list[dict[str, Any]] = []
+    top_citation = extracted_facts.get("citation")
+    if isinstance(top_citation, dict):
+        out.append(dict(top_citation))
+
+    for item in extracted_facts.get("results", []):
+        if isinstance(item, dict):
+            inner = item.get("citation")
+            if isinstance(inner, dict):
+                out.append(dict(inner))
+
+    return _dedupe_citations(out)
+
+
 def _make_supervisor(llm: Any):
     def supervisor(state: CopilotState) -> dict:
         # Guard against infinite loops.
@@ -136,6 +172,18 @@ def _make_supervisor(llm: Any):
         )
         evidence_done = bool(state.get("guideline_evidence"))
 
+        if not has_extracted and not evidence_done:
+            entry = {
+                "node": "supervisor",
+                "decision": "answer",
+                "reason": "rag disabled until a document is uploaded and extracted",
+                "timestamp_ms": int(time.time() * 1000),
+            }
+            return {
+                "routing_log": list(state.get("routing_log") or []) + [entry],
+                "_next_node": "answer_composer",
+            }
+
         user_ctx = (
             f"Query: {_last_message_text(state)[:500]}\n"
             f"Has extracted facts: {has_extracted}\n"
@@ -157,6 +205,11 @@ def _make_supervisor(llm: Any):
             "answer": "answer_composer",
         }
         next_node = _NODE_MAP.get(decision, "answer_composer")
+
+        _LOG.info(
+            "supervisor_decision decision=%s next_node=%s reason=%s",
+            decision, next_node, reason,
+        )
 
         entry = {
             "node": "supervisor",
@@ -211,7 +264,7 @@ def _make_evidence_retriever(rag_retriever: Any):
     def evidence_retriever(state: CopilotState) -> dict:
         query = _last_message_text(state)
         snippets: list[dict] = []
-        if rag_retriever is not None and query:
+        if rag_retriever is not None and query and state.get("extracted_facts") is not None:
             try:
                 snippets = rag_retriever.retrieve(query, top_k=5)
             except Exception:
@@ -229,6 +282,11 @@ def _make_evidence_retriever(rag_retriever: Any):
             }
             for s in snippets
         ]
+
+        _LOG.info(
+            "evidence_retriever_done snippet_count=%d query_len=%d",
+            len(snippets), len(query),
+        )
 
         entry = {
             "node": "evidence_retriever",
@@ -273,6 +331,12 @@ def _make_answer_composer(llm: Any):
         user_prompt = f"User query: {query[:500]}\n\nContext:\n---\n" + "\n---\n".join(context_parts)
 
         system_prompt = RAG_ANSWER_SYSTEM_PROMPT if has_evidence else _ANSWER_SYSTEM
+        _LOG.info(
+            "answer_composer_start rag_prompt=%s has_extracted_facts=%s evidence_count=%d",
+            has_evidence,
+            state.get("extracted_facts") is not None,
+            len(state.get("guideline_evidence") or []),
+        )
         try:
             parsed, usage = _llm_json(llm, system_prompt, user_prompt)
             reply = str(parsed.get("reply") or "I was unable to compose an answer from the available context.")
@@ -281,6 +345,9 @@ def _make_answer_composer(llm: Any):
             _LOG.exception("answer_composer_llm_failed")
             reply = "I was unable to compose an answer. Please try again."
             new_citations, usage = [], {}
+
+        if not new_citations:
+            new_citations = list(state.get("citations") or [])
 
         entry = {
             "node": "answer_composer",
@@ -291,7 +358,7 @@ def _make_answer_composer(llm: Any):
 
         return {
             "final_answer": reply,
-            "citations": list(state.get("citations") or []) + new_citations,
+            "citations": _dedupe_citations(list(state.get("citations") or []) + new_citations),
             "routing_log": list(state.get("routing_log") or []) + [entry],
             "token_usage": _merge_usage(state.get("token_usage") or {}, usage),
         }
@@ -381,7 +448,7 @@ def run_multimodal_graph(
         "guideline_evidence": [],
         "routing_log": [],
         "final_answer": None,
-        "citations": [],
+        "citations": _extract_citations_from_facts(extracted_facts),
         "token_usage": {},
         "_next_node": "supervisor",
     }
@@ -393,4 +460,5 @@ def run_multimodal_graph(
         "citations": final.get("citations") or [],
         "routing_log": final.get("routing_log") or [],
         "token_usage": final.get("token_usage") or {},
+        "guideline_evidence": final.get("guideline_evidence") or [],
     }

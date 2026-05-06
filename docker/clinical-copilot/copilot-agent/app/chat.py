@@ -194,7 +194,17 @@ async def multimodal_chat(
             detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
         )
 
-    rag_retriever = getattr(request.app.state, "rag_retriever", None) if body.use_rag else None
+    rag_active = body.use_rag and body.extracted_facts is not None
+    rag_retriever = getattr(request.app.state, "rag_retriever", None) if rag_active else None
+
+    _LOG.info(
+        "clinical_copilot_multimodal_chat_start request_id=%s has_extracted_facts=%s use_rag=%s rag_active=%s msg_len=%d",
+        request_id,
+        body.extracted_facts is not None,
+        body.use_rag,
+        rag_active,
+        len(body.message.strip()),
+    )
 
     from app.multimodal_graph import run_multimodal_graph
 
@@ -211,20 +221,31 @@ async def multimodal_chat(
         raise
     except Exception as exc:
         _LOG.exception(
-            "clinical_copilot_multimodal_chat_failed",
-            extra={
-                "request_id": request_id,
-                "total_ms": int((time.perf_counter() - req_start) * 1000.0),
-            },
+            "clinical_copilot_multimodal_chat_failed request_id=%s has_extracted_facts=%s rag_active=%s total_ms=%d",
+            request_id,
+            body.extracted_facts is not None,
+            rag_active,
+            int((time.perf_counter() - req_start) * 1000.0),
         )
         raise HTTPException(status_code=502, detail="Upstream multimodal chat request failed.") from exc
 
     latency_ms = int((time.perf_counter() - req_start) * 1000.0)
+    token_usage = result.get("token_usage") or {}
+    routing_path = ",".join(
+        e.get("node", "?") + ":" + e.get("decision", "?")
+        for e in (result.get("routing_log") or [])
+    )
     _LOG.info(
-        "clinical_copilot_multimodal_chat_ok request_id=%s latency_ms=%d routing_steps=%d",
+        "clinical_copilot_multimodal_chat_ok request_id=%s latency_ms=%d routing_steps=%d routing_path=%s "
+        "prompt_tokens=%d completion_tokens=%d cost_usd=%.6f evidence_count=%d",
         request_id,
         latency_ms,
         len(result.get("routing_log") or []),
+        routing_path,
+        token_usage.get("prompt_tokens", 0),
+        token_usage.get("completion_tokens", 0),
+        estimate_cost_usd(settings.openrouter_model, token_usage),
+        len(result.get("guideline_evidence") or []),
     )
 
     return {
