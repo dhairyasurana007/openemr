@@ -179,7 +179,7 @@ services:
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
-      VLM_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
+      VLM_MODEL: ${VLM_MODEL:-anthropic/claude-opus-4.7}
       OPENROUTER_MODEL_UC4: ${OPENROUTER_MODEL_UC4:-anthropic/claude-sonnet-4.5}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
       LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
