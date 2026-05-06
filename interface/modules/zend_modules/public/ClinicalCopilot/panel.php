@@ -99,6 +99,35 @@ $agentReady = $handoff->isConfigured();
             max-width: 100%;
             box-sizing: border-box;
         }
+        .clinical-copilot-bubble h1,
+        .clinical-copilot-bubble h2,
+        .clinical-copilot-bubble h3 {
+            margin: 0.25rem 0 0.35rem 0;
+            line-height: 1.2;
+        }
+        .clinical-copilot-bubble h1 {
+            font-size: 1.35rem;
+        }
+        .clinical-copilot-bubble h2 {
+            font-size: 1.2rem;
+        }
+        .clinical-copilot-bubble h3 {
+            font-size: 1.05rem;
+        }
+        .clinical-copilot-bubble p,
+        .clinical-copilot-bubble ul {
+            margin: 0 0 0.35rem 0;
+        }
+        .clinical-copilot-bubble ul {
+            padding-left: 1.1rem;
+        }
+        .clinical-copilot-bubble code {
+            background: rgba(0, 0, 0, 0.08);
+            border-radius: 0.2rem;
+            padding: 0.05rem 0.25rem;
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.9em;
+        }
         .clinical-copilot-msg-meta {
             font-size: 0.75rem;
             color: var(--gray, #6c757d);
@@ -184,7 +213,7 @@ $agentReady = $handoff->isConfigured();
                 row.className = 'clinical-copilot-msg mb-2 ' + (role === 'user' ? 'clinical-copilot-msg-user' : 'clinical-copilot-msg-assistant');
                 var bubble = document.createElement('div');
                 bubble.className = 'clinical-copilot-bubble' + (isError ? ' border border-danger text-danger' : '');
-                bubble.appendChild(document.createTextNode(text));
+                bubble.innerHTML = renderMarkdown(text);
                 row.appendChild(bubble);
                 var meta = document.createElement('div');
                 meta.className = 'clinical-copilot-msg-meta ' + (role === 'user' ? 'text-right pr-1' : 'pl-1');
@@ -198,6 +227,67 @@ $agentReady = $handoff->isConfigured();
                 row.appendChild(meta);
                 messagesEl.appendChild(row);
                 scrollToBottom();
+            }
+
+            function escapeHtml(raw) {
+                return String(raw)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function renderInlineMarkdown(escapedText) {
+                return escapedText
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            }
+
+            function renderMarkdown(rawText) {
+                var text = typeof rawText === 'string' ? rawText : '';
+                if (!text) {
+                    return '';
+                }
+                var lines = text.split(/\r?\n/);
+                var html = [];
+                var listOpen = false;
+
+                function closeList() {
+                    if (listOpen) {
+                        html.push('</ul>');
+                        listOpen = false;
+                    }
+                }
+
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i];
+                    var heading = /^(#{1,3})\s+(.*)$/.exec(line);
+                    var bullet = /^-\s+(.*)$/.exec(line);
+                    if (heading) {
+                        closeList();
+                        var level = heading[1].length;
+                        var headingText = renderInlineMarkdown(escapeHtml(heading[2]));
+                        html.push('<h' + level + '>' + headingText + '</h' + level + '>');
+                        continue;
+                    }
+                    if (bullet) {
+                        if (!listOpen) {
+                            html.push('<ul>');
+                            listOpen = true;
+                        }
+                        html.push('<li>' + renderInlineMarkdown(escapeHtml(bullet[1])) + '</li>');
+                        continue;
+                    }
+                    closeList();
+                    if (line.trim() === '') {
+                        html.push('<br>');
+                        continue;
+                    }
+                    html.push('<p>' + renderInlineMarkdown(escapeHtml(line)) + '</p>');
+                }
+                closeList();
+                return html.join('');
             }
 
             function startLiveStatus(rowId, phases, tickMs) {
