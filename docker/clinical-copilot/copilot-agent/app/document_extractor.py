@@ -175,6 +175,15 @@ async def extract_document(
     try:
         parsed: dict[str, Any] = json.loads(_strip_markdown_fences(raw_content))
     except json.JSONDecodeError as exc:
+        output_snippet = raw_content
+        if len(output_snippet) > 2000:
+            output_snippet = output_snippet[:2000] + "...<truncated>"
+        _LOG.warning(
+            "document_extractor_parse_error doc_type=%s model=%s output=%s",
+            doc_type,
+            model,
+            output_snippet,
+        )
         raise ValueError(f"VLM returned unparseable JSON for doc_type={doc_type}") from exc
 
     _inject_source_id(parsed, sid)
