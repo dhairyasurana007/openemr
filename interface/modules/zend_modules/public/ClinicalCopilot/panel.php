@@ -308,12 +308,15 @@ $agentReady = $handoff->isConfigured();
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
 
-                var useMultimodal = extractedFacts !== null;
+                var ragChecked = !!(useRagCheckbox && useRagCheckbox.checked);
+                var useMultimodal = extractedFacts !== null || ragChecked;
                 var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
                 var requestBody = {message: msg, csrf_token_form: csrfToken};
-                if (useMultimodal) {
+                if (extractedFacts !== null) {
                     requestBody.extracted_facts = extractedFacts;
-                    requestBody.use_rag = !!(useRagCheckbox && useRagCheckbox.checked);
+                }
+                if (useMultimodal) {
+                    requestBody.use_rag = ragChecked;
                 }
 
                 fetch(targetUrl, {

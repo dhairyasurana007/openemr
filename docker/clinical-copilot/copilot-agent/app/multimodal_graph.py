@@ -7,6 +7,8 @@ import logging
 import time
 from typing import Any, TypedDict
 
+from app.llm_prompts import RAG_ANSWER_SYSTEM_PROMPT
+
 _LOG = logging.getLogger("clinical_copilot.multimodal_graph")
 
 
@@ -222,6 +224,8 @@ def _make_evidence_retriever(rag_retriever: Any):
                 "page_or_section": f"chunk_{s.get('chunk_id', 0)}",
                 "field_or_chunk_id": str(s.get("chunk_id", 0)),
                 "quote_or_value": s.get("text", "")[:200],
+                "url": s.get("url", ""),
+                "description": s.get("description", s.get("source", "")),
             }
             for s in snippets
         ]
@@ -253,20 +257,24 @@ def _make_answer_composer(llm: Any):
                 + json.dumps(state["extracted_facts"], indent=2)[:2000]
             )
 
-        if state.get("guideline_evidence"):
-            lines = [
-                f"[{s.get('source', '')} chunk {s.get('chunk_id', 0)}]: {s.get('text', '')[:300]}"
-                for s in (state["guideline_evidence"] or [])[:5]
-            ]
-            context_parts.append("Clinical guideline evidence:\n" + "\n".join(lines))
+        has_evidence = bool(state.get("guideline_evidence"))
+        if has_evidence:
+            lines = []
+            for s in (state["guideline_evidence"] or [])[:5]:
+                desc = s.get("description") or s.get("source", "")
+                url = s.get("url", "")
+                header = f"[{desc}]({url})" if url else desc
+                lines.append(f"{header} — chunk {s.get('chunk_id', 0)}:\n{s.get('text', '')[:400]}")
+            context_parts.append("Clinical guideline evidence:\n\n" + "\n\n".join(lines))
 
         if not context_parts:
             context_parts.append("No additional context was retrieved.")
 
         user_prompt = f"User query: {query[:500]}\n\nContext:\n---\n" + "\n---\n".join(context_parts)
 
+        system_prompt = RAG_ANSWER_SYSTEM_PROMPT if has_evidence else _ANSWER_SYSTEM
         try:
-            parsed, usage = _llm_json(llm, _ANSWER_SYSTEM, user_prompt)
+            parsed, usage = _llm_json(llm, system_prompt, user_prompt)
             reply = str(parsed.get("reply") or "I was unable to compose an answer from the available context.")
             new_citations = list(parsed.get("citations") or [])
         except Exception:

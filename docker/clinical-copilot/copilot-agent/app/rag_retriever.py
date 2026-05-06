@@ -122,14 +122,36 @@ class HybridRetriever:
 
     @staticmethod
     def _load_corpus(corpus_dir: str) -> list[dict[str, Any]]:
+        import json as _json
+
         path = Path(corpus_dir)
         if not path.is_dir():
             _LOG.warning("rag_retriever_corpus_dir_missing path=%s", corpus_dir)
             return []
+
+        # Build filename → {url, description} from sources.json when present.
+        source_meta: dict[str, dict[str, str]] = {}
+        sources_path = path / "sources.json"
+        if sources_path.exists():
+            try:
+                for entry in _json.loads(sources_path.read_text(encoding="utf-8")):
+                    fname = entry.get("filename", "")
+                    if fname:
+                        source_meta[fname] = {
+                            "url": entry.get("url", ""),
+                            "description": entry.get("description", fname),
+                        }
+            except Exception:
+                _LOG.warning("rag_retriever_sources_json_unreadable path=%s", sources_path)
+
         chunks: list[dict[str, Any]] = []
         for txt_file in sorted(path.glob("*.txt")):
             text = txt_file.read_text(encoding="utf-8", errors="replace")
-            chunks.extend(_chunk_text(text, txt_file.name))
+            meta = source_meta.get(txt_file.name, {"url": "", "description": txt_file.name})
+            for chunk in _chunk_text(text, txt_file.name):
+                chunk["url"] = meta["url"]
+                chunk["description"] = meta["description"]
+                chunks.append(chunk)
         return chunks
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
