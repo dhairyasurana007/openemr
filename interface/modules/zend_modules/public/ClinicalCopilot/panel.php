@@ -200,6 +200,82 @@ $agentReady = $handoff->isConfigured();
                 scrollToBottom();
             }
 
+            function startLiveStatus(rowId, phases, tickMs) {
+                var phaseIndex = 0;
+                var timer = null;
+                function renderPhase() {
+                    var row = document.getElementById(rowId);
+                    if (!row) {
+                        return;
+                    }
+                    var bubble = row.querySelector('.clinical-copilot-bubble');
+                    if (!bubble) {
+                        return;
+                    }
+                    bubble.textContent = phases[phaseIndex];
+                    phaseIndex = (phaseIndex + 1) % phases.length;
+                }
+                renderPhase();
+                timer = window.setInterval(renderPhase, tickMs);
+                return function stopLiveStatus() {
+                    if (timer !== null) {
+                        window.clearInterval(timer);
+                    }
+                };
+            }
+
+            function normalizeCitationValue(value) {
+                if (typeof value === 'string') {
+                    return value.trim();
+                }
+                return '';
+            }
+
+            function formatCitations(citations) {
+                if (!Array.isArray(citations) || citations.length === 0) {
+                    return '';
+                }
+
+                var lines = [<?php echo json_encode(xl('Sources') . ':'); ?>];
+                for (var i = 0; i < citations.length; i++) {
+                    var citation = citations[i];
+                    if (!citation || typeof citation !== 'object') {
+                        continue;
+                    }
+                    var sourceType = normalizeCitationValue(citation.source_type) || 'source';
+                    var sourceId = normalizeCitationValue(citation.source_id) || '?';
+                    var pageOrSection = normalizeCitationValue(citation.page_or_section);
+                    var fieldId = normalizeCitationValue(citation.field_or_chunk_id);
+                    var quote = normalizeCitationValue(citation.quote_or_value);
+                    var description = normalizeCitationValue(citation.description);
+                    var url = normalizeCitationValue(citation.url);
+
+                    var parts = [sourceType + ' ' + sourceId];
+                    if (description) {
+                        parts.push(description);
+                    }
+                    if (pageOrSection) {
+                        parts.push(pageOrSection);
+                    }
+                    if (fieldId) {
+                        parts.push(fieldId);
+                    }
+                    if (url) {
+                        parts.push(url);
+                    }
+                    if (quote) {
+                        parts.push('"' + quote + '"');
+                    }
+
+                    lines.push('- ' + parts.join(' | '));
+                }
+
+                if (lines.length === 1) {
+                    return '';
+                }
+                return lines.join('\n');
+            }
+
             function removeIntroIfPresent() {
                 var intro = document.getElementById('clinical-copilot-intro');
                 if (intro) {
@@ -230,10 +306,19 @@ $agentReady = $handoff->isConfigured();
                     loadingRow.id = 'ccp-extract-loading-row';
                     var loadingBubble = document.createElement('div');
                     loadingBubble.className = 'clinical-copilot-bubble text-muted border';
-                    loadingBubble.appendChild(document.createTextNode(<?php echo json_encode(xl('Extracting document') . '…'); ?>));
+                    loadingBubble.appendChild(document.createTextNode(''));
                     loadingRow.appendChild(loadingBubble);
                     messagesEl.appendChild(loadingRow);
                     scrollToBottom();
+                    var stopExtractStatus = startLiveStatus(
+                        'ccp-extract-loading-row',
+                        [
+                            <?php echo json_encode(xl('Reading file') . '…'); ?>,
+                            <?php echo json_encode(xl('Extracting fields') . '…'); ?>,
+                            <?php echo json_encode(xl('Preparing structured output') . '…'); ?>,
+                        ],
+                        900
+                    );
 
                     uploadBtn.disabled = true;
 
@@ -251,6 +336,7 @@ $agentReady = $handoff->isConfigured();
                             return {ok: r.ok, status: r.status, data: data};
                         });
                     }).then(function (res) {
+                        stopExtractStatus();
                         var lr = document.getElementById('ccp-extract-loading-row');
                         if (lr) {
                             lr.remove();
@@ -263,6 +349,7 @@ $agentReady = $handoff->isConfigured();
                             appendBubble('assistant', err, true);
                         }
                     }).catch(function () {
+                        stopExtractStatus();
                         var lr = document.getElementById('ccp-extract-loading-row');
                         if (lr) {
                             lr.remove();
@@ -295,10 +382,19 @@ $agentReady = $handoff->isConfigured();
                 loadingRow.id = 'clinical-copilot-loading-row';
                 var loadingBubble = document.createElement('div');
                 loadingBubble.className = 'clinical-copilot-bubble text-muted border';
-                loadingBubble.appendChild(document.createTextNode(<?php echo json_encode(xl('Waiting for response') . '…'); ?>));
+                loadingBubble.appendChild(document.createTextNode(''));
                 loadingRow.appendChild(loadingBubble);
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
+                var stopChatStatus = startLiveStatus(
+                    'clinical-copilot-loading-row',
+                    [
+                        <?php echo json_encode(xl('Thinking') . '…'); ?>,
+                        <?php echo json_encode(xl('Reviewing context') . '…'); ?>,
+                        <?php echo json_encode(xl('Composing response') . '…'); ?>,
+                    ],
+                    900
+                );
 
                 var useMultimodal = extractedFacts !== null;
                 var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
@@ -318,17 +414,23 @@ $agentReady = $handoff->isConfigured();
                         return {ok: r.ok, status: r.status, data: data};
                     });
                 }).then(function (res) {
+                    stopChatStatus();
                     var lr = document.getElementById('clinical-copilot-loading-row');
                     if (lr) {
                         lr.remove();
                     }
                     if (res.ok && res.data && typeof res.data.reply === 'string') {
                         appendBubble('assistant', res.data.reply, false);
+                        var citationsText = formatCitations(res.data.citations);
+                        if (citationsText) {
+                            appendBubble('assistant', citationsText, false, <?php echo json_encode(xl('Citations')); ?>);
+                        }
                     } else {
                         var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Request failed')); ?>;
                         appendBubble('assistant', err, true);
                     }
                 }).catch(function () {
+                    stopChatStatus();
                     var lr = document.getElementById('clinical-copilot-loading-row');
                     if (lr) {
                         lr.remove();
