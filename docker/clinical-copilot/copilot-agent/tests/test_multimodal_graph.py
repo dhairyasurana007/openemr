@@ -8,6 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from app.multimodal_graph import (
     CopilotState,
+    _content_to_text,
+    _escape_control_chars_in_json_strings,
     _last_message_text,
     _make_answer_composer,
     _make_evidence_retriever,
@@ -107,6 +109,18 @@ class TestStripFences(unittest.TestCase):
 
     def test_whitespace_stripped(self) -> None:
         assert _strip_fences("  \n{}\n  ") == "{}"
+
+
+class TestJsonSanitize(unittest.TestCase):
+    def test_escapes_raw_newline_inside_json_string(self) -> None:
+        raw = '{"reply":"line1\nline2","citations":[]}'
+        repaired = _escape_control_chars_in_json_strings(raw)
+        parsed = json.loads(repaired)
+        assert parsed["reply"] == "line1\nline2"
+
+    def test_content_list_to_text(self) -> None:
+        content = [{"type": "text", "text": '{"reply":"ok","citations":[]}'}]
+        assert _content_to_text(content) == '{"reply":"ok","citations":[]}'
 
 
 class TestMergeUsage(unittest.TestCase):

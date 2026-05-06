@@ -43,12 +43,63 @@ def _strip_fences(raw: str) -> str:
     return raw
 
 
+def _content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+    return str(content)
+
+
+def _escape_control_chars_in_json_strings(raw: str) -> str:
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in raw:
+        if escaped:
+            out.append(ch)
+            escaped = False
+            continue
+        if ch == "\\":
+            out.append(ch)
+            escaped = True
+            continue
+        if ch == "\"":
+            out.append(ch)
+            in_string = not in_string
+            continue
+        if in_string and ord(ch) < 0x20:
+            if ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            else:
+                out.append(f"\\u{ord(ch):04x}")
+            continue
+        out.append(ch)
+    return "".join(out)
+
+
 def _llm_json(llm: Any, system: str, user: str) -> tuple[dict, dict]:
     """Invoke LLM and parse a JSON response. Returns (parsed, token_usage)."""
     from langchain_core.messages import HumanMessage, SystemMessage
 
     response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
-    parsed = json.loads(_strip_fences(response.content))
+    raw = _strip_fences(_content_to_text(response.content))
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        parsed = json.loads(_escape_control_chars_in_json_strings(raw))
 
     usage: dict = {}
     if hasattr(response, "response_metadata"):
