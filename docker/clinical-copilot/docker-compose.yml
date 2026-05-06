@@ -178,7 +178,7 @@ services:
       - '${COPILOT_AGENT_PORT:-8000}:8000'
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-anthropic/claude-sonnet-4.6}
       VLM_MODEL: ${VLM_MODEL:-anthropic/claude-opus-4.7}
       OPENROUTER_MODEL_UC4: ${OPENROUTER_MODEL_UC4:-anthropic/claude-sonnet-4.5}
       LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}

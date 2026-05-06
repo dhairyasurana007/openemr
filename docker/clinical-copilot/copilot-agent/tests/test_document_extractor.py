@@ -45,7 +45,7 @@ def _settings() -> Settings:
         readyz_probe_openemr=False,
         use_openemr_retrieval=False,
         copilot_max_inflight=0,
-        vlm_model="anthropic/claude-3-5-sonnet",
+        vlm_model="anthropic/claude-sonnet-4.6",
         langchain_api_key="",
         langchain_tracing_v2=False,
         langchain_project="clinical-copilot",
@@ -187,18 +187,18 @@ class TestInjectSourceId(unittest.TestCase):
 class TestEstimateCostUsd(unittest.TestCase):
     def test_known_model_pricing(self) -> None:
         cost = estimate_cost_usd(
-            "anthropic/claude-3-5-sonnet",
+            "anthropic/claude-sonnet-4.6",
             {"prompt_tokens": 1_000_000, "completion_tokens": 0},
         )
         assert abs(cost - 3.0) < 1e-9
 
     def test_output_tokens_priced_higher(self) -> None:
         input_cost = estimate_cost_usd(
-            "anthropic/claude-3-5-sonnet",
+            "anthropic/claude-sonnet-4.6",
             {"prompt_tokens": 1000, "completion_tokens": 0},
         )
         output_cost = estimate_cost_usd(
-            "anthropic/claude-3-5-sonnet",
+            "anthropic/claude-sonnet-4.6",
             {"prompt_tokens": 0, "completion_tokens": 1000},
         )
         assert output_cost > input_cost
@@ -208,7 +208,7 @@ class TestEstimateCostUsd(unittest.TestCase):
         assert cost > 0.0
 
     def test_zero_tokens_zero_cost(self) -> None:
-        assert estimate_cost_usd("anthropic/claude-3-5-sonnet", {}) == 0.0
+        assert estimate_cost_usd("anthropic/claude-sonnet-4.6", {}) == 0.0
 
 
 # ---------------------------------------------------------------------------

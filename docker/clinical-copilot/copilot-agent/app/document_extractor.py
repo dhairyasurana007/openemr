@@ -19,9 +19,8 @@ _LOG = logging.getLogger("clinical_copilot.document_extractor")
 
 # Approximate per-token USD cost for cost estimation (input_rate, output_rate).
 _MODEL_COST_PER_TOKEN: dict[str, tuple[float, float]] = {
-    "anthropic/claude-3-5-sonnet": (3.0e-6, 15.0e-6),
-    "anthropic/claude-3.5-sonnet": (3.0e-6, 15.0e-6),
-    "anthropic/claude-3-5-sonnet-20241022": (3.0e-6, 15.0e-6),
+    "anthropic/claude-sonnet-4.6": (3.0e-6, 15.0e-6),
+    "anthropic/claude-opus-4.7": (15.0e-6, 75.0e-6),
 }
 _DEFAULT_COST_PER_TOKEN: tuple[float, float] = (3.0e-6, 15.0e-6)
 
