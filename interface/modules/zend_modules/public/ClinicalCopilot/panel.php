@@ -276,6 +276,77 @@ $agentReady = $handoff->isConfigured();
                 return lines.join('\n');
             }
 
+            function formatActivityTrace(data, useMultimodal) {
+                var lines = [<?php echo json_encode(xl('Activity') . ':'); ?>];
+                var hasDetail = false;
+
+                if (useMultimodal && Array.isArray(data.routing_log)) {
+                    for (var i = 0; i < data.routing_log.length; i++) {
+                        var step = data.routing_log[i];
+                        if (!step || typeof step !== 'object') {
+                            continue;
+                        }
+                        var node = normalizeCitationValue(step.node) || 'step';
+                        var decision = normalizeCitationValue(step.decision);
+                        var reason = normalizeCitationValue(step.reason);
+                        var summary = node;
+                        if (decision) {
+                            summary += ' | ' + decision;
+                        }
+                        if (reason) {
+                            summary += ' | ' + reason;
+                        }
+                        lines.push('- ' + summary);
+                        hasDetail = true;
+                    }
+                }
+
+                if (!useMultimodal && Array.isArray(data.tools_used)) {
+                    for (var j = 0; j < data.tools_used.length; j++) {
+                        var tool = data.tools_used[j];
+                        if (!tool || typeof tool !== 'object') {
+                            continue;
+                        }
+                        var name = normalizeCitationValue(tool.name) || 'tool';
+                        var status = normalizeCitationValue(tool.status) || 'ok';
+                        lines.push('- ' + name + ' | ' + status);
+                        hasDetail = true;
+                    }
+                }
+
+                if (useMultimodal && Array.isArray(data.citations)) {
+                    var seenSources = {};
+                    for (var k = 0; k < data.citations.length; k++) {
+                        var citation = data.citations[k];
+                        if (!citation || typeof citation !== 'object') {
+                            continue;
+                        }
+                        var sourceType = normalizeCitationValue(citation.source_type);
+                        var sourceId = normalizeCitationValue(citation.source_id);
+                        var url = normalizeCitationValue(citation.url);
+                        if (sourceType !== 'guideline') {
+                            continue;
+                        }
+                        var sourceKey = sourceId + '|' + url;
+                        if (seenSources[sourceKey]) {
+                            continue;
+                        }
+                        seenSources[sourceKey] = true;
+                        var sourceLine = sourceId || <?php echo json_encode(xl('Guideline source')); ?>;
+                        if (url) {
+                            sourceLine += ' | ' + url;
+                        }
+                        lines.push('- ' + <?php echo json_encode(xl('Searched')); ?> + ' | ' + sourceLine);
+                        hasDetail = true;
+                    }
+                }
+
+                if (!hasDetail) {
+                    return '';
+                }
+                return lines.join('\n');
+            }
+
             function removeIntroIfPresent() {
                 var intro = document.getElementById('clinical-copilot-intro');
                 if (intro) {
@@ -421,6 +492,10 @@ $agentReady = $handoff->isConfigured();
                     }
                     if (res.ok && res.data && typeof res.data.reply === 'string') {
                         appendBubble('assistant', res.data.reply, false);
+                        var activityText = formatActivityTrace(res.data, useMultimodal);
+                        if (activityText) {
+                            appendBubble('assistant', activityText, false, <?php echo json_encode(xl('Trace')); ?>);
+                        }
                         var citationsText = formatCitations(res.data.citations);
                         if (citationsText) {
                             appendBubble('assistant', citationsText, false, <?php echo json_encode(xl('Citations')); ?>);
