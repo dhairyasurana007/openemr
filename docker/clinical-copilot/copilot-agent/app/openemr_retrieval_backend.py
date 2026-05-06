@@ -198,6 +198,14 @@ class OpenEmrRetrievalBackend:
     def get_patient_core_profile(self, patient_uuid: str) -> dict[str, Any]:
         return self._get_json(f"{self._prefix}/patient-core-profile", {"patient": patient_uuid}, "get_patient_core_profile")
 
+    def find_patient_candidates(self, name: str, limit: int = 5) -> dict[str, Any]:
+        normalized_limit = max(1, min(10, int(limit)))
+        return self._get_json(
+            f"{self._prefix}/find-patient-candidates",
+            {"name": name, "limit": str(normalized_limit)},
+            "find_patient_candidates",
+        )
+
     def get_medication_list(self, patient_uuid: str) -> dict[str, Any]:
         return self._get_json(f"{self._prefix}/medication-list", {"patient": patient_uuid}, "get_medication_list")
 

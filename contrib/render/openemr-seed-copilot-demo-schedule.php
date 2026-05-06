@@ -260,6 +260,18 @@ function copilotDemoPatientDefsPhysician2(): array
 {
     return [
         [
+            'fname' => 'Martin', 'lname' => 'Reed', 'sex' => 'Male', 'dob' => '1984-02-10',
+            'street' => 'E 79th St', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60619', 'country_code' => 'US',
+            'phone_home' => '+1-312-555-0521', 'language' => 'english',
+            'vitals' => ['height' => 70.0, 'weight' => 186.0, 'bps' => '128', 'bpd' => '82', 'pulse' => 73.0, 'temperature' => 98.2, 'respiration' => 15.0, 'waist_circ' => 37.0, 'oxygen_saturation' => 97.0],
+        ],
+        [
+            'fname' => 'Lucas', 'lname' => 'Reed', 'sex' => 'Male', 'dob' => '1991-09-27',
+            'street' => 'N Broadway', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60640', 'country_code' => 'US',
+            'phone_home' => '+1-312-555-0522', 'language' => 'english',
+            'vitals' => ['height' => 72.0, 'weight' => 178.0, 'bps' => '122', 'bpd' => '78', 'pulse' => 67.0, 'temperature' => 98.0, 'respiration' => 14.0, 'waist_circ' => 34.0, 'oxygen_saturation' => 98.0],
+        ],
+        [
             'fname' => 'Margaret L.', 'lname' => 'Chen', 'sex' => 'Female', 'dob' => '1967-08-14',
             'street' => 'W Belmont Ave', 'city' => 'Chicago', 'state' => 'IL', 'postal_code' => '60657', 'country_code' => 'US',
             'phone_home' => '+1-312-555-0461', 'language' => 'english',

@@ -712,6 +712,9 @@ return [
     "GET /api/clinical-copilot/retrieval/patient-core-profile" => function (HttpRestRequest $request) {
         return (new ClinicalCopilotRetrievalRestController())->getPatientCoreProfile($request);
     },
+    "GET /api/clinical-copilot/retrieval/find-patient-candidates" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->findPatientCandidates($request);
+    },
     "GET /api/clinical-copilot/retrieval/medication-list" => function (HttpRestRequest $request) {
         return (new ClinicalCopilotRetrievalRestController())->getMedicationList($request);
     },

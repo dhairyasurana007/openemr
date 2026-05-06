@@ -185,7 +185,67 @@ def test_aborts_when_first_turn_returns_no_tool_calls() -> None:
         llm_factory=factory,
     )
 
-    assert "No summary" in text or "retrieval" in text.lower()
-    assert diag.get("summarization_mode") == "aborted_no_retrieval"
-    assert any(f.get("code") == "retrieval_tool_calls_missing" for f in diag.get("verification_findings", []))
+    assert "patient context" in text.lower() or "open the patient chart" in text.lower()
+    assert diag.get("summarization_mode") == "aborted_missing_patient_context"
+    assert any(f.get("code") == "patient_context_missing" for f in diag.get("verification_findings", []))
+    assert base.invoke.call_count == 0
+
+
+def test_aborts_when_patient_lookup_is_ambiguous() -> None:
+    class AmbiguousPatientBackend(StubRetrievalBackend):
+        def find_patient_candidates(self, name: str, limit: int = 5) -> dict:
+            return {
+                "tool": "find_patient_candidates",
+                "schema_version": "1",
+                "query": name,
+                "citations": [],
+                "candidates": [
+                    {
+                        "patient_uuid": "00000000-0000-4000-8000-0000000000a1",
+                        "pid": "101",
+                        "display_name": "Martin Reed",
+                        "dob": "1984-02-10",
+                        "sex": "Male",
+                    },
+                    {
+                        "patient_uuid": "00000000-0000-4000-8000-0000000000a2",
+                        "pid": "102",
+                        "display_name": "Lucas Reed",
+                        "dob": "1991-09-27",
+                        "sex": "Male",
+                    },
+                ],
+            }
+
+    backend = AmbiguousPatientBackend()
+    msg_tools = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "find_patient_candidates",
+                "args": {"name": "Reed", "limit": 5},
+                "id": "call_find",
+                "type": "tool_call",
+            }
+        ],
+    )
+    msg_planner = AIMessage(content="", tool_calls=[])
+    msg_final = AIMessage(content="Should not be reached.")
+    base = _configure_two_phase_mock(msg_tools=msg_tools, msg_planner_no_tools=msg_planner, msg_final=msg_final)
+
+    def factory(_s: Settings) -> BaseChatModel:
+        return base  # type: ignore[return-value]
+
+    text, diag = run_chat_with_tools(
+        "Tell me about Reed",
+        _minimal_settings(),
+        backend,
+        llm_factory=factory,
+    )
+
+    assert "multiple patients match" in text.lower()
+    assert "Martin Reed" in text
+    assert "Lucas Reed" in text
+    assert diag.get("summarization_mode") == "aborted_ambiguous_patient_candidates"
+    assert any(f.get("code") == "patient_candidate_ambiguity" for f in diag.get("verification_findings", []))
     assert base.invoke.call_count == 0

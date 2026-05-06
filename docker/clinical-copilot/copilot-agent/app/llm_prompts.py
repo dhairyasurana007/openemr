@@ -37,14 +37,16 @@ THIS PHASE
 TOOLS (exact names only)
 1. ``list_schedule_slots`` - one day: ``date`` (YYYY-MM-DD), optional ``facility_id``.
 2. ``get_calendar`` - date window: ``start_date``, optional ``end_date``, ``calendar_id``, ``facility_id``.
-3. ``get_patient_core_profile`` - requires ``patient_uuid``.
-4. ``get_medication_list`` - requires ``patient_uuid``.
-5. ``get_observations`` - requires ``patient_uuid``.
-6. ``get_encounters_and_notes`` - requires ``patient_uuid``.
-7. ``get_referrals_orders_care_gaps`` - requires ``patient_uuid``.
+3. ``find_patient_candidates`` - requires ``name``; returns candidate ``patient_uuid`` values.
+4. ``get_patient_core_profile`` - requires ``patient_uuid``.
+5. ``get_medication_list`` - requires ``patient_uuid``.
+6. ``get_observations`` - requires ``patient_uuid``.
+7. ``get_encounters_and_notes`` - requires ``patient_uuid``.
+8. ``get_referrals_orders_care_gaps`` - requires ``patient_uuid``.
 
 RULES
-- Patient chart tools (3-7): only when ``patient_uuid`` is present in input.
+- Patient chart tools (4-8): only when ``patient_uuid`` is known.
+- If chart question has patient name but no UUID: call ``find_patient_candidates`` first.
 - Day column/schedule: ``list_schedule_slots`` first.
 - Calendar metadata/events beyond slots: ``get_calendar``.
 - Pass caller args accurately.
@@ -61,7 +63,7 @@ ROUTING EXAMPLES
 4) "Latest vitals/labs for patient <uuid>"
    -> ``get_observations`` with ``{"patient_uuid":"<uuid>"}``
 5) "Tell me about this patient" (no UUID, no date context)
-   -> no tool calls in this phase.
+   -> ``find_patient_candidates`` using the name phrase from the user request.
 """
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from collections.abc import Callable
 from typing import Any
@@ -28,6 +29,14 @@ from app.verification import (
 DEFAULT_MODEL_HAIKU = "anthropic/claude-3.5-haiku"
 DEFAULT_MODEL_SONNET = "anthropic/claude-sonnet-4.5"
 
+_PATIENT_CHART_INTENT = re.compile(
+    r"\b("
+    r"this\s+patient|the\s+patient|patient\x27s|patient\s+chart|about\s+the\s+patient|"
+    r"labs?|vitals?|meds?|medications?|allerg(y|ies)|problem\s+list|encounter\s+notes?"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 def _default_llm_factory(settings: Settings, model_override: str | None = None) -> BaseChatModel:
     # OpenRouter speaks the OpenAI Chat Completions wire format; ``ChatOpenAI`` is that client—not “OpenAI models”.
@@ -52,14 +61,65 @@ _TOOL_LOOP_INSTRUCTION = (
     "'this week', and similar terms using CURRENT_DATE only.\n"
     "1) Tool names must match the system prompt exactly—never ``get``/generic names.\n"
     "2) If ``patient_uuid`` is present and the question is chart data: call the needed tools among "
+    "find_patient_candidates, "
     "get_patient_core_profile, get_medication_list, get_observations, get_encounters_and_notes, "
     "get_referrals_orders_care_gaps.\n"
-    "3) No patient UUID → do not call those five.\n"
+    "3) No patient UUID: if user gave a patient name, call find_patient_candidates first; "
+    "otherwise do not call UUID-scoped patient tools.\n"
     "4) Schedule/day/column → list_schedule_slots first.\n"
     "5) Calendar beyond slots → get_calendar with a sensible date window.\n"
     "6) Minimal tool set only. retrieval_status.ok=false → stop or try another read; never invent data.\n"
     "7) This phase: tool calls only—no assumptions."
 )
+
+
+def _extract_caller_context(user_message: str) -> dict[str, Any]:
+    start_tag = "[CALLER_CONTEXT]"
+    end_tag = "[/CALLER_CONTEXT]"
+    start = user_message.find(start_tag)
+    end = user_message.find(end_tag)
+    if start == -1 or end == -1 or end <= start:
+        return {}
+    body = user_message[start + len(start_tag):end].strip()
+    try:
+        parsed = json.loads(body)
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _ambiguous_patient_candidates(tool_payloads: list[dict[str, Any]]) -> list[dict[str, str]]:
+    for payload in reversed(tool_payloads):
+        if str(payload.get("tool", "")) != "find_patient_candidates":
+            continue
+        status = payload.get("retrieval_status")
+        if isinstance(status, dict) and status.get("ok") is False:
+            return []
+        raw_candidates = payload.get("candidates")
+        if not isinstance(raw_candidates, list):
+            return []
+        candidates: list[dict[str, str]] = []
+        for item in raw_candidates:
+            if not isinstance(item, dict):
+                continue
+            display_name = str(item.get("display_name", "")).strip()
+            patient_uuid = str(item.get("patient_uuid", "")).strip()
+            dob = str(item.get("dob", "")).strip()
+            sex = str(item.get("sex", "")).strip()
+            if display_name == "" or patient_uuid == "":
+                continue
+            candidates.append(
+                {
+                    "display_name": display_name,
+                    "patient_uuid": patient_uuid,
+                    "dob": dob,
+                    "sex": sex,
+                }
+            )
+        if len(candidates) > 1:
+            return candidates
+        return []
+    return []
 
 
 def run_chat_with_tools(
@@ -95,6 +155,11 @@ def run_chat_with_tools(
 
     bound_required = base_llm.bind_tools(tools, tool_choice="required")
     bound_auto = base_llm.bind_tools(tools, tool_choice="auto")
+    caller_context = _extract_caller_context(user_message)
+    patient_uuid = str(caller_context.get("patient_uuid", "")).strip()
+    has_patient_uuid = patient_uuid != ""
+    patient_chart_intent = _PATIENT_CHART_INTENT.search(user_message) is not None
+    force_first_tool = not (patient_chart_intent and not has_patient_uuid)
 
     messages: list[BaseMessage] = [
         SystemMessage(
@@ -126,13 +191,13 @@ def run_chat_with_tools(
 
     while rounds < max_tool_rounds:
         rounds += 1
-        bound = bound_required if rounds == 1 else bound_auto
+        bound = bound_required if rounds == 1 and force_first_tool else bound_auto
         ai: AIMessage = bound.invoke(messages, config=trace_phase1)
         messages.append(ai)
 
         tcalls = getattr(ai, "tool_calls", None) or []
         if not tcalls:
-            if rounds == 1 and not tools_used:
+            if rounds == 1 and force_first_tool and not tools_used:
                 diagnostics: dict[str, Any] = {
                     "tools_used": tools_used,
                     "tool_rounds_used": rounds,
@@ -154,6 +219,28 @@ def run_chat_with_tools(
                     "Chart retrieval did not run (no tool calls from the model). "
                     "No summary can be shown from patient or schedule data.",
                     diagnostics,
+                )
+            if rounds == 1 and patient_chart_intent and not has_patient_uuid and not tools_used:
+                return (
+                    "I need patient context before chart retrieval. "
+                    "Please include the patient name (for lookup) or open the patient chart first.",
+                    {
+                        "tools_used": [],
+                        "tool_rounds_used": rounds,
+                        "tool_payload_count": 0,
+                        "summarization_mode": "aborted_missing_patient_context",
+                        "verification": {
+                            "grounding_ok": True,
+                            "tool_failures_disclosed_ok": True,
+                            "patient_chart_tools_ok": False,
+                        },
+                        "verification_findings": [
+                            {
+                                "code": "patient_context_missing",
+                                "detail": "no patient_uuid in caller context and no retrieval tool call executed",
+                            }
+                        ],
+                    },
                 )
             break
 
@@ -222,6 +309,35 @@ def run_chat_with_tools(
     if retrieval_truncated:
         retrieval_bundle["retrieval_warning"] = (
             "Maximum retrieval tool rounds were reached; results below may be incomplete."
+        )
+
+    ambiguous_candidates = _ambiguous_patient_candidates(tool_payloads)
+    if patient_chart_intent and not has_patient_uuid and ambiguous_candidates:
+        option_lines = [
+            f"- {c['display_name']} | DOB {c['dob'] or 'unknown'} | Sex {c['sex'] or 'unknown'} | UUID {c['patient_uuid']}"
+            for c in ambiguous_candidates
+        ]
+        return (
+            "Multiple patients match your request. Please specify which patient before chart retrieval.\n"
+            + "\n".join(option_lines),
+            {
+                "tools_used": tools_used,
+                "tool_rounds_used": rounds,
+                "tool_payload_count": len(tool_payloads),
+                "summarization_mode": "aborted_ambiguous_patient_candidates",
+                "verification": {
+                    "grounding_ok": True,
+                    "tool_failures_disclosed_ok": True,
+                    "patient_chart_tools_ok": False,
+                },
+                "verification_findings": [
+                    {
+                        "code": "patient_candidate_ambiguity",
+                        "detail": "multiple patient candidates matched the user request; explicit disambiguation required",
+                    }
+                ],
+                "openrouter_model_effective": model_for_request,
+            },
         )
 
     human2 = (

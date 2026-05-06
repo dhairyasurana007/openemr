@@ -16,6 +16,9 @@ class RetrievalBackend(Protocol):
     def get_patient_core_profile(self, patient_uuid: str) -> dict[str, Any]:
         ...
 
+    def find_patient_candidates(self, name: str, limit: int = 5) -> dict[str, Any]:
+        ...
+
     def get_medication_list(self, patient_uuid: str) -> dict[str, Any]:
         ...
 
@@ -92,6 +95,20 @@ class StubRetrievalBackend:
             },
             "active_problems": [],
             "allergies": [],
+        }
+        st = self._status(tool)
+        if st:
+            base["retrieval_status"] = st
+        return base
+
+    def find_patient_candidates(self, name: str, limit: int = 5) -> dict[str, Any]:
+        tool = "find_patient_candidates"
+        base: dict[str, Any] = {
+            "tool": tool,
+            "schema_version": "1",
+            "citations": [],
+            "query": name,
+            "candidates": [],
         }
         st = self._status(tool)
         if st:

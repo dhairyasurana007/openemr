@@ -250,6 +250,55 @@ final class ClinicalCopilotRetrievalRestController
         return new JsonResponse($body, Response::HTTP_OK);
     }
 
+    public function findPatientCandidates(HttpRestRequest $request): JsonResponse
+    {
+        ClinicalCopilotInternalAuth::assertConfiguredSecretMatches($request);
+        RestConfig::request_authorization_check($request, 'patients', 'demo');
+
+        $name = trim((string) $request->query->get('name', ''));
+        if (mb_strlen($name) < 2) {
+            throw new BadRequestHttpException('Missing or too-short query parameter: name (min 2 characters)');
+        }
+
+        $limitRaw = (string) $request->query->get('limit', '5');
+        $limit = (int) $limitRaw;
+        if ($limit < 1) {
+            $limit = 1;
+        }
+        if ($limit > 10) {
+            $limit = 10;
+        }
+
+        $search = [
+            'fname' => $name,
+            'lname' => $name,
+            'mname' => $name,
+            'pubpid' => $name,
+            'pid' => $name,
+        ];
+        $processingResult = $this->patientService->getAll($search, false);
+        if ($processingResult->hasErrors()) {
+            return $this->processingResultJson($processingResult);
+        }
+
+        $candidates = [];
+        foreach (array_slice($processingResult->getData(), 0, $limit) as $row) {
+            $candidates[] = $this->normalizePatientCandidate($row);
+        }
+
+        $body = [
+            'tool' => 'find_patient_candidates',
+            'schema_version' => self::SCHEMA_VERSION,
+            'citations' => [
+                self::citation('find_patient_candidates', 'demographics', '/api/clinical-copilot/retrieval/find-patient-candidates'),
+            ],
+            'query' => $name,
+            'candidates' => $candidates,
+        ];
+
+        return new JsonResponse($body, Response::HTTP_OK);
+    }
+
     public function getMedicationList(HttpRestRequest $request): JsonResponse
     {
         ClinicalCopilotInternalAuth::assertConfiguredSecretMatches($request);
@@ -555,6 +604,26 @@ final class ClinicalCopilotRetrievalRestController
             'first_name' => (string) ($row['fname'] ?? ''),
             'last_name' => (string) ($row['lname'] ?? ''),
             'DOB' => (string) ($row['DOB'] ?? ''),
+            'sex' => (string) ($row['sex'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, string>
+     */
+    private function normalizePatientCandidate(array $row): array
+    {
+        $first = trim((string) ($row['fname'] ?? ''));
+        $middle = trim((string) ($row['mname'] ?? ''));
+        $last = trim((string) ($row['lname'] ?? ''));
+        $nameParts = array_values(array_filter([$first, $middle, $last], static fn ($value): bool => $value !== ''));
+
+        return [
+            'patient_uuid' => (string) ($row['uuid'] ?? ''),
+            'pid' => (string) ($row['pid'] ?? ''),
+            'display_name' => trim(implode(' ', $nameParts)),
+            'dob' => (string) ($row['DOB'] ?? ''),
             'sex' => (string) ($row['sex'] ?? ''),
         ];
     }

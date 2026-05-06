@@ -25,6 +25,13 @@ class PatientScopedArgs(BaseModel):
     patient_uuid: str = Field(description="Patient UUID scoped by the caller authorization.")
 
 
+class FindPatientCandidatesArgs(BaseModel):
+    """Name-fragment based patient lookup to resolve UUID before chart reads."""
+
+    name: str = Field(description="Patient name fragment (or MRN/pid fragment) to search.")
+    limit: int = Field(default=5, ge=1, le=10, description="Max candidates to return (1-10).")
+
+
 class GetCalendarArgs(BaseModel):
     """Date-bounded calendar read (calendars metadata + events)."""
 
@@ -78,6 +85,18 @@ def build_retrieval_tools(backend: RetrievalBackend) -> list[StructuredTool]:
                     calendar_id=calendar_id,
                     facility_id=facility_id,
                 ),
+            ),
+        ),
+        StructuredTool.from_function(
+            name="find_patient_candidates",
+            description=(
+                "Read-only: resolve patient identity by name/MRN fragment when patient_uuid is unknown. "
+                "Returns candidate patient_uuid values for follow-up chart tools."
+            ),
+            args_schema=FindPatientCandidatesArgs,
+            func=_wrap(
+                "find_patient_candidates",
+                lambda name, limit=5: backend.find_patient_candidates(name=name, limit=limit),
             ),
         ),
         StructuredTool.from_function(
