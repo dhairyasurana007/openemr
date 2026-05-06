@@ -32,7 +32,10 @@ def _source_id(file_bytes: bytes) -> str:
 
 def _pdf_pages_to_images(file_bytes: bytes) -> list[tuple[str, str]]:
     """Render every PDF page to a base64 PNG. Returns list of (b64_data, mime_type)."""
-    import fitz  # pymupdf — optional dep; imported lazily to keep container image smaller
+    try:
+        import fitz  # pymupdf
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("PyMuPDF (fitz) is required for PDF extraction but is not installed.") from exc
 
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     pages: list[tuple[str, str]] = []
@@ -182,3 +185,4 @@ async def extract_document(
     )
 
     return result, token_usage, latency_ms
+
