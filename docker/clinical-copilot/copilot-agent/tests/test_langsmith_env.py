@@ -36,6 +36,7 @@ def _settings_with_langsmith(
         readyz_probe_openemr=False,
         use_openemr_retrieval=False,
         copilot_max_inflight=0,
+        vlm_model="anthropic/claude-3-5-sonnet",
         langchain_api_key=api_key,
         langchain_tracing_v2=tracing,
         langchain_project=project,

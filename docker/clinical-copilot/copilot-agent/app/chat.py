@@ -13,6 +13,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, Request, Uploa
 from pydantic import BaseModel, Field
 
 from app.agent_runner import run_chat_with_tools
+from app.document_extractor import estimate_cost_usd, extract_document
 from app.output_safety import (
     check_schedule_wide_safety,
     check_uc5_draft_with_contradictory_note,
@@ -176,24 +177,57 @@ async def extract(
         str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
     ] = None,
 ) -> dict[str, Any]:
-    """Stub document extraction endpoint. Returns a clearly-marked stub response.
-
-    Real VLM extraction logic is added in Commit 3.
-    """
     req_start = time.perf_counter()
+    request_id = (request.headers.get("X-Request-Id") or "").strip()
+    if request_id == "":
+        request_id = f"extract-{int(time.time() * 1000)}"
     settings: Settings = request.app.state.settings
     _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
+
+    if settings.openrouter_api_key == "":
+        raise HTTPException(
+            status_code=503,
+            detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
+        )
 
     if doc_type not in _ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="Invalid doc_type. Allowed: lab_pdf, intake_form")
 
-    latency_ms = int((time.perf_counter() - req_start) * 1000.0)
+    file_bytes = await file.read()
+    mime_type = file.content_type or "application/octet-stream"
+
+    try:
+        result, token_usage, latency_ms = await extract_document(
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+            doc_type=doc_type,
+            settings=settings,
+        )
+    except ValueError as exc:
+        _LOG.warning(
+            "clinical_copilot_extract_parse_error request_id=%s doc_type=%s",
+            request_id,
+            doc_type,
+        )
+        raise HTTPException(status_code=422, detail="VLM returned unparseable output.") from exc
+    except Exception as exc:
+        _LOG.exception(
+            "clinical_copilot_extract_failed",
+            extra={"request_id": request_id, "doc_type": doc_type,
+                   "total_ms": int((time.perf_counter() - req_start) * 1000.0)},
+        )
+        raise HTTPException(status_code=502, detail="Upstream extraction request failed.") from exc
+
+    _LOG.info(
+        "clinical_copilot_extract_ok request_id=%s doc_type=%s latency_ms=%d",
+        request_id,
+        doc_type,
+        latency_ms,
+    )
+
     return {
-        "extracted": {
-            "doc_type": doc_type,
-            "schema_version": "1.0.0",
-            "stub": True,
-            "message": "extraction not yet implemented",
-        },
+        "extracted": result.model_dump(),
         "latency_ms": latency_ms,
+        "token_usage": token_usage,
+        "cost_estimate_usd": estimate_cost_usd(settings.vlm_model, token_usage),
     }

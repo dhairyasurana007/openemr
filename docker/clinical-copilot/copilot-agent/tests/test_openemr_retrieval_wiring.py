@@ -31,6 +31,7 @@ def _settings(**overrides: object) -> Settings:
         readyz_probe_openemr=False,
         use_openemr_retrieval=False,
         copilot_max_inflight=0,
+        vlm_model="anthropic/claude-3-5-sonnet",
         langchain_api_key="",
         langchain_tracing_v2=False,
         langchain_project="clinical-copilot",
