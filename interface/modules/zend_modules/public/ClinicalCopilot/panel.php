@@ -33,6 +33,7 @@ $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
 $extractUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/extract.php';
+$multimodalChatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/multimodal_chat.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
 
@@ -159,9 +160,11 @@ $agentReady = $handoff->isConfigured();
         (function () {
             var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var extractUrl = <?php echo json_encode($extractUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var multimodalChatUrl = <?php echo json_encode($multimodalChatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var agentReady = <?php echo $agentReady ? 'true' : 'false'; ?>;
+            var extractedFacts = null;
             var btn = document.getElementById('clinical-copilot-send');
             var input = document.getElementById('clinical-copilot-message');
             var messagesEl = document.getElementById('clinical-copilot-messages');
@@ -253,6 +256,7 @@ $agentReady = $handoff->isConfigured();
                             lr.remove();
                         }
                         if (res.ok && res.data && res.data.extracted) {
+                            extractedFacts = res.data.extracted;
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
                         } else {
                             var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Extraction failed')); ?>;
@@ -296,14 +300,18 @@ $agentReady = $handoff->isConfigured();
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
 
-                fetch(chatUrl, {
+                var useMultimodal = extractedFacts !== null;
+                var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
+                var requestBody = {message: msg, csrf_token_form: csrfToken};
+                if (useMultimodal) {
+                    requestBody.extracted_facts = extractedFacts;
+                }
+
+                fetch(targetUrl, {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        message: msg,
-                        csrf_token_form: csrfToken
-                    })
+                    body: JSON.stringify(requestBody)
                 }).then(function (r) {
                     return r.json().then(function (data) {
                         return {ok: r.ok, status: r.status, data: data};

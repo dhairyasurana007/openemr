@@ -165,6 +165,77 @@ async def chat(
     return out
 
 
+class MultimodalChatRequestBody(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    patient_id: str | None = Field(default=None, max_length=64)
+    extracted_facts: dict[str, Any] | None = None
+    surface: str = Field(default="encounter", max_length=32)
+
+
+@router.post("/multimodal-chat")
+async def multimodal_chat(
+    request: Request,
+    body: MultimodalChatRequestBody,
+    x_clinical_copilot_internal_secret: Annotated[
+        str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
+    ] = None,
+) -> dict[str, Any]:
+    req_start = time.perf_counter()
+    request_id = (request.headers.get("X-Request-Id") or "").strip()
+    if request_id == "":
+        request_id = f"mmchat-{int(time.time() * 1000)}"
+    settings: Settings = request.app.state.settings
+    _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
+
+    if settings.openrouter_api_key == "":
+        raise HTTPException(
+            status_code=503,
+            detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
+        )
+
+    rag_retriever = getattr(request.app.state, "rag_retriever", None)
+
+    from app.multimodal_graph import run_multimodal_graph
+
+    try:
+        result = await asyncio.to_thread(
+            run_multimodal_graph,
+            body.message.strip(),
+            settings,
+            rag_retriever,
+            body.patient_id,
+            body.extracted_facts,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _LOG.exception(
+            "clinical_copilot_multimodal_chat_failed",
+            extra={
+                "request_id": request_id,
+                "total_ms": int((time.perf_counter() - req_start) * 1000.0),
+            },
+        )
+        raise HTTPException(status_code=502, detail="Upstream multimodal chat request failed.") from exc
+
+    latency_ms = int((time.perf_counter() - req_start) * 1000.0)
+    _LOG.info(
+        "clinical_copilot_multimodal_chat_ok request_id=%s latency_ms=%d routing_steps=%d",
+        request_id,
+        latency_ms,
+        len(result.get("routing_log") or []),
+    )
+
+    return {
+        "reply": result["reply"],
+        "citations": result.get("citations", []),
+        "routing_log": result.get("routing_log", []),
+        "latency_ms": latency_ms,
+        "token_usage": result.get("token_usage", {}),
+        "cost_estimate_usd": estimate_cost_usd(settings.openrouter_model, result.get("token_usage", {})),
+    }
+
+
 _ALLOWED_DOC_TYPES = frozenset({"lab_pdf", "intake_form"})
 
 
