@@ -2,17 +2,17 @@
   {
     "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hypertension-in-adults-screening",
     "filename": "uspstf_hypertension_screening.txt",
-    "description": "USPSTF: Hypertension in Adults — Screening Recommendation"
+    "description": "USPSTF: Hypertension in Adults - Screening Recommendation"
   },
   {
     "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/diabetes-mellitus-type-2-in-adults-screening",
     "filename": "uspstf_diabetes_screening.txt",
-    "description": "USPSTF: Type 2 Diabetes in Adults — Screening Recommendation"
+    "description": "USPSTF: Type 2 Diabetes in Adults - Screening Recommendation"
   },
   {
     "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-for-the-primary-prevention-of-cardiovascular-events-in-adults-preventive-medication",
     "filename": "uspstf_statin_lipid_screening.txt",
-    "description": "USPSTF: Statin Use for Primary Prevention of CVD — Lipid Screening Recommendation"
+    "description": "USPSTF: Statin Use for Primary Prevention of CVD - Lipid Screening Recommendation"
   },
   {
     "url": "https://www.cdc.gov/blood-pressure/about/index.html",
@@ -27,12 +27,12 @@
   {
     "url": "https://www.nhlbi.nih.gov/health/high-blood-pressure",
     "filename": "nhlbi_high_blood_pressure.txt",
-    "description": "NHLBI: High Blood Pressure — What Is It?"
+    "description": "NHLBI: High Blood Pressure - What Is It?"
   },
   {
     "url": "https://www.nhlbi.nih.gov/health/high-blood-cholesterol",
     "filename": "nhlbi_high_blood_cholesterol.txt",
-    "description": "NHLBI: High Blood Cholesterol — What Is It?"
+    "description": "NHLBI: High Blood Cholesterol - What Is It?"
   },
   {
     "url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
@@ -43,5 +43,55 @@
     "url": "https://www.who.int/news-room/fact-sheets/detail/diabetes",
     "filename": "who_diabetes_fact_sheet.txt",
     "description": "WHO: Diabetes Fact Sheet"
+  },
+  {
+    "url": "https://www.nice.org.uk/about/what-we-do/our-programmes/nice-guidance/nice-guidelines",
+    "filename": "nice_guidelines_overview.txt",
+    "description": "NICE: Guidelines Overview"
+  },
+  {
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation-topics/uspstf-and-b-recommendations",
+    "filename": "uspstf_a_b_recommendations.txt",
+    "description": "USPSTF: A and B Recommendations"
+  },
+  {
+    "url": "https://www.cdc.gov/sti/hcp/clinical-guidance/index.html",
+    "filename": "cdc_sti_clinical_guidance.txt",
+    "description": "CDC: STI Clinical Guidance"
+  },
+  {
+    "url": "https://www.cdc.gov/respiratory-viruses/hcp/clinical-overview/index.html",
+    "filename": "cdc_respiratory_viruses_clinical_overview.txt",
+    "description": "CDC: Clinical Overview of Respiratory Illnesses"
+  },
+  {
+    "url": "https://www.who.int/news-room/fact-sheets",
+    "filename": "who_fact_sheets_index.txt",
+    "description": "WHO: Fact Sheets Index"
+  },
+  {
+    "url": "https://www.fda.gov/drugs/drug-approvals-and-databases/drugsfda-database",
+    "filename": "fda_drugsfda_overview.txt",
+    "description": "FDA: Drugs@FDA Overview"
+  },
+  {
+    "url": "https://dailymed.nlm.nih.gov/dailymed",
+    "filename": "dailymed_overview.txt",
+    "description": "NLM: DailyMed Overview"
+  },
+  {
+    "url": "https://medlineplus.gov/",
+    "filename": "medlineplus_home.txt",
+    "description": "NLM/NIH: MedlinePlus Home"
+  },
+  {
+    "url": "https://medlineplus.gov/cough.html",
+    "filename": "medlineplus_cough.txt",
+    "description": "NLM/NIH: MedlinePlus Cough Topic"
+  },
+  {
+    "url": "https://www.idsociety.org/practice-guideline/clinical-practice-guidelines-development-training-and-resources/",
+    "filename": "idsa_guideline_development_overview.txt",
+    "description": "IDSA: Clinical Practice Guidelines Development"
   }
 ]
