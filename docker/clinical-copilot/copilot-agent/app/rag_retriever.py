@@ -99,11 +99,10 @@ class HybridRetriever:
         # Lazy import of rank_bm25 — only needed when corpus is non-empty.
         from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
-        self._embed_fn = _embed_fn or _load_sentence_transformer(embedding_model_name)
-
         tokenized = [c["text"].split() for c in self._chunks]
         self._bm25 = BM25Okapi(tokenized)
 
+        self._embed_fn = _embed_fn or _load_sentence_transformer(embedding_model_name)
         raw = self._embed_fn([c["text"] for c in self._chunks])
         mat = np.array(raw, dtype=np.float32)
         norms = np.linalg.norm(mat, axis=1, keepdims=True)
