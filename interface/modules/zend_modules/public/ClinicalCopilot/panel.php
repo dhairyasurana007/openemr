@@ -33,6 +33,7 @@ $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
 $extractUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/extract.php';
+$saveExtractedUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/save_extracted.php';
 $multimodalChatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/multimodal_chat.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
@@ -189,6 +190,7 @@ $agentReady = $handoff->isConfigured();
         (function () {
             var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var extractUrl = <?php echo json_encode($extractUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var saveExtractedUrl = <?php echo json_encode($saveExtractedUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var multimodalChatUrl = <?php echo json_encode($multimodalChatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -200,6 +202,9 @@ $agentReady = $handoff->isConfigured();
             var uploadBtn = document.getElementById('ccp-upload-btn');
             var fileInput = document.getElementById('ccp-file-input');
             var docTypeSelect = document.getElementById('ccp-doc-type');
+            var pendingExtractConfirmation = false;
+            var pendingExtractDocType = '';
+            var pendingExtractFileName = '';
             if (!btn || !input || !messagesEl) {
                 return;
             }
@@ -444,6 +449,104 @@ $agentReady = $handoff->isConfigured();
                 }
             }
 
+            function normalizeSimpleText(text) {
+                return String(text || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            function isYesEquivalent(text) {
+                var normalized = normalizeSimpleText(text);
+                if (!normalized) {
+                    return false;
+                }
+                var yesPhrases = {
+                    'y': true,
+                    'yes': true,
+                    'yeah': true,
+                    'yep': true,
+                    'yup': true,
+                    'sure': true,
+                    'ok': true,
+                    'okay': true,
+                    'correct': true,
+                    'looks good': true,
+                    'sounds good': true,
+                    'affirmative': true
+                };
+                return !!yesPhrases[normalized];
+            }
+
+            function isNoEquivalent(text) {
+                var normalized = normalizeSimpleText(text);
+                if (!normalized) {
+                    return false;
+                }
+                var noPhrases = {
+                    'n': true,
+                    'no': true,
+                    'nope': true,
+                    'nah': true,
+                    'negative': true,
+                    'not correct': true
+                };
+                return !!noPhrases[normalized];
+            }
+
+            function handleExtractConfirmationReply(messageText) {
+                if (!pendingExtractConfirmation) {
+                    return false;
+                }
+                if (isNoEquivalent(messageText)) {
+                    pendingExtractConfirmation = false;
+                    appendBubble('assistant', <?php echo json_encode(xl('Understood. I will not save that extraction. You can upload another document when ready.')); ?>, false);
+                    return true;
+                }
+                if (!isYesEquivalent(messageText)) {
+                    appendBubble('assistant', <?php echo json_encode(xl('Please reply with yes to save, or no to skip.')); ?>, false);
+                    return true;
+                }
+
+                pendingExtractConfirmation = false;
+                var payload = {
+                    csrf_token_form: csrfToken,
+                    doc_type: pendingExtractDocType,
+                    source_file_name: pendingExtractFileName,
+                    extracted_facts: extractedFacts
+                };
+                appendBubble('assistant', <?php echo json_encode(xl('Saving confirmed extracted data to patient record') . '...'); ?>, false, <?php echo json_encode(xl('Save status')); ?>);
+                fetch(saveExtractedUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                }).then(function (r) {
+                    return r.json().then(function (data) {
+                        return {ok: r.ok, data: data};
+                    });
+                }).then(function (res) {
+                    if (res.ok && res.data && res.data.ok === true) {
+                        var applied = res.data.applied || {};
+                        var savedLines = [<?php echo json_encode(xl('Confirmed extraction has been saved for the active patient.')); ?>];
+                        if (applied && applied.vitals_form_id) {
+                            savedLines.push('- ' + <?php echo json_encode(xl('Vitals form created')); ?> + ': ' + applied.vitals_form_id);
+                        }
+                        if (applied && applied.pnote_id) {
+                            savedLines.push('- ' + <?php echo json_encode(xl('Patient note created')); ?> + ': ' + applied.pnote_id);
+                        }
+                        appendBubble('assistant', savedLines.join('\n'), false);
+                    } else {
+                        var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Failed to persist extracted data')); ?>;
+                        appendBubble('assistant', err, true);
+                    }
+                }).catch(function () {
+                    appendBubble('assistant', <?php echo json_encode(xl('Network error while saving extracted data')); ?>, true);
+                });
+                return true;
+            }
+
             if (uploadBtn && fileInput && docTypeSelect) {
                 uploadBtn.addEventListener('click', function () {
                     if (!agentReady) {
@@ -504,7 +607,11 @@ $agentReady = $handoff->isConfigured();
                         }
                         if (res.ok && res.data && res.data.extracted) {
                             extractedFacts = res.data.extracted;
+                            pendingExtractDocType = docTypeSelect.value;
+                            pendingExtractFileName = file.name || 'uploaded-document';
+                            pendingExtractConfirmation = true;
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
+                            appendBubble('assistant', <?php echo json_encode(xl('Does this extracted data look correct? Reply yes to save it to the active patient record, or no to skip.')); ?>, false);
                         } else {
                             var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Extraction failed')); ?>;
                             appendBubble('assistant', err, true);
@@ -537,6 +644,10 @@ $agentReady = $handoff->isConfigured();
                 removeIntroIfPresent();
                 appendBubble('user', msg, false);
                 input.value = '';
+                if (handleExtractConfirmationReply(msg)) {
+                    input.focus();
+                    return;
+                }
                 btn.disabled = true;
                 var loadingRow = document.createElement('div');
                 loadingRow.className = 'clinical-copilot-msg clinical-copilot-msg-assistant mb-2';

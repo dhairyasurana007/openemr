@@ -1139,6 +1139,29 @@ CREATE TABLE `clinical_copilot_encounter_state` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `clinical_copilot_extracted_data`
+--
+
+DROP TABLE IF EXISTS `clinical_copilot_extracted_data`;
+CREATE TABLE `clinical_copilot_extracted_data` (
+  `id` bigint(20) NOT NULL auto_increment,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `pid` int(11) NOT NULL,
+  `encounter` int(11) DEFAULT NULL,
+  `doc_type` varchar(32) NOT NULL COMMENT 'lab_pdf|intake_form',
+  `source_file_name` varchar(255) NOT NULL DEFAULT '',
+  `extracted_json` longtext NOT NULL,
+  `extracted_hash` char(64) NOT NULL DEFAULT '',
+  `confirmed_by_user_id` bigint(20) NOT NULL DEFAULT '0',
+  `confirmed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ccp_extract_pid_created` (`pid`, `created_at`),
+  KEY `idx_ccp_extract_doc_type_created` (`doc_type`, `created_at`)
+) ENGINE=InnoDB COMMENT='Clinical co-pilot clinician-confirmed extracted data payloads';
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `ai_audit_log`
 --
 
