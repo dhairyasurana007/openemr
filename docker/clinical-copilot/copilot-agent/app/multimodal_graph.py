@@ -88,15 +88,61 @@ def _escape_control_chars_in_json_strings(raw: str) -> str:
     return "".join(out)
 
 
-def _llm_json(llm: Any, system: str, user: str) -> tuple[dict, dict]:
+def _extract_first_json_object(raw: str) -> str | None:
+    start = raw.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(raw)):
+        ch = raw[i]
+        if in_string:
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == "\"":
+                in_string = False
+            continue
+        if ch == "\"":
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return raw[start:i + 1]
+    return None
+
+
+def _llm_json(llm: Any, system: str, user: str, fallback_key: str | None = None) -> tuple[dict, dict]:
     from langchain_core.messages import HumanMessage, SystemMessage
 
     response = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
     raw = _strip_fences(_content_to_text(response.content))
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        parsed = json.loads(_escape_control_chars_in_json_strings(raw))
+    candidates = [raw, _escape_control_chars_in_json_strings(raw)]
+    extracted = _extract_first_json_object(raw)
+    if extracted:
+        candidates.append(extracted)
+        candidates.append(_escape_control_chars_in_json_strings(extracted))
+
+    parsed: dict[str, Any] | None = None
+    for candidate in candidates:
+        try:
+            loaded = json.loads(candidate)
+            if isinstance(loaded, dict):
+                parsed = loaded
+                break
+        except json.JSONDecodeError:
+            continue
+    if parsed is None:
+        if fallback_key:
+            parsed = {fallback_key: raw}
+        else:
+            raise json.JSONDecodeError("unable to parse json response", raw, 0)
 
     usage: dict = {}
     if hasattr(response, "response_metadata"):
@@ -455,7 +501,7 @@ def _make_answer_composer(llm: Any):
         user_prompt = f"User query: {query[:500]}\n\nContext:\n---\n" + "\n---\n".join(context_parts)
         system_prompt = RAG_ANSWER_SYSTEM_PROMPT if state.get("guideline_evidence") else _ANSWER_SYSTEM
         try:
-            parsed, usage = _llm_json(llm, system_prompt, user_prompt)
+            parsed, usage = _llm_json(llm, system_prompt, user_prompt, fallback_key="reply")
             reply = str(parsed.get("reply") or "I was unable to compose an answer from the available context.")
             new_citations = list(parsed.get("citations") or [])
         except Exception:

@@ -89,6 +89,9 @@ HARD RULES
 
 TONE
 - Professional, neutral, concise.
+
+Respond ONLY with valid JSON:
+{"reply":"<answer>","citations":[{"source_type":"<str>","source_id":"<str>","page_or_section":"<str>","field_or_chunk_id":"<str>","quote_or_value":"<str>","url":"<str>","description":"<str>"}]}
 """
 
 

@@ -9,8 +9,10 @@ from unittest.mock import MagicMock, patch
 from app.multimodal_graph import (
     CopilotState,
     _content_to_text,
+    _extract_first_json_object,
     _escape_control_chars_in_json_strings,
     _last_message_text,
+    _llm_json,
     _make_answer_composer,
     _make_evidence_retriever,
     _make_intake_extractor,
@@ -122,6 +124,30 @@ class TestJsonSanitize(unittest.TestCase):
     def test_content_list_to_text(self) -> None:
         content = [{"type": "text", "text": '{"reply":"ok","citations":[]}'}]
         assert _content_to_text(content) == '{"reply":"ok","citations":[]}'
+
+    def test_extracts_first_json_object_from_mixed_text(self) -> None:
+        raw = 'Sure, here is JSON: {"decision":"answer","reason":"enough"} trailing text'
+        extracted = _extract_first_json_object(raw)
+        assert extracted == '{"decision":"answer","reason":"enough"}'
+
+    def test_llm_json_fallback_key_wraps_plaintext(self) -> None:
+        llm = MagicMock()
+        response = MagicMock()
+        response.content = "Plain text answer"
+        response.response_metadata = {}
+        llm.invoke.return_value = response
+        parsed, usage = _llm_json(llm, "system", "user", fallback_key="reply")
+        assert parsed["reply"] == "Plain text answer"
+        assert usage["total_tokens"] == 0
+
+    def test_llm_json_parses_embedded_json(self) -> None:
+        llm = MagicMock()
+        response = MagicMock()
+        response.content = 'Prefix text {"reply":"ok","citations":[]} suffix'
+        response.response_metadata = {}
+        llm.invoke.return_value = response
+        parsed, _ = _llm_json(llm, "system", "user")
+        assert parsed["reply"] == "ok"
 
 
 class TestMergeUsage(unittest.TestCase):
