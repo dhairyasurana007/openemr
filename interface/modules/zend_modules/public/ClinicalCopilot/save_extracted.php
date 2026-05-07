@@ -22,6 +22,66 @@ use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotExtractedDataRepository;
 
 header('Content-Type: application/json; charset=utf-8');
 
+/**
+ * @param array<string, mixed> $input
+ * @return array<string, mixed>
+ */
+function ccpFlattenArray(array $input): array
+{
+    $flat = [];
+    $stack = [['prefix' => '', 'value' => $input]];
+    while ($stack !== []) {
+        $frame = array_pop($stack);
+        if (!is_array($frame)) {
+            continue;
+        }
+        $prefix = is_string($frame['prefix'] ?? null) ? $frame['prefix'] : '';
+        $value = $frame['value'] ?? null;
+        if (!is_array($value)) {
+            if ($prefix !== '') {
+                $flat[$prefix] = $value;
+            }
+            continue;
+        }
+        foreach ($value as $key => $child) {
+            $keyPart = is_int($key) ? (string) $key : $key;
+            $nextPrefix = $prefix === '' ? $keyPart : ($prefix . '.' . $keyPart);
+            if (is_array($child)) {
+                $stack[] = ['prefix' => $nextPrefix, 'value' => $child];
+            } else {
+                $flat[$nextPrefix] = $child;
+            }
+        }
+    }
+    return $flat;
+}
+
+function ccpNormalizeFieldName(string $name): string
+{
+    return strtolower(preg_replace('/[^a-z0-9]/', '', $name) ?? '');
+}
+
+/**
+ * @param array<string, mixed> $extractedFacts
+ * @param list<string> $fieldCandidates
+ */
+function ccpHasNonEmptyField(array $extractedFacts, array $fieldCandidates): bool
+{
+    $normalizedCandidates = array_map(static fn(string $candidate): string => ccpNormalizeFieldName($candidate), $fieldCandidates);
+    $flat = ccpFlattenArray($extractedFacts);
+    foreach ($flat as $path => $value) {
+        $lastDot = strrpos($path, '.');
+        $fieldName = $lastDot === false ? $path : substr($path, $lastDot + 1);
+        if (!in_array(ccpNormalizeFieldName($fieldName), $normalizedCandidates, true)) {
+            continue;
+        }
+        if (is_scalar($value) && trim((string) $value) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
     echo json_encode(['error' => 'Method not allowed']);
@@ -83,6 +143,14 @@ try {
     if (!is_array($extractedFacts)) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid extracted_facts']);
+        exit;
+    }
+    $hasName = ccpHasNonEmptyField($extractedFacts, ['name', 'full_name', 'patient_name']);
+    $hasGender = ccpHasNonEmptyField($extractedFacts, ['gender', 'sex']);
+    $hasDob = ccpHasNonEmptyField($extractedFacts, ['date_of_birth', 'dob', 'birth_date']);
+    if (!$hasName || !$hasGender || !$hasDob) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Unable to map data to a patient. Extraction must include non-empty name, gender, and date_of_birth fields.']);
         exit;
     }
 

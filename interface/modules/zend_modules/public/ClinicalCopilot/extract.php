@@ -30,6 +30,83 @@ function ccpExtractReleaseSessionLock(): void
     }
 }
 
+/**
+ * @param array<string, mixed> $input
+ * @return array<string, mixed>
+ */
+function ccpExtractFlattenArray(array $input): array
+{
+    $flat = [];
+    $stack = [['prefix' => '', 'value' => $input]];
+    while ($stack !== []) {
+        $frame = array_pop($stack);
+        if (!is_array($frame)) {
+            continue;
+        }
+        $prefix = is_string($frame['prefix'] ?? null) ? $frame['prefix'] : '';
+        $value = $frame['value'] ?? null;
+        if (!is_array($value)) {
+            if ($prefix !== '') {
+                $flat[$prefix] = $value;
+            }
+            continue;
+        }
+        foreach ($value as $key => $child) {
+            $keyPart = is_int($key) ? (string) $key : $key;
+            $nextPrefix = $prefix === '' ? $keyPart : ($prefix . '.' . $keyPart);
+            if (is_array($child)) {
+                $stack[] = ['prefix' => $nextPrefix, 'value' => $child];
+            } else {
+                $flat[$nextPrefix] = $child;
+            }
+        }
+    }
+    return $flat;
+}
+
+function ccpExtractNormalizeFieldName(string $name): string
+{
+    return strtolower(preg_replace('/[^a-z0-9]/', '', $name) ?? '');
+}
+
+/**
+ * @param array<string, mixed> $extractedFacts
+ * @param list<string> $fieldCandidates
+ */
+function ccpExtractHasNonEmptyField(array $extractedFacts, array $fieldCandidates): bool
+{
+    $normalizedCandidates = array_map(
+        static fn(string $candidate): string => ccpExtractNormalizeFieldName($candidate),
+        $fieldCandidates
+    );
+    $flat = ccpExtractFlattenArray($extractedFacts);
+    foreach ($flat as $path => $value) {
+        $lastDot = strrpos($path, '.');
+        $fieldName = $lastDot === false ? $path : substr($path, $lastDot + 1);
+        if (!in_array(ccpExtractNormalizeFieldName($fieldName), $normalizedCandidates, true)) {
+            continue;
+        }
+        if (is_scalar($value) && trim((string) $value) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @param array<string, mixed> $decoded
+ */
+function ccpExtractHasRequiredIdentityFields(array $decoded): bool
+{
+    $extracted = $decoded['extracted'] ?? null;
+    if (!is_array($extracted)) {
+        return false;
+    }
+    return ccpExtractHasNonEmptyField($extracted, ['name', 'full_name', 'patient_name'])
+        && ccpExtractHasNonEmptyField($extracted, ['gender', 'sex'])
+        && ccpExtractHasNonEmptyField($extracted, ['date_of_birth', 'dob', 'birth_date']);
+}
+
 header('Content-Type: application/json; charset=utf-8');
 $logger = ServiceContainer::getLogger();
 $requestId = uniqid('ccp_ext_', true);
@@ -119,26 +196,46 @@ try {
     ccpExtractReleaseSessionLock();
 
     $client = new Client(['timeout' => 120.0, 'connect_timeout' => 3.0]);
-    $response = $client->post($url, [
-        'headers' => $headers,
-        'multipart' => [
-            [
-                'name'     => 'file',
-                'contents' => $fileContents,
-                'filename' => $fileOriginalName,
-                'headers'  => ['Content-Type' => $mimeType],
+    $decoded = null;
+    $maxAttempts = 3;
+    $attempts = 0;
+    while ($attempts < $maxAttempts) {
+        $attempts++;
+        $response = $client->post($url, [
+            'headers' => $headers,
+            'multipart' => [
+                [
+                    'name'     => 'file',
+                    'contents' => $fileContents,
+                    'filename' => $fileOriginalName,
+                    'headers'  => ['Content-Type' => $mimeType],
+                ],
+                [
+                    'name'     => 'doc_type',
+                    'contents' => $docType,
+                ],
+                [
+                    'name'     => 'required_fields',
+                    'contents' => 'name,gender,date_of_birth',
+                ],
             ],
-            [
-                'name'     => 'doc_type',
-                'contents' => $docType,
-            ],
-        ],
-    ]);
+        ]);
 
-    $raw = (string) $response->getBody();
-    $decoded = json_decode($raw, true);
-    if (!is_array($decoded)) {
-        throw new \RuntimeException('Clinical co-pilot extract endpoint returned invalid JSON.');
+        $raw = (string) $response->getBody();
+        $attemptDecoded = json_decode($raw, true);
+        if (!is_array($attemptDecoded)) {
+            throw new \RuntimeException('Clinical co-pilot extract endpoint returned invalid JSON.');
+        }
+        if (ccpExtractHasRequiredIdentityFields($attemptDecoded)) {
+            $decoded = $attemptDecoded;
+            break;
+        }
+        $decoded = $attemptDecoded;
+    }
+    if (!is_array($decoded) || !ccpExtractHasRequiredIdentityFields($decoded)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Unable to map data to a patient. Extraction did not include required fields (name, gender, date_of_birth) after 3 attempts.']);
+        exit;
     }
 
     $latencyMs = (int) round((microtime(true) - $reqStart) * 1000.0);
@@ -146,6 +243,7 @@ try {
         'request_id' => $requestId,
         'doc_type'   => $docType,
         'mime_type'  => $mimeType,
+        'attempts'   => $attempts,
         'total_ms'   => $latencyMs,
     ]);
 

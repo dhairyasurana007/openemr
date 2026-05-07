@@ -449,6 +449,50 @@ $agentReady = $handoff->isConfigured();
                 }
             }
 
+            function flattenObject(input, prefix, output) {
+                if (input === null || typeof input !== 'object') {
+                    return;
+                }
+                Object.keys(input).forEach(function (key) {
+                    var value = input[key];
+                    var nextPrefix = prefix ? (prefix + '.' + key) : key;
+                    if (value !== null && typeof value === 'object') {
+                        flattenObject(value, nextPrefix, output);
+                    } else {
+                        output[nextPrefix] = value;
+                    }
+                });
+            }
+
+            function normalizeFieldName(value) {
+                return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            }
+
+            function hasNonEmptyExtractedField(extracted, candidates) {
+                if (!extracted || typeof extracted !== 'object') {
+                    return false;
+                }
+                var flat = {};
+                flattenObject(extracted, '', flat);
+                var normalizedCandidates = candidates.map(function (candidate) {
+                    return normalizeFieldName(candidate);
+                });
+                var paths = Object.keys(flat);
+                for (var index = 0; index < paths.length; index++) {
+                    var path = paths[index];
+                    var value = flat[path];
+                    var lastDot = path.lastIndexOf('.');
+                    var fieldName = lastDot >= 0 ? path.substring(lastDot + 1) : path;
+                    if (normalizedCandidates.indexOf(normalizeFieldName(fieldName)) === -1) {
+                        continue;
+                    }
+                    if (value !== null && String(value).trim() !== '') {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             function normalizeSimpleText(text) {
                 return String(text || '')
                     .toLowerCase()
@@ -607,11 +651,19 @@ $agentReady = $handoff->isConfigured();
                         }
                         if (res.ok && res.data && res.data.extracted) {
                             extractedFacts = res.data.extracted;
+                            var hasName = hasNonEmptyExtractedField(extractedFacts, ['name', 'full_name', 'patient_name']);
+                            var hasGender = hasNonEmptyExtractedField(extractedFacts, ['gender', 'sex']);
+                            var hasDob = hasNonEmptyExtractedField(extractedFacts, ['date_of_birth', 'dob', 'birth_date']);
                             pendingExtractDocType = docTypeSelect.value;
                             pendingExtractFileName = file.name || 'uploaded-document';
-                            pendingExtractConfirmation = true;
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
-                            appendBubble('assistant', <?php echo json_encode(xl('Does this extracted data look correct? Reply yes to save it to the active patient record, or no to skip.')); ?>, false);
+                            if (!hasName || !hasGender || !hasDob) {
+                                pendingExtractConfirmation = false;
+                                appendBubble('assistant', <?php echo json_encode(xl('Extraction is missing required patient identity fields (name, gender, date_of_birth). Please upload a clearer document.')); ?>, true);
+                            } else {
+                                pendingExtractConfirmation = true;
+                                appendBubble('assistant', <?php echo json_encode(xl('Does this extracted data look correct? Reply yes to save it to the active patient record, or no to skip.')); ?>, false);
+                            }
                         } else {
                             var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Extraction failed')); ?>;
                             appendBubble('assistant', err, true);
