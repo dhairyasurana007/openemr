@@ -52,7 +52,7 @@ class Settings:
     openrouter_app_title: str
     """OpenRouter optional ``X-Title`` header."""
     clinical_copilot_internal_secret: str
-    """When non-empty, ``POST /v1/chat`` requires matching ``X-Clinical-Copilot-Internal-Secret``."""
+    """When non-empty, copilot endpoints require matching ``X-Clinical-Copilot-Internal-Secret``."""
     openemr_internal_hostport: str
     """Host:port or full URL for OpenEMR HTTP (e.g. ``openemr-web:80``). Document root; not the API prefix."""
     openemr_standard_api_path_prefix: str

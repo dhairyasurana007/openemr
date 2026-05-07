@@ -3,45 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import secrets
 import time
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from app.agent_runner import run_chat_with_tools
 from app.document_extractor import estimate_cost_usd, extract_document
-from app.output_safety import (
-    check_schedule_wide_safety,
-    check_uc5_draft_with_contradictory_note,
-)
 from app.retrieval_backends import RetrievalBackend
 from app.settings import Settings
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 _LOG = logging.getLogger("clinical_copilot.chat")
-
-
-class CallerContext(BaseModel):
-    """OpenEMR web binding forwarded from chat.php (PHI-safe keys; values may identify patients/slots)."""
-
-    use_case: str | None = Field(default=None, max_length=8)
-    patient_uuid: str | None = Field(default=None, max_length=64)
-    encounter_id: str | None = Field(default=None, max_length=32)
-    schedule_date: str | None = Field(default=None, max_length=10)
-    authorized_slot_ids: list[str] | None = None
-
-
-class ChatRequestBody(BaseModel):
-    message: str = Field(min_length=1, max_length=4000)
-    surface: Literal["encounter", "schedule_day", "uc5_draft"] = Field(
-        default="encounter",
-        description="Caller context for deterministic output-safety gates (UC1/UC6 vs UC5).",
-    )
-    caller_context: CallerContext | None = None
 
 
 def _verify_internal_secret(settings: Settings, header_value: str | None) -> None:
@@ -55,114 +30,6 @@ def _verify_internal_secret(settings: Settings, header_value: str | None) -> Non
         ok = False
     if not ok:
         raise HTTPException(status_code=403, detail="Clinical co-pilot internal authentication failed")
-
-
-def _run_copilot_chat_sync(
-    message: str,
-    settings: Settings,
-    backend: RetrievalBackend,
-    use_case: str | None,
-) -> tuple[str, dict[str, Any]]:
-    return run_chat_with_tools(message, settings, backend, use_case=use_case)
-
-
-def _output_safety_findings(surface: str, reply: str) -> list[dict[str, str]]:
-    findings: list[dict[str, str]] = []
-    if surface == "schedule_day":
-        for f in check_schedule_wide_safety(reply):
-            findings.append({"code": f.code, "detail": f.detail})
-    elif surface == "uc5_draft":
-        for f in check_uc5_draft_with_contradictory_note(reply):
-            findings.append({"code": f.code, "detail": f.detail})
-    return findings
-
-
-@router.post("/chat")
-async def chat(
-    request: Request,
-    body: ChatRequestBody,
-    x_clinical_copilot_internal_secret: Annotated[
-        str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
-    ] = None,
-) -> dict[str, Any]:
-    req_start = time.perf_counter()
-    request_id = (request.headers.get("X-Request-Id") or "").strip()
-    if request_id == "":
-        request_id = f"agent-{int(time.time() * 1000)}"
-    settings: Settings = request.app.state.settings
-    _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
-
-    if settings.openrouter_api_key == "":
-        raise HTTPException(
-            status_code=503,
-            detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
-        )
-
-    backend: RetrievalBackend = request.app.state.retrieval_backend
-
-    user_message = body.message.strip()
-    use_case = (body.caller_context.use_case or "").strip() if body.caller_context else ""
-    if body.caller_context is not None:
-        ctx = body.caller_context.model_dump(exclude_none=True)
-        if ctx:
-            user_message = (
-                "[CALLER_CONTEXT]\n"
-                + json.dumps(ctx, separators=(",", ":"), ensure_ascii=False)
-                + "\n[/CALLER_CONTEXT]\n\n"
-                + user_message
-            )
-
-    try:
-        reply, diagnostics = await asyncio.to_thread(
-            _run_copilot_chat_sync,
-            user_message,
-            settings,
-            backend,
-            use_case,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        _LOG.exception(
-            "clinical_copilot_agent_chat_failed",
-            extra={
-                "request_id": request_id,
-                "surface": body.surface,
-                "total_ms": int((time.perf_counter() - req_start) * 1000.0),
-            },
-        )
-        # Do not leak vendor or network details to clients.
-        raise HTTPException(status_code=502, detail="Upstream language model request failed.") from exc
-
-    out: dict[str, Any] = {"reply": reply}
-    out["tools_used"] = diagnostics.get("tools_used") or []
-    out["summarization_mode"] = diagnostics.get("summarization_mode", "")
-    if diagnostics.get("retrieval_truncated") is True:
-        out["retrieval_truncated"] = True
-    out["verification"] = diagnostics.get("verification", {})
-    vf = diagnostics.get("verification_findings") or []
-    if vf:
-        out["verification_findings"] = vf
-    out["tool_rounds_used"] = diagnostics.get("tool_rounds_used", 0)
-    out["tool_payload_count"] = diagnostics.get("tool_payload_count", 0)
-
-    safety = _output_safety_findings(body.surface, reply)
-    if safety:
-        out["output_safety_findings"] = safety
-
-    _LOG.info(
-        "clinical_copilot_agent_chat_ok request_id=%s surface=%s use_case=%s total_ms=%d tool_rounds_used=%d tool_payload_count=%d summarization_mode=%s model=%s",
-        request_id,
-        body.surface,
-        use_case,
-        int((time.perf_counter() - req_start) * 1000.0),
-        int(diagnostics.get("tool_rounds_used", 0)),
-        int(diagnostics.get("tool_payload_count", 0)),
-        str(diagnostics.get("summarization_mode", "")),
-        str(diagnostics.get("openrouter_model_effective", settings.openrouter_model)),
-    )
-
-    return out
 
 
 class MultimodalChatRequestBody(BaseModel):

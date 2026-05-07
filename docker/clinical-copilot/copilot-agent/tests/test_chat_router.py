@@ -1,4 +1,4 @@
-"""Tests for POST /v1/chat (OpenRouter key gating; no live LLM)."""
+"""Tests for chat endpoints (OpenRouter key gating; no live LLM)."""
 
 from __future__ import annotations
 
@@ -47,31 +47,20 @@ class TestChatRouter(unittest.TestCase):
 
         main_mod.app.state.settings = Settings.load()
 
-    def test_chat_returns_503_when_openrouter_key_missing(self) -> None:
+    def test_multimodal_chat_returns_503_when_openrouter_key_missing(self) -> None:
+        import app.main as main_mod
+
+        main_mod.app.state.settings = _settings_no_openrouter()
+        with TestClient(main_mod.app) as client:
+            response = client.post("/v1/multimodal-chat", json={"message": "hello"})
+        self.assertEqual(response.status_code, 503)
+        body = response.json()
+        self.assertIn("detail", body)
+
+    def test_legacy_chat_endpoint_is_removed(self) -> None:
         import app.main as main_mod
 
         main_mod.app.state.settings = _settings_no_openrouter()
         with TestClient(main_mod.app) as client:
             response = client.post("/v1/chat", json={"message": "hello"})
-        self.assertEqual(response.status_code, 503)
-        body = response.json()
-        self.assertIn("detail", body)
-
-    def test_chat_accepts_optional_caller_context_still_503_without_key(self) -> None:
-        import app.main as main_mod
-
-        main_mod.app.state.settings = _settings_no_openrouter()
-        with TestClient(main_mod.app) as client:
-            response = client.post(
-                "/v1/chat",
-                json={
-                    "message": "hello",
-                    "surface": "encounter",
-                    "caller_context": {
-                        "use_case": "UC2",
-                        "patient_uuid": "00000000-0000-0000-0000-000000000001",
-                        "encounter_id": "1",
-                    },
-                },
-            )
-        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.status_code, 404)

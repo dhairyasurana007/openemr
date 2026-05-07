@@ -1,7 +1,7 @@
 <?php
 
 /**
- * JSON body for copilot-agent POST /v1/chat (message, surface, optional caller binding).
+ * JSON body for copilot-agent POST /v1/multimodal-chat.
  *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
@@ -14,13 +14,6 @@ declare(strict_types=1);
 namespace OpenEMR\Services\ClinicalCopilot;
 
 /**
- * @phpstan-type CallerContextArray array{
- *     use_case?: string,
- *     patient_uuid?: string,
- *     encounter_id?: string,
- *     schedule_date?: string,
- *     authorized_slot_ids?: list<string>
- * }
  */
 final readonly class ClinicalCopilotAgentChatPayload
 {
@@ -55,37 +48,13 @@ final readonly class ClinicalCopilotAgentChatPayload
         $out = [
             'message' => $this->message,
             'surface' => $this->useCase->agentSurface(),
+            'use_rag' => true,
         ];
 
-        $ctx = $this->buildCallerContext();
-        if ($ctx !== []) {
-            $out['caller_context'] = $ctx;
+        if ($this->patientUuid !== null && $this->patientUuid !== '') {
+            $out['patient_id'] = $this->patientUuid;
         }
 
         return $out;
-    }
-
-    /**
-     * @return CallerContextArray
-     */
-    private function buildCallerContext(): array
-    {
-        $ctx = [
-            'use_case' => $this->useCase->value,
-        ];
-        if ($this->patientUuid !== null && $this->patientUuid !== '') {
-            $ctx['patient_uuid'] = $this->patientUuid;
-        }
-        if ($this->encounterId !== null && $this->encounterId !== '') {
-            $ctx['encounter_id'] = $this->encounterId;
-        }
-        if ($this->scheduleDate !== null && $this->scheduleDate !== '') {
-            $ctx['schedule_date'] = $this->scheduleDate;
-        }
-        if ($this->authorizedSlotIds !== null && $this->authorizedSlotIds !== []) {
-            $ctx['authorized_slot_ids'] = array_values($this->authorizedSlotIds);
-        }
-
-        return $ctx;
     }
 }

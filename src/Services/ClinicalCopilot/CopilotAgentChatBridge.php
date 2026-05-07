@@ -62,7 +62,7 @@ final class CopilotAgentChatBridge
             throw new \DomainException('Clinical co-pilot agent URL is not configured');
         }
 
-        $url = rtrim($base, '/') . '/v1/chat';
+        $url = rtrim($base, '/') . '/v1/multimodal-chat';
         $secret = $this->readInternalSecret();
         $headers = [
             'Content-Type' => 'application/json',
