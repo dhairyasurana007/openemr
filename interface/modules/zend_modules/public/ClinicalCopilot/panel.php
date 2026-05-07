@@ -205,6 +205,8 @@ $agentReady = $handoff->isConfigured();
             var pendingExtractConfirmation = false;
             var pendingExtractDocType = '';
             var pendingExtractFileName = '';
+            var pendingIdentityCollection = false;
+            var pendingIdentityMissingFields = [];
             if (!btn || !input || !messagesEl) {
                 return;
             }
@@ -493,6 +495,82 @@ $agentReady = $handoff->isConfigured();
                 return false;
             }
 
+            function getMissingIdentityFields(extracted) {
+                var missing = [];
+                if (!hasNonEmptyExtractedField(extracted, ['name', 'full_name', 'patient_name'])) {
+                    missing.push('name');
+                }
+                if (!hasNonEmptyExtractedField(extracted, ['gender', 'sex'])) {
+                    missing.push('gender');
+                }
+                if (!hasNonEmptyExtractedField(extracted, ['date_of_birth', 'dob', 'birth_date'])) {
+                    missing.push('date_of_birth');
+                }
+                return missing;
+            }
+
+            function parseIdentityFromMessage(messageText) {
+                var text = String(messageText || '');
+                var parsed = {};
+
+                var nameMatch = /(?:^|[\n,;])\s*(?:name|patient\s*name)\s*[:=]\s*([^\n,;]+)/i.exec(text);
+                if (nameMatch && nameMatch[1]) {
+                    parsed.name = nameMatch[1].trim();
+                }
+
+                var genderMatch = /(?:^|[\n,;])\s*(?:gender|sex)\s*[:=]\s*([^\n,;]+)/i.exec(text);
+                if (genderMatch && genderMatch[1]) {
+                    parsed.gender = genderMatch[1].trim();
+                }
+
+                var dobMatch = /(?:^|[\n,;])\s*(?:date\s*of\s*birth|dob|birth\s*date)\s*[:=]\s*([^\n,;]+)/i.exec(text);
+                if (dobMatch && dobMatch[1]) {
+                    parsed.date_of_birth = dobMatch[1].trim();
+                }
+
+                return parsed;
+            }
+
+            function mergeIdentityIntoExtractedFacts(identity) {
+                if (!extractedFacts || typeof extractedFacts !== 'object') {
+                    extractedFacts = {};
+                }
+                if (identity.name) {
+                    extractedFacts.name = identity.name;
+                }
+                if (identity.gender) {
+                    extractedFacts.gender = identity.gender;
+                }
+                if (identity.date_of_birth) {
+                    extractedFacts.date_of_birth = identity.date_of_birth;
+                }
+            }
+
+            function handlePendingIdentityCollection(messageText) {
+                if (!pendingIdentityCollection) {
+                    return false;
+                }
+                var identity = parseIdentityFromMessage(messageText);
+                mergeIdentityIntoExtractedFacts(identity);
+                var stillMissing = getMissingIdentityFields(extractedFacts);
+                pendingIdentityMissingFields = stillMissing;
+                if (stillMissing.length > 0) {
+                    appendBubble(
+                        'assistant',
+                        <?php echo json_encode(xl('Still missing required fields')); ?> + ': ' + stillMissing.join(', ')
+                            + '\n' + <?php echo json_encode(xl('Please provide them in this format: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
+                        true
+                    );
+                    return true;
+                }
+
+                pendingIdentityCollection = false;
+                pendingExtractConfirmation = true;
+                appendBubble('assistant', JSON.stringify(extractedFacts, null, 2), false, <?php echo json_encode(xl('Updated extraction result')); ?>);
+                appendBubble('assistant', <?php echo json_encode(xl('Does this extracted data look correct? Reply yes to save it to the active patient record, or no to skip.')); ?>, false);
+                return true;
+            }
+
             function normalizeSimpleText(text) {
                 return String(text || '')
                     .toLowerCase()
@@ -651,16 +729,23 @@ $agentReady = $handoff->isConfigured();
                         }
                         if (res.ok && res.data && res.data.extracted) {
                             extractedFacts = res.data.extracted;
-                            var hasName = hasNonEmptyExtractedField(extractedFacts, ['name', 'full_name', 'patient_name']);
-                            var hasGender = hasNonEmptyExtractedField(extractedFacts, ['gender', 'sex']);
-                            var hasDob = hasNonEmptyExtractedField(extractedFacts, ['date_of_birth', 'dob', 'birth_date']);
                             pendingExtractDocType = docTypeSelect.value;
                             pendingExtractFileName = file.name || 'uploaded-document';
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
-                            if (!hasName || !hasGender || !hasDob) {
+                            var missingFields = getMissingIdentityFields(extractedFacts);
+                            pendingIdentityMissingFields = missingFields;
+                            if (missingFields.length > 0) {
                                 pendingExtractConfirmation = false;
-                                appendBubble('assistant', <?php echo json_encode(xl('Extraction is missing required patient identity fields (name, gender, date_of_birth). Please upload a clearer document.')); ?>, true);
+                                pendingIdentityCollection = true;
+                                appendBubble(
+                                    'assistant',
+                                    <?php echo json_encode(xl('Unable to map data to a patient because required identity fields are missing')); ?>
+                                        + ': ' + missingFields.join(', ')
+                                        + '\n' + <?php echo json_encode(xl('Please provide them in this format: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
+                                    true
+                                );
                             } else {
+                                pendingIdentityCollection = false;
                                 pendingExtractConfirmation = true;
                                 appendBubble('assistant', <?php echo json_encode(xl('Does this extracted data look correct? Reply yes to save it to the active patient record, or no to skip.')); ?>, false);
                             }
@@ -696,6 +781,10 @@ $agentReady = $handoff->isConfigured();
                 removeIntroIfPresent();
                 appendBubble('user', msg, false);
                 input.value = '';
+                if (handlePendingIdentityCollection(msg)) {
+                    input.focus();
+                    return;
+                }
                 if (handleExtractConfirmationReply(msg)) {
                     input.focus();
                     return;
