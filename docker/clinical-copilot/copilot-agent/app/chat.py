@@ -194,8 +194,9 @@ async def multimodal_chat(
             detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
         )
 
-    rag_active = body.use_rag and body.extracted_facts is not None
+    rag_active = body.use_rag
     rag_retriever = getattr(request.app.state, "rag_retriever", None) if rag_active else None
+    backend: RetrievalBackend = request.app.state.retrieval_backend
 
     _LOG.info(
         "clinical_copilot_multimodal_chat_start request_id=%s has_extracted_facts=%s use_rag=%s rag_active=%s msg_len=%d",
@@ -213,6 +214,7 @@ async def multimodal_chat(
             run_multimodal_graph,
             body.message.strip(),
             settings,
+            backend,
             rag_retriever,
             body.patient_id,
             body.extracted_facts,

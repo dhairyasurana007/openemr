@@ -21,6 +21,7 @@ from app.multimodal_graph import (
     build_graph,
     run_multimodal_graph,
 )
+from app.retrieval_backends import StubRetrievalBackend
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +294,11 @@ class TestEvidenceRetrieverNode(unittest.TestCase):
         result = _make_evidence_retriever(None)(_empty_state())
         assert result["routing_log"][-1]["node"] == "evidence_retriever"
 
-    def test_skips_rag_without_uploaded_document(self) -> None:
+    def test_rag_runs_without_uploaded_document(self) -> None:
         rag = MagicMock()
         result = _make_evidence_retriever(rag)(_empty_state(extracted_facts=None))
-        assert result["guideline_evidence"] == []
-        rag.retrieve.assert_not_called()
+        rag.retrieve.assert_called_once()
+        assert isinstance(result["guideline_evidence"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +369,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
         return run_multimodal_graph(
             message="What is the BP target?",
             settings=settings,
+            backend=StubRetrievalBackend(),
             rag_retriever=None,
             _llm=llm,
             **state_kwargs,
@@ -427,12 +429,13 @@ class TestBuildAndRunGraph(unittest.TestCase):
         result = run_multimodal_graph(
             message="What is the BP target?",
             settings=_settings(),
+            backend=StubRetrievalBackend(),
             rag_retriever=rag,
             _llm=llm,
         )
         routing_nodes = [e["node"] for e in result["routing_log"]]
-        assert "evidence_retriever" not in routing_nodes
-        rag.retrieve.assert_not_called()
+        assert "evidence_retriever" in routing_nodes
+        rag.retrieve.assert_called_once()
 
     def test_evidence_retriever_runs_after_upload(self) -> None:
         rag = MagicMock()
@@ -445,6 +448,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
         result = run_multimodal_graph(
             message="What is the BP target?",
             settings=_settings(),
+            backend=StubRetrievalBackend(),
             rag_retriever=rag,
             extracted_facts={"doc_type": "lab_pdf", "results": []},
             _llm=llm,
@@ -471,6 +475,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
         result = run_multimodal_graph(
             message="Summarize this upload.",
             settings=_settings(),
+            backend=StubRetrievalBackend(),
             extracted_facts=extracted,
             _llm=llm,
         )
@@ -485,6 +490,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
         result = run_multimodal_graph(
             message="test",
             settings=_settings(),
+            backend=StubRetrievalBackend(),
             extracted_facts={"doc_type": "lab_pdf"},
             _llm=llm,
         )

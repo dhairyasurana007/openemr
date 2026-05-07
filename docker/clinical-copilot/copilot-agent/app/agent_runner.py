@@ -373,6 +373,7 @@ def run_chat_with_tools(
 
     diagnostics = {
         "tools_used": tools_used,
+        "tool_payloads": tool_payloads,
         "tool_rounds_used": rounds,
         "tool_payload_count": len(tool_payloads),
         "summarization_mode": "json_only_two_phase",
