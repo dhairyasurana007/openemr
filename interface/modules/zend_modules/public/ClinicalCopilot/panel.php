@@ -134,6 +134,28 @@ $agentReady = $handoff->isConfigured();
             color: var(--gray, #6c757d);
             margin-top: 0.15rem;
         }
+        .clinical-copilot-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .clinical-copilot-spinner {
+            width: 0.95rem;
+            height: 0.95rem;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            border-top-color: rgba(0, 0, 0, 0.65);
+            border-radius: 50%;
+            animation: clinical-copilot-spin 0.8s linear infinite;
+            flex: 0 0 auto;
+        }
+        @keyframes clinical-copilot-spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 <body>
@@ -300,6 +322,7 @@ $agentReady = $handoff->isConfigured();
             function startLiveStatus(rowId, phases, tickMs) {
                 var phaseIndex = 0;
                 var timer = null;
+                var startedAtMs = Date.now();
                 function renderPhase() {
                     var row = document.getElementById(rowId);
                     if (!row) {
@@ -309,8 +332,17 @@ $agentReady = $handoff->isConfigured();
                     if (!bubble) {
                         return;
                     }
-                    bubble.textContent = phases[phaseIndex];
-                    phaseIndex = (phaseIndex + 1) % phases.length;
+                    var elapsedSeconds = Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000));
+                    var phaseText = phases[phaseIndex] || '';
+                    var spinnerHtml = '<span class="clinical-copilot-spinner" aria-hidden="true"></span>';
+                    if (phaseIndex < (phases.length - 1)) {
+                        bubble.innerHTML = '<span class="clinical-copilot-loading">' + spinnerHtml
+                            + '<span>' + escapeHtml(phaseText + ' (' + elapsedSeconds + 's)') + '</span></span>';
+                        phaseIndex++;
+                    } else {
+                        bubble.innerHTML = '<span class="clinical-copilot-loading">' + spinnerHtml
+                            + '<span>' + escapeHtml(phaseText + ' (' + elapsedSeconds + 's)') + '</span></span>';
+                    }
                 }
                 renderPhase();
                 timer = window.setInterval(renderPhase, tickMs);
@@ -699,11 +731,11 @@ $agentReady = $handoff->isConfigured();
                     var stopExtractStatus = startLiveStatus(
                         'ccp-extract-loading-row',
                         [
-                            <?php echo json_encode(xl('Reading file') . '…'); ?>,
-                            <?php echo json_encode(xl('Extracting fields') . '…'); ?>,
-                            <?php echo json_encode(xl('Preparing structured output') . '…'); ?>,
+                            <?php echo json_encode(xl('Uploading document to extraction service') . '…'); ?>,
+                            <?php echo json_encode(xl('Extracting structured fields from document') . '…'); ?>,
+                            <?php echo json_encode(xl('Waiting for extraction response') . '…'); ?>,
                         ],
-                        900
+                        1800
                     );
 
                     uploadBtn.disabled = true;
@@ -802,11 +834,11 @@ $agentReady = $handoff->isConfigured();
                 var stopChatStatus = startLiveStatus(
                     'clinical-copilot-loading-row',
                     [
-                        <?php echo json_encode(xl('Thinking') . '…'); ?>,
-                        <?php echo json_encode(xl('Reviewing context') . '…'); ?>,
-                        <?php echo json_encode(xl('Composing response') . '…'); ?>,
+                        <?php echo json_encode(xl('Sending request to co-pilot') . '…'); ?>,
+                        <?php echo json_encode(xl('Retrieving context and sources') . '…'); ?>,
+                        <?php echo json_encode(xl('Generating response') . '…'); ?>,
                     ],
-                    900
+                    1800
                 );
 
                 var useMultimodal = extractedFacts !== null;
