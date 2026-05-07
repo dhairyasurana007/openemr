@@ -171,10 +171,16 @@ class TestRouteFromSupervisor(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSupervisorNode(unittest.TestCase):
+    def test_no_patient_context_forces_evidence_retriever(self) -> None:
+        llm = _mock_llm([{"decision": "chart_retriever", "reason": "needs chart"}])
+        result = _make_supervisor(llm)(_empty_state(patient_id=None))
+        assert result["_next_node"] == "evidence_retriever"
+        assert result["routing_log"][-1]["decision"] == "evidence_retriever"
+
     def test_routes_to_intake_extractor(self) -> None:
         llm = _mock_llm([{"decision": "intake_extractor", "reason": "facts present"}])
         supervisor = _make_supervisor(llm)
-        state = _empty_state(extracted_facts={"doc_type": "lab_pdf"})
+        state = _empty_state(patient_id="p-1", extracted_facts={"doc_type": "lab_pdf"})
         result = supervisor(state)
         assert result["_next_node"] == "intake_extractor"
         assert len(result["routing_log"]) == 1
@@ -182,18 +188,17 @@ class TestSupervisorNode(unittest.TestCase):
 
     def test_routes_to_evidence_retriever(self) -> None:
         llm = _mock_llm([{"decision": "evidence_retriever", "reason": "needs guidelines"}])
-        supervisor = _make_supervisor(llm)
-        result = _make_supervisor(llm)(_empty_state())
+        result = _make_supervisor(llm)(_empty_state(patient_id="p-1"))
         assert result["_next_node"] == "evidence_retriever"
 
     def test_routes_to_answer_composer_on_answer_decision(self) -> None:
         llm = _mock_llm([{"decision": "answer", "reason": "enough context"}])
-        result = _make_supervisor(llm)(_empty_state())
+        result = _make_supervisor(llm)(_empty_state(patient_id="p-1"))
         assert result["_next_node"] == "answer_composer"
 
     def test_forces_answer_after_max_routing_steps(self) -> None:
         llm = _mock_llm([{"decision": "intake_extractor", "reason": "x"}])
-        state = _empty_state()
+        state = _empty_state(patient_id="p-1")
         state["routing_log"] = [{"node": "supervisor"}] * 6
         result = _make_supervisor(llm)(state)
         assert result["_next_node"] == "answer_composer"
@@ -202,24 +207,24 @@ class TestSupervisorNode(unittest.TestCase):
     def test_falls_back_on_llm_error(self) -> None:
         llm = MagicMock()
         llm.invoke.side_effect = RuntimeError("network down")
-        result = _make_supervisor(llm)(_empty_state())
+        result = _make_supervisor(llm)(_empty_state(patient_id="p-1"))
         assert result["_next_node"] == "answer_composer"
 
     def test_unknown_decision_maps_to_answer_composer(self) -> None:
         llm = _mock_llm([{"decision": "unknown_worker", "reason": "oops"}])
-        result = _make_supervisor(llm)(_empty_state())
+        result = _make_supervisor(llm)(_empty_state(patient_id="p-1"))
         assert result["_next_node"] == "answer_composer"
 
     def test_routing_log_appended(self) -> None:
         llm = _mock_llm([{"decision": "answer", "reason": "done"}])
-        state = _empty_state()
+        state = _empty_state(patient_id="p-1")
         state["routing_log"] = [{"node": "prior"}]
         result = _make_supervisor(llm)(state)
         assert len(result["routing_log"]) == 2
 
     def test_timestamp_ms_present(self) -> None:
         llm = _mock_llm([{"decision": "answer", "reason": "x"}])
-        result = _make_supervisor(llm)(_empty_state())
+        result = _make_supervisor(llm)(_empty_state(patient_id="p-1"))
         assert "timestamp_ms" in result["routing_log"][-1]
 
 

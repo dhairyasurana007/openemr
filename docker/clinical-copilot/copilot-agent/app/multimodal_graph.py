@@ -232,10 +232,35 @@ def _make_supervisor(llm: Any):
             }
 
         hops = _worker_hops(state)
+        has_patient_context = str(state.get("patient_id") or "").strip() != ""
         has_extracted = state.get("extracted_facts") is not None
         intake_done = str(state.get("intake_summary") or "").strip() != ""
         chart_done = len(state.get("chart_tool_payloads") or []) > 0
         evidence_done = bool(state.get("guideline_evidence"))
+
+        if not has_patient_context:
+            if not evidence_done and hops < _MAX_WORKER_HOPS:
+                entry = {
+                    "node": "supervisor",
+                    "decision": "evidence_retriever",
+                    "reason": "no patient context; evidence-only routing",
+                    "timestamp_ms": int(time.time() * 1000),
+                }
+                return {
+                    "routing_log": list(state.get("routing_log") or []) + [entry],
+                    "_next_node": "evidence_retriever",
+                }
+            entry = {
+                "node": "supervisor",
+                "decision": "answer",
+                "reason": "no patient context and evidence step complete",
+                "timestamp_ms": int(time.time() * 1000),
+            }
+            return {
+                "routing_log": list(state.get("routing_log") or []) + [entry],
+                "composer_brief": _build_composer_brief(state),
+                "_next_node": "answer_composer",
+            }
 
         if hops >= _MAX_WORKER_HOPS:
             entry = {
