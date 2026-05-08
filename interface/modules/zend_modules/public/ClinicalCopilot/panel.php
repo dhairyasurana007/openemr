@@ -738,6 +738,7 @@ $agentReady = $handoff->isConfigured();
                     var formData = new FormData();
                     formData.append('file', file);
                     formData.append('csrf_token_form', csrfToken);
+                    formData.append('doc_type', 'lab_pdf');
 
                     fetch(extractUrl, {
                         method: 'POST',

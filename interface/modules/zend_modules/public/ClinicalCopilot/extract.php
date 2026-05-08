@@ -121,7 +121,12 @@ try {
         exit;
     }
 
-    $docType = trim($_POST['doc_type'] ?? '');
+    $docType = trim((string) ($_POST['doc_type'] ?? ''));
+    $docTypeInferred = false;
+    if ($docType === '') {
+        $docType = 'lab_pdf';
+        $docTypeInferred = true;
+    }
     if (!in_array($docType, ['lab_pdf', 'intake_form'], true)) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid doc_type. Allowed values: lab_pdf, intake_form']);
@@ -137,6 +142,7 @@ try {
 
     $fileTmpPath = (string) $_FILES['file']['tmp_name'];
     $fileOriginalName = (string) ($_FILES['file']['name'] ?? 'upload');
+    $fileExtension = strtolower(pathinfo($fileOriginalName, PATHINFO_EXTENSION));
 
     // Validate MIME type from file bytes (not the browser-reported Content-Type).
     $finfo = new \finfo(FILEINFO_MIME_TYPE);
@@ -148,10 +154,19 @@ try {
         'image/gif',
         'image/webp',
         'image/tiff',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/hl7-v2',
+        'text/plain',
     ];
-    if (!in_array($mimeType, $allowedMimes, true)) {
+    $genericMimes = ['application/zip', 'application/octet-stream'];
+    $genericMimeAllowedExtensions = ['docx', 'xlsx', 'hl7', 'txt'];
+    $isAllowedMime = in_array($mimeType, $allowedMimes, true);
+    $isAllowedGenericMime = in_array($mimeType, $genericMimes, true)
+        && in_array($fileExtension, $genericMimeAllowedExtensions, true);
+    if (!$isAllowedMime && !$isAllowedGenericMime) {
         http_response_code(415);
-        echo json_encode(['error' => 'Unsupported file type. Only PDF and images (JPEG, PNG, GIF, WebP, TIFF) are allowed.']);
+        echo json_encode(['error' => 'Unsupported file type. Allowed: PDF, images (JPEG, PNG, GIF, WebP, TIFF), DOCX, XLSX, HL7, and TXT.']);
         exit;
     }
 
@@ -211,6 +226,13 @@ try {
         'mime_type'  => $mimeType,
         'total_ms'   => $latencyMs,
     ]);
+
+    if (!array_key_exists('doc_type', $decoded)) {
+        $decoded['doc_type'] = $docType;
+    }
+    if (!array_key_exists('doc_type_inferred', $decoded)) {
+        $decoded['doc_type_inferred'] = $docTypeInferred;
+    }
 
     echo json_encode($decoded, JSON_THROW_ON_ERROR);
 } catch (\DomainException $e) {
