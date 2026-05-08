@@ -248,9 +248,6 @@ try {
     }
 
     $docType = trim((string) ($payload['doc_type'] ?? ''));
-    if ($docType === 'lab_pdf') {
-        $docType = 'lab';
-    }
     if (!in_array($docType, ['lab', 'intake_form'], true)) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid doc_type']);

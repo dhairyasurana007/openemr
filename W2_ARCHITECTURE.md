@@ -38,7 +38,7 @@ flowchart TD
     Classify -->|Yes| Dispatch
 
     Classifier --> Dispatch[extract_document dispatcher]
-    Dispatch -->|lab_pdf| LabPrompt[_lab_pdf_prompt\n+ JSON schema enforcement]
+    Dispatch -->|lab| LabPrompt[_lab_prompt\n+ JSON schema enforcement]
     Dispatch -->|intake_form| IntakePrompt[_intake_form_prompt\n+ JSON schema enforcement]
 
     LabPrompt --> VLM[OpenRouter VLM\nanthropic/claude-sonnet-4.6]
@@ -54,8 +54,8 @@ flowchart TD
 1. For text-mode formats (DOCX/XLSX/HL7): run `_heuristic_classify` on the
    first 2 KB of extracted text (keyword scoring, zero cost).
 2. If heuristic abstains: send first page/2 KB to VLM with a single-token
-   prompt: `"lab_pdf"` or `"intake_form"`.
-3. Default to `"lab_pdf"` on VLM failure; log a warning.
+   prompt: `"lab"` or `"intake_form"`.
+3. Default to `"lab"` on VLM failure; log a warning.
 
 ---
 
@@ -210,7 +210,7 @@ sequenceDiagram
         FHIR-->>Persist: 200 empty bundle
         Persist->>FHIR: POST DocumentReference (inline Attachment.data base64)
         FHIR-->>Persist: 201 + DocumentReference.id
-        loop Each LabResult (lab_pdf only)
+        loop Each LabResult (lab only)
             Persist->>FHIR: POST Observation (derivedFrom=DocumentReference/{id})
             FHIR-->>Persist: 201 + Observation.id
         end

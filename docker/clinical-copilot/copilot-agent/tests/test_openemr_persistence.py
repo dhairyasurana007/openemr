@@ -72,7 +72,7 @@ def _settings() -> Settings:
 
 def _citation() -> ExtractionCitation:
     return ExtractionCitation(
-        source_type="lab_pdf",
+        source_type="lab",
         source_id="sha256:abc",
         page_or_section="page 1",
         field_or_chunk_id="sodium",
@@ -177,11 +177,11 @@ def _make_mock_client(
 
 def test_build_document_reference_structure() -> None:
     file_bytes = b"fake-pdf"
-    doc = _build_document_reference("patient-1", "abc123", "application/pdf", file_bytes, "lab_pdf")
+    doc = _build_document_reference("patient-1", "abc123", "application/pdf", file_bytes, "lab")
     assert doc["resourceType"] == "DocumentReference"
     assert doc["subject"]["reference"] == "Patient/patient-1"
     assert doc["identifier"][0]["value"] == "sha256:abc123"
-    assert doc["description"] == "lab_pdf"
+    assert doc["description"] == "lab"
     import base64
     assert doc["content"][0]["attachment"]["data"] == base64.b64encode(file_bytes).decode()
 
@@ -277,7 +277,7 @@ async def test_first_upload_creates_doc_ref_and_observations() -> None:
             patient_id="demo-001",
             file_bytes=file_bytes,
             mime_type="application/pdf",
-            doc_type="lab_pdf",
+            doc_type="lab",
             extracted=extracted,
             settings=_settings(),
         )
@@ -311,7 +311,7 @@ async def test_second_upload_same_bytes_is_deduplicated() -> None:
             patient_id="demo-001",
             file_bytes=file_bytes,
             mime_type="application/pdf",
-            doc_type="lab_pdf",
+            doc_type="lab",
             extracted=_lab_extraction(_lab_result()),
             settings=_settings(),
         )
@@ -389,7 +389,7 @@ async def test_fhir_doc_ref_post_failure_falls_back_to_content_hash() -> None:
             patient_id="demo-001",
             file_bytes=file_bytes,
             mime_type="application/pdf",
-            doc_type="lab_pdf",
+            doc_type="lab",
             extracted=_lab_extraction(_lab_result()),
             settings=_settings(),
         )
@@ -415,7 +415,7 @@ async def test_observation_post_failure_does_not_crash_and_skips_id() -> None:
             patient_id="demo-001",
             file_bytes=file_bytes,
             mime_type="application/pdf",
-            doc_type="lab_pdf",
+            doc_type="lab",
             extracted=_lab_extraction(_lab_result()),
             settings=_settings(),
         )

@@ -313,7 +313,7 @@ async def persist_extraction(
     patient_id: str,
     file_bytes: bytes,
     mime_type: str,
-    doc_type: Literal["lab_pdf", "intake_form"],
+    doc_type: Literal["lab", "intake_form"],
     extracted: LabExtractionResult | IntakeFormResult,
     settings: Settings,
 ) -> PersistResult:
@@ -373,7 +373,7 @@ async def persist_extraction(
         # Write Observations only when DocumentReference was successfully stored;
         # without a real FHIR id, derivedFrom references would be unresolvable.
         observation_ids: list[str] = []
-        if doc_type == "lab_pdf" and doc_ref_persisted:
+        if doc_type == "lab" and doc_ref_persisted:
             from app.schemas.extraction import LabExtractionResult
 
             if isinstance(extracted, LabExtractionResult):

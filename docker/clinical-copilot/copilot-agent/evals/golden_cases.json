@@ -5,12 +5,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Glucose",
@@ -21,7 +21,7 @@
           "abnormal_flag": "H",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc001a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "glucose",
@@ -47,12 +47,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "HbA1c",
@@ -63,7 +63,7 @@
           "abnormal_flag": "H",
           "confidence": 0.99,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc002a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "hba1c",
@@ -81,7 +81,7 @@
           "abnormal_flag": "",
           "confidence": 0.96,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc002a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "creatinine",
@@ -107,12 +107,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Sodium",
@@ -123,7 +123,7 @@
           "abnormal_flag": "",
           "confidence": 0.98,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc003a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "sodium",
@@ -141,7 +141,7 @@
           "abnormal_flag": "L",
           "confidence": 0.95,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc003a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "potassium",
@@ -159,7 +159,7 @@
           "abnormal_flag": "",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc003a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "chloride",
@@ -185,12 +185,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "TSH",
@@ -201,7 +201,7 @@
           "abnormal_flag": "L",
           "confidence": 0.93,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc004a",
             "page_or_section": "Page 2",
             "field_or_chunk_id": "tsh",
@@ -227,12 +227,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "cbc_report.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "WBC",
@@ -243,7 +243,7 @@
           "abnormal_flag": "H",
           "confidence": 0.98,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc005a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "wbc",
@@ -261,7 +261,7 @@
           "abnormal_flag": "L",
           "confidence": 0.99,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc005a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "hemoglobin",
@@ -279,7 +279,7 @@
           "abnormal_flag": "",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc005a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "platelets",
@@ -305,12 +305,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "lipid_panel.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Total Cholesterol",
@@ -321,7 +321,7 @@
           "abnormal_flag": "H",
           "confidence": 0.96,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc006a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "total_cholesterol",
@@ -339,7 +339,7 @@
           "abnormal_flag": "H",
           "confidence": 0.95,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc006a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "ldl",
@@ -357,7 +357,7 @@
           "abnormal_flag": "L",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc006a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "hdl",
@@ -383,12 +383,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "bmp_report.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "BUN",
@@ -399,7 +399,7 @@
           "abnormal_flag": "H",
           "confidence": 0.94,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc007a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "bun",
@@ -425,12 +425,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "urinalysis.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Urine Protein",
@@ -441,7 +441,7 @@
           "abnormal_flag": "A",
           "confidence": 0.88,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc008a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "urine_protein",
@@ -590,12 +590,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "thyroid_panel.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Free T4",
@@ -606,7 +606,7 @@
           "abnormal_flag": "",
           "confidence": 0.92,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc012a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "free_t4",
@@ -632,12 +632,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "hep_panel.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "AST",
@@ -648,7 +648,7 @@
           "abnormal_flag": "H",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc013a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "ast",
@@ -666,7 +666,7 @@
           "abnormal_flag": "",
           "confidence": 0.98,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc013a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "alt",
@@ -733,12 +733,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "iron_studies.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Serum Iron",
@@ -749,7 +749,7 @@
           "abnormal_flag": "L",
           "confidence": 0.95,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc015a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "serum_iron",
@@ -767,7 +767,7 @@
           "abnormal_flag": "L",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc015a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "ferritin",
@@ -796,7 +796,7 @@
       "message": "What is the patient's HbA1c?",
       "source_text": "HbA1c 8.2% collected 2026-04-15 reference 4.0-5.6%"
     },
-    "stub_response": "The patient's HbA1c is 8.2%, collected on 2026-04-15. This is above the reference range of 4.0-5.6%. [source: lab_pdf/sha256:doc002a/page_1/hba1c]",
+    "stub_response": "The patient's HbA1c is 8.2%, collected on 2026-04-15. This is above the reference range of 4.0-5.6%. [source: lab/sha256:doc002a/page_1/hba1c]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -814,7 +814,7 @@
       "message": "Are any of the lipid panel results abnormal?",
       "source_text": "Total Cholesterol 220 mg/dL H ref <200, LDL 148 mg/dL H ref <100, HDL 42 mg/dL L ref >60"
     },
-    "stub_response": "Yes. The LDL is 148 mg/dL (reference <100 mg/dL, flagged H) and HDL is 42 mg/dL (reference >60 mg/dL, flagged L). Total Cholesterol is 220 mg/dL, also elevated. [source: lab_pdf/sha256:doc006a/page_1]",
+    "stub_response": "Yes. The LDL is 148 mg/dL (reference <100 mg/dL, flagged H) and HDL is 42 mg/dL (reference >60 mg/dL, flagged L). Total Cholesterol is 220 mg/dL, also elevated. [source: lab/sha256:doc006a/page_1]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -832,7 +832,7 @@
       "message": "What is the current potassium level?",
       "source_text": "Potassium 3.2 mEq/L collected 2026-03-10 reference 3.5-5.0 flag L"
     },
-    "stub_response": "Potassium is 3.2 mEq/L (reference 3.5-5.0 mEq/L, flagged Low). [source: lab_pdf/sha256:doc003a/page_1/potassium]",
+    "stub_response": "Potassium is 3.2 mEq/L (reference 3.5-5.0 mEq/L, flagged Low). [source: lab/sha256:doc003a/page_1/potassium]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -850,7 +850,7 @@
       "message": "Is the WBC elevated?",
       "source_text": "WBC 11.2 K/uL reference 4.5-11.0 flag H"
     },
-    "stub_response": "Yes. WBC is 11.2 K/uL, slightly above the reference range of 4.5-11.0 K/uL. [source: lab_pdf/sha256:doc005a/page_1/wbc]",
+    "stub_response": "Yes. WBC is 11.2 K/uL, slightly above the reference range of 4.5-11.0 K/uL. [source: lab/sha256:doc005a/page_1/wbc]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -904,7 +904,7 @@
       "message": "Is the hemoglobin within normal range?",
       "source_text": "Hemoglobin 10.5 g/dL reference 12.0-16.0 flag L"
     },
-    "stub_response": "No. Hemoglobin is 10.5 g/dL, below the reference range of 12.0-16.0 g/dL. [source: lab_pdf/sha256:doc005a/page_1/hemoglobin]",
+    "stub_response": "No. Hemoglobin is 10.5 g/dL, below the reference range of 12.0-16.0 g/dL. [source: lab/sha256:doc005a/page_1/hemoglobin]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -922,7 +922,7 @@
       "message": "What is the TSH result?",
       "source_text": "TSH 0.3 mIU/L collected 2026-02-20 reference 0.4-4.0 flag L"
     },
-    "stub_response": "TSH is 0.3 mIU/L, below the lower limit of the reference range (0.4-4.0 mIU/L). [source: lab_pdf/sha256:doc004a/page_2/tsh]",
+    "stub_response": "TSH is 0.3 mIU/L, below the lower limit of the reference range (0.4-4.0 mIU/L). [source: lab/sha256:doc004a/page_2/tsh]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -940,7 +940,7 @@
       "message": "What is the ferritin level?",
       "source_text": "Ferritin 8 ng/mL reference 12-300 flag L"
     },
-    "stub_response": "Ferritin is 8 ng/mL, below the reference range of 12-300 ng/mL. [source: lab_pdf/sha256:doc015a/page_1/ferritin]",
+    "stub_response": "Ferritin is 8 ng/mL, below the reference range of 12-300 ng/mL. [source: lab/sha256:doc015a/page_1/ferritin]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -958,7 +958,7 @@
       "message": "Is the BUN elevated?",
       "source_text": "BUN 24 mg/dL reference 7-20 flag H"
     },
-    "stub_response": "Yes. BUN is 24 mg/dL, above the reference range of 7-20 mg/dL. [source: lab_pdf/sha256:doc007a/page_1/bun]",
+    "stub_response": "Yes. BUN is 24 mg/dL, above the reference range of 7-20 mg/dL. [source: lab/sha256:doc007a/page_1/bun]",
     "expected": {
       "schema_valid": null,
       "citation_present": true,
@@ -973,12 +973,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Glucose",
@@ -989,7 +989,7 @@
           "abnormal_flag": "H",
           "confidence": 0.97,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc026a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "glucose",
@@ -1015,12 +1015,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "HbA1c",
@@ -1031,7 +1031,7 @@
           "abnormal_flag": "H",
           "confidence": 0.99,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc027a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "hba1c",
@@ -1049,7 +1049,7 @@
           "abnormal_flag": "",
           "confidence": 0.98,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc027a",
             "page_or_section": "Page 2",
             "field_or_chunk_id": "sodium",
@@ -1116,12 +1116,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Creatinine",
@@ -1132,7 +1132,7 @@
           "abnormal_flag": "H",
           "confidence": 0.96,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc029a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "creatinine",
@@ -1158,12 +1158,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "eGFR",
@@ -1174,7 +1174,7 @@
           "abnormal_flag": "L",
           "confidence": 0.91,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc030a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "egfr",
@@ -1200,12 +1200,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "multipage_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Calcium",
@@ -1216,7 +1216,7 @@
           "abnormal_flag": "",
           "confidence": 0.94,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc031a",
             "page_or_section": "Page 3",
             "field_or_chunk_id": "calcium",
@@ -1242,12 +1242,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Uric Acid",
@@ -1258,7 +1258,7 @@
           "abnormal_flag": "H",
           "confidence": 0.90,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc032a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "uric_acid",
@@ -1284,12 +1284,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Troponin I",
@@ -1300,7 +1300,7 @@
           "abnormal_flag": "",
           "confidence": 0.98,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc033a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "troponin_i",
@@ -1367,12 +1367,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "sample_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Magnesium",
@@ -1383,7 +1383,7 @@
           "abnormal_flag": "L",
           "confidence": 0.93,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc035a",
             "page_or_section": "Page 2",
             "field_or_chunk_id": "magnesium",
@@ -1579,12 +1579,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "blurry_scan.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [],
       "extraction_warnings": ["Low scan quality; no structured results could be extracted."]
     },
@@ -1602,12 +1602,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "partial_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Glucose",
@@ -1618,7 +1618,7 @@
           "abnormal_flag": "",
           "confidence": 0.60,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc047a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "glucose",
@@ -1685,12 +1685,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "corrupted_lab.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [],
       "extraction_warnings": ["Document could not be rendered; all pages returned empty pixmaps."]
     },
@@ -1708,12 +1708,12 @@
     "input": {
       "endpoint": "/v1/attach-and-extract",
       "patient_id": "demo-001",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "fixture": "single_result_no_range.pdf"
     },
     "stub_extraction": {
       "schema_version": "1.0.0",
-      "doc_type": "lab_pdf",
+      "doc_type": "lab",
       "results": [
         {
           "test_name": "Vitamin D",
@@ -1724,7 +1724,7 @@
           "abnormal_flag": "",
           "confidence": 0.75,
           "citation": {
-            "source_type": "lab_pdf",
+            "source_type": "lab",
             "source_id": "sha256:doc050a",
             "page_or_section": "Page 1",
             "field_or_chunk_id": "vitamin_d",

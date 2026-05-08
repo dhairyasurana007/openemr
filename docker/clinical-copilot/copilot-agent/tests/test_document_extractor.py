@@ -79,7 +79,7 @@ def _openrouter_response(content: str) -> httpx.Response:
 
 _VALID_LAB_JSON = json.dumps({
     "schema_version": "1.0.0",
-    "doc_type": "lab_pdf",
+    "doc_type": "lab",
     "results": [
         {
             "test_name": "Sodium",
@@ -90,7 +90,7 @@ _VALID_LAB_JSON = json.dumps({
             "abnormal_flag": "",
             "confidence": 0.97,
             "citation": {
-                "source_type": "lab_pdf",
+                "source_type": "lab",
                 "source_id": "PLACEHOLDER",
                 "page_or_section": "page 1",
                 "field_or_chunk_id": "sodium",
@@ -232,7 +232,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
         mock = AsyncMock(return_value=_openrouter_response(content))
         return mock
 
-    async def test_lab_pdf_image_path_returns_valid_result(self) -> None:
+    async def test_lab_image_path_returns_valid_result(self) -> None:
         settings = _settings()
         tiny_png = b"\x89PNG\r\n\x1a\n"  # minimal PNG-like bytes
         with patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
@@ -244,12 +244,12 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, token_usage, latency_ms = await extract_document(
                 file_bytes=tiny_png,
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
         assert isinstance(result, LabExtractionResult)
-        assert result.doc_type == "lab_pdf"
+        assert result.doc_type == "lab"
         assert len(result.results) == 1
         assert result.results[0].test_name == "Sodium"
         assert result.results[0].value == "138"
@@ -292,7 +292,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"%PDF-1.4",
                 mime_type="application/pdf",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -313,7 +313,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=file_bytes,
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -333,18 +333,18 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"img",
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
         assert isinstance(result, LabExtractionResult)
-        assert result.doc_type == "lab_pdf"
+        assert result.doc_type == "lab"
         assert result.results == []
         assert len(result.extraction_warnings) == 1
 
     async def test_schema_mismatch_raises_validation_error(self) -> None:
         settings = _settings()
-        bad_schema = json.dumps({"doc_type": "lab_pdf", "results": [{"test_name": "X"}]})
+        bad_schema = json.dumps({"doc_type": "lab", "results": [{"test_name": "X"}]})
 
         with patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
@@ -355,7 +355,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"img",
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -376,7 +376,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"img",
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -416,7 +416,7 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
 class TestHeuristicClassify(unittest.TestCase):
     def test_heuristic_classifies_lab_text(self) -> None:
         text = "reference range 136-145 mEq/L abnormal flag present specimen collected"
-        assert _heuristic_classify(text) == "lab_pdf"
+        assert _heuristic_classify(text) == "lab"
 
     def test_heuristic_classifies_intake_text(self) -> None:
         text = "chief concern: headache current medications: aspirin 81mg family history: hypertension"
@@ -442,7 +442,7 @@ class TestClassifyDocType(unittest.IsolatedAsyncioTestCase):
         settings = _settings()
         text = "reference range 136-145 mEq/L abnormal flag present specimen"
         result = await classify_doc_type(text_content=text, settings=settings)
-        assert result == "lab_pdf"
+        assert result == "lab"
 
     async def test_classify_doc_type_falls_back_to_vlm(self) -> None:
         settings = _settings()
@@ -475,12 +475,12 @@ class TestClassifyDocType(unittest.IsolatedAsyncioTestCase):
                 settings=settings,
             )
 
-        assert result == "lab_pdf"
+        assert result == "lab"
 
-    async def test_classify_doc_type_defaults_to_lab_pdf_on_empty_payload(self) -> None:
+    async def test_classify_doc_type_defaults_to_lab_on_empty_payload(self) -> None:
         settings = _settings()
         result = await classify_doc_type(settings=settings)
-        assert result == "lab_pdf"
+        assert result == "lab"
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +495,7 @@ class TestExtractDocumentAutoClassify(unittest.IsolatedAsyncioTestCase):
         settings = _settings()
         tiny_png = b"\x89PNG\r\n\x1a\n"
 
-        with patch("app.document_extractor.classify_doc_type", new_callable=AsyncMock, return_value="lab_pdf") as mock_clf, \
+        with patch("app.document_extractor.classify_doc_type", new_callable=AsyncMock, return_value="lab") as mock_clf, \
              patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post = self._mock_post(_VALID_LAB_JSON)
@@ -526,7 +526,7 @@ class TestExtractDocumentAutoClassify(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=tiny_png,
                 mime_type="image/png",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -615,7 +615,7 @@ class TestTiffRendering(unittest.TestCase):
                 r, _, _ = await extract_document(
                     file_bytes=b"TIFF\x00",
                     mime_type="image/tiff",
-                    doc_type="lab_pdf",
+                    doc_type="lab",
                     settings=settings,
                 )
             mock_tiff.assert_called_once_with(b"TIFF\x00")
@@ -765,7 +765,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"fake",
                 mime_type=mime_type,
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
         mock_helper.assert_called_once_with(b"fake")
@@ -812,7 +812,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=hl7_bytes,
                 mime_type="text/plain",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
         mock_hl7.assert_called_once_with(hl7_bytes)
@@ -824,7 +824,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             await extract_document(
                 file_bytes=b"just some plain text without HL7",
                 mime_type="text/plain",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -834,7 +834,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             await extract_document(
                 file_bytes=b"PK\x03\x04",
                 mime_type="application/zip",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -844,7 +844,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             await extract_document(
                 file_bytes=b"\xd0\xcf\x11\xe0",
                 mime_type="application/msword",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 
@@ -854,7 +854,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             result, token_usage, latency_ms = await extract_document(
                 file_bytes=b"corrupt",
                 mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
         assert isinstance(result, LabExtractionResult)
@@ -869,7 +869,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"corrupt",
                 mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
         assert isinstance(result, LabExtractionResult)
@@ -882,7 +882,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             result, _, _ = await extract_document(
                 file_bytes=b"corrupt",
                 mime_type="application/hl7-v2",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
         assert isinstance(result, LabExtractionResult)
@@ -910,7 +910,7 @@ class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
             await extract_document(
                 file_bytes=b"fake",
                 mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                doc_type="lab_pdf",
+                doc_type="lab",
                 settings=settings,
             )
 

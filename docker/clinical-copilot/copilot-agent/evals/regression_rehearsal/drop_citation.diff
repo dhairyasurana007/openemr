@@ -2,7 +2,7 @@ diff --git a/docker/clinical-copilot/copilot-agent/evals/rubrics.py b/docker/cli
 --- a/docker/clinical-copilot/copilot-agent/evals/rubrics.py
 +++ b/docker/clinical-copilot/copilot-agent/evals/rubrics.py
 @@ -73,7 +73,8 @@ def citation_present(case: dict[str, Any], output: Any) -> bool:
-     if doc_type == "lab_pdf":
+     if doc_type == "lab":
          results = output.get("results", [])
          if not results:
              return False

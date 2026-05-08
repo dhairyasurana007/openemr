@@ -78,6 +78,7 @@ function ccpExtractInferDocType(string $mimeType, string $fileExtension): string
     return 'intake_form';
 }
 
+
 /**
  * @param array<string, mixed> $extractedFacts
  * @param list<string> $fieldCandidates
@@ -173,9 +174,6 @@ try {
         $docType = ccpExtractInferDocType($mimeType, $fileExtension);
         $docTypeInferred = true;
     }
-    if ($docType === 'lab_pdf') {
-        $docType = 'lab';
-    }
     if (!in_array($docType, ['lab', 'intake_form'], true)) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid doc_type. Allowed values: lab, intake_form']);
@@ -253,7 +251,6 @@ try {
     if (!is_array($decoded)) {
         throw new \RuntimeException('Clinical co-pilot extract endpoint returned invalid JSON.');
     }
-
     $latencyMs = (int) round((microtime(true) - $reqStart) * 1000.0);
     $logger->info('clinical_copilot_extract_proxy_ok', [
         'request_id' => $requestId,
@@ -264,8 +261,6 @@ try {
 
     if (!array_key_exists('doc_type', $decoded)) {
         $decoded['doc_type'] = $docType;
-    } elseif ($decoded['doc_type'] === 'lab_pdf') {
-        $decoded['doc_type'] = 'lab';
     }
     if (!array_key_exists('doc_type_inferred', $decoded)) {
         $decoded['doc_type_inferred'] = $docTypeInferred;

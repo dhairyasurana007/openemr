@@ -32,7 +32,7 @@ from evals.rubrics import (
 # ---------------------------------------------------------------------------
 
 _VALID_CITATION = {
-    "source_type": "lab_pdf",
+    "source_type": "lab",
     "source_id": "sha256:smoke001",
     "page_or_section": "Page 1",
     "field_or_chunk_id": "glucose",
@@ -47,12 +47,12 @@ _EXTRACTION_CASE: dict = {
     "input": {
         "endpoint": "/v1/attach-and-extract",
         "patient_id": "demo-001",
-        "doc_type": "lab_pdf",
+        "doc_type": "lab",
         "fixture": "sample_lab.pdf",
     },
     "stub_extraction": {
         "schema_version": "1.0.0",
-        "doc_type": "lab_pdf",
+        "doc_type": "lab",
         "results": [
             {
                 "test_name": "Glucose",
@@ -110,7 +110,7 @@ class TestSchemaValid:
     def test_missing_required_field_fails(self) -> None:
         broken = {
             "schema_version": "1.0.0",
-            "doc_type": "lab_pdf",
+            "doc_type": "lab",
             "results": [
                 {
                     # missing 'test_name', 'value', 'confidence', 'citation'
@@ -153,13 +153,13 @@ class TestCitationPresent:
     def test_lab_result_missing_citation(self) -> None:
         output = {
             "schema_version": "1.0.0",
-            "doc_type": "lab_pdf",
+            "doc_type": "lab",
             "results": [{"test_name": "Glucose", "value": "110", "citation": None}],
         }
         assert citation_present(_EXTRACTION_CASE, output) is False
 
     def test_empty_results_returns_false(self) -> None:
-        output = {"doc_type": "lab_pdf", "results": []}
+        output = {"doc_type": "lab", "results": []}
         assert citation_present(_EXTRACTION_CASE, output) is False
 
     def test_chat_response_with_source_marker(self) -> None:
@@ -267,10 +267,10 @@ class TestEvaluateCaseIntegration:
         phi_case = {
             "id": "smoke_phi",
             "category": "extraction",
-            "input": {"doc_type": "lab_pdf"},
+            "input": {"doc_type": "lab"},
             "stub_extraction": {
                 "schema_version": "1.0.0",
-                "doc_type": "lab_pdf",
+                "doc_type": "lab",
                 "results": [
                     {
                         "test_name": "Glucose",

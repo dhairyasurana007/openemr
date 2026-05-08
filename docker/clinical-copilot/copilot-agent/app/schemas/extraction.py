@@ -12,7 +12,7 @@ class ExtractionCitation(BaseModel):
 
     source_type: str = Field(
         min_length=1,
-        description="Origin kind: 'lab_pdf', 'intake_form', 'guideline_chunk', etc.",
+        description="Origin kind: 'lab', 'intake_form', 'guideline_chunk', etc.",
     )
     source_id: str = Field(
         min_length=1,
@@ -59,10 +59,10 @@ class LabResult(BaseModel):
 
 
 class LabExtractionResult(BaseModel):
-    """Top-level result for a lab PDF extraction."""
+    """Top-level result for a lab extraction."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    doc_type: Literal["lab_pdf"] = "lab_pdf"
+    doc_type: Literal["lab"] = "lab"
     results: list[LabResult] = Field(default_factory=list)
     extraction_warnings: list[str] = Field(
         default_factory=list,

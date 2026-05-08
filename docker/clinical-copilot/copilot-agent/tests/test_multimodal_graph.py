@@ -216,7 +216,7 @@ class TestSupervisorNode(unittest.TestCase):
         supervisor = _make_supervisor(llm)
         state = _empty_state(
             patient_id=None,
-            extracted_facts={"doc_type": "lab_pdf", "results": []},
+            extracted_facts={"doc_type": "lab", "results": []},
         )
         result = supervisor(state)
         assert result["_next_node"] == "chart_retriever"
@@ -226,7 +226,7 @@ class TestSupervisorNode(unittest.TestCase):
     def test_routes_to_intake_extractor(self) -> None:
         llm = _mock_llm([{"decision": "intake_extractor", "reason": "facts present"}])
         supervisor = _make_supervisor(llm)
-        state = _empty_state(patient_id="p-1", extracted_facts={"doc_type": "lab_pdf"})
+        state = _empty_state(patient_id="p-1", extracted_facts={"doc_type": "lab"})
         result = supervisor(state)
         assert result["_next_node"] == "intake_extractor"
         assert len(result["routing_log"]) == 1
@@ -384,7 +384,7 @@ class TestAnswerComposerNode(unittest.TestCase):
 
     def test_uses_extracted_facts_in_prompt(self) -> None:
         llm = _mock_llm([{"reply": "Based on the lab results...", "citations": []}])
-        state = _empty_state(extracted_facts={"doc_type": "lab_pdf", "results": []})
+        state = _empty_state(extracted_facts={"doc_type": "lab", "results": []})
         _make_answer_composer(llm)(state)
         call_args = llm.invoke.call_args[0][0]
         content = " ".join(str(m.content) for m in call_args)
@@ -393,7 +393,7 @@ class TestAnswerComposerNode(unittest.TestCase):
     def test_no_extracted_facts_in_prompt_when_intake_summary_present(self) -> None:
         llm = _mock_llm([{"reply": "Based on intake...", "citations": []}])
         state = _empty_state(
-            extracted_facts={"doc_type": "lab_pdf", "results": []},
+            extracted_facts={"doc_type": "lab", "results": []},
             intake_summary="Patient has hypertension.",
         )
         _make_answer_composer(llm)(state)
@@ -484,7 +484,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
                 {"summary": "Patient has HTN.", "citations": []},  # intake_extractor
                 {"reply": "Based on extracted facts...", "citations": []},  # answer_composer
             ],
-            extracted_facts={"doc_type": "lab_pdf"},
+            extracted_facts={"doc_type": "lab"},
         )
         routing_nodes = [e["node"] for e in result["routing_log"]]
         assert "intake_extractor" in routing_nodes
@@ -539,7 +539,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
                 settings=_settings(),
                 backend=StubRetrievalBackend(),
                 rag_retriever=rag,
-                extracted_facts={"doc_type": "lab_pdf", "results": []},
+                extracted_facts={"doc_type": "lab", "results": []},
                 _llm=llm,
             )
         routing_nodes = [e["node"] for e in result["routing_log"]]
@@ -580,7 +580,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
             message="test",
             settings=_settings(),
             backend=StubRetrievalBackend(),
-            extracted_facts={"doc_type": "lab_pdf"},
+            extracted_facts={"doc_type": "lab"},
             _llm=llm,
         )
         assert isinstance(result["reply"], str)

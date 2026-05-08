@@ -45,9 +45,9 @@ def schema_valid(case: dict[str, Any], output: Any) -> bool:
     """Output round-trips through the appropriate Pydantic schema without error."""
     if not isinstance(output, dict):
         return False
-    doc_type = output.get("doc_type") or case.get("input", {}).get("doc_type", "lab_pdf")
+    doc_type = output.get("doc_type") or case.get("input", {}).get("doc_type", "lab")
     try:
-        if doc_type == "lab_pdf":
+        if doc_type == "lab":
             LabExtractionResult.model_validate(output)
         elif doc_type == "intake_form":
             IntakeFormResult.model_validate(output)
@@ -69,8 +69,8 @@ def citation_present(case: dict[str, Any], output: Any) -> bool:
         return "[source:" in low or "source_id" in low
     if not isinstance(output, dict):
         return False
-    doc_type = output.get("doc_type", "lab_pdf")
-    if doc_type == "lab_pdf":
+    doc_type = output.get("doc_type", "lab")
+    if doc_type == "lab":
         results = output.get("results", [])
         if not results:
             return False

@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from app.schemas.extraction import IntakeFormResult, LabExtractionResult
 from app.settings import Settings
 
-DocType = Literal["lab_pdf", "intake_form"]
+DocType = Literal["lab", "intake_form"]
 
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -38,7 +38,7 @@ def _heuristic_classify(text: str) -> DocType | None:
     lab = sum(s in t for s in _LAB_SIGNALS)
     intake = sum(s in t for s in _INTAKE_SIGNALS)
     if lab >= 2 and lab > intake:
-        return "lab_pdf"
+        return "lab"
     if intake >= 2 and intake > lab:
         return "intake_form"
     return None
@@ -156,11 +156,11 @@ def _text_parse_fallback(
     warning: str,
     start_time: float,
 ) -> tuple[LabExtractionResult | IntakeFormResult, dict[str, Any], int]:
-    resolved: DocType = doc_type or "lab_pdf"
+    resolved: DocType = doc_type or "lab"
     fallback = _fallback_parsed_for_doc_type(resolved, warning)
     _inject_source_id(fallback, sid)
     validated: LabExtractionResult | IntakeFormResult
-    if resolved == "lab_pdf":
+    if resolved == "lab":
         validated = LabExtractionResult.model_validate(fallback)
     else:
         validated = IntakeFormResult.model_validate(fallback)
@@ -217,13 +217,13 @@ def _inject_source_id(parsed: dict[str, Any], sid: str) -> None:
 
 
 def _json_schema_for_doc_type(doc_type: str) -> dict[str, Any]:
-    if doc_type == "lab_pdf":
+    if doc_type == "lab":
         return {
             "type": "object",
             "additionalProperties": False,
             "properties": {
                 "schema_version": {"type": "string", "const": "1.0.0"},
-                "doc_type": {"type": "string", "const": "lab_pdf"},
+                "doc_type": {"type": "string", "const": "lab"},
                 "results": {
                     "type": "array",
                     "items": {
@@ -394,10 +394,10 @@ def _parse_json_with_fallbacks(raw_content: str) -> dict[str, Any] | None:
 
 
 def _fallback_parsed_for_doc_type(doc_type: str, warning: str) -> dict[str, Any]:
-    if doc_type == "lab_pdf":
+    if doc_type == "lab":
         return {
             "schema_version": "1.0.0",
-            "doc_type": "lab_pdf",
+            "doc_type": "lab",
             "results": [],
             "extraction_warnings": [warning],
         }
@@ -504,14 +504,14 @@ def estimate_cost_usd(model: str, token_usage: dict[str, Any]) -> float:
     )
 
 
-def _lab_pdf_prompt() -> str:
+def _lab_prompt() -> str:
     return (
         "You are a medical document AI. Extract ALL laboratory results from the document image(s).\n\n"
         "Respond with ONLY valid JSON — no markdown fences, no prose — matching this schema:\n"
-        '{"schema_version":"1.0.0","doc_type":"lab_pdf","results":[{"test_name":"<string>",'
+        '{"schema_version":"1.0.0","doc_type":"lab","results":[{"test_name":"<string>",'
         '"value":"<raw printed value>","unit":"<string or empty>","reference_range":"<string or empty>",'
         '"collection_date":"<ISO-8601 or empty>","abnormal_flag":"<H|L|HH|LL|A or empty>",'
-        '"confidence":<0.0-1.0>,"citation":{"source_type":"lab_pdf","source_id":"PLACEHOLDER",'
+        '"confidence":<0.0-1.0>,"citation":{"source_type":"lab","source_id":"PLACEHOLDER",'
         '"page_or_section":"<page N>","field_or_chunk_id":"<test slug>",'
         '"quote_or_value":"<verbatim text>","bbox":[x0,y0,x1,y1],"page_number":<N>}}],'
         '"extraction_warnings":[]}\n\n'
@@ -548,13 +548,13 @@ async def classify_doc_type(
     text_content: str | None = None,
     settings: Settings,
 ) -> DocType:
-    """Classify a document as lab_pdf or intake_form.
+    """Classify a document as lab or intake_form.
 
     Strategy:
     - If text_content available, try heuristic first (zero cost).
     - Otherwise (or on heuristic abstain), make ONE VLM call with the first
-      page only, asking for a single token: "lab_pdf" or "intake_form".
-    - Default to "lab_pdf" only if the VLM returns garbage; emit a warning.
+      page only, asking for a single token: "lab" or "intake_form".
+    - Default to "lab" only if the VLM returns garbage; emit a warning.
     """
     if text_content is not None:
         result = _heuristic_classify(text_content[:2048])
@@ -562,12 +562,12 @@ async def classify_doc_type(
             return result
 
     if not image_payload:
-        _LOG.warning("classify_doc_type_no_content defaulting to lab_pdf")
-        return "lab_pdf"
+        _LOG.warning("classify_doc_type_no_content defaulting to lab")
+        return "lab"
 
     classify_prompt = (
         'You are classifying a clinical document. Reply with EXACTLY one word, '
-        'either "lab_pdf" or "intake_form". No punctuation. No explanation.'
+        'either "lab" or "intake_form". No punctuation. No explanation.'
     )
     first_page_b64 = base64.standard_b64encode(image_payload[0]).decode()
     content: list[dict[str, Any]] = [
@@ -585,19 +585,19 @@ async def classify_doc_type(
                 settings=settings,
                 model=settings.vlm_model,
                 content=content,
-                doc_type="lab_pdf",
+                doc_type="lab",
                 enforce_schema=False,
             )
         normalized = raw.strip().lower().rstrip(".,!;: ")
         if "intake" in normalized:
             return "intake_form"
         if "lab" in normalized:
-            return "lab_pdf"
-        _LOG.warning("classify_doc_type_vlm_unexpected_response raw=%s defaulting to lab_pdf", raw[:100])
-        return "lab_pdf"
+            return "lab"
+        _LOG.warning("classify_doc_type_vlm_unexpected_response raw=%s defaulting to lab", raw[:100])
+        return "lab"
     except Exception:
-        _LOG.warning("classify_doc_type_vlm_failed defaulting to lab_pdf", exc_info=True)
-        return "lab_pdf"
+        _LOG.warning("classify_doc_type_vlm_failed defaulting to lab", exc_info=True)
+        return "lab"
 
 
 async def extract_document(
@@ -673,10 +673,10 @@ async def extract_document(
                 settings=settings,
             )
         else:
-            doc_type = "lab_pdf"
+            doc_type = "lab"
 
     # Phase 3: Build VLM content list (text-only path or image path).
-    prompt = _lab_pdf_prompt() if doc_type == "lab_pdf" else _intake_form_prompt()
+    prompt = _lab_prompt() if doc_type == "lab" else _intake_form_prompt()
     content: list[dict[str, Any]]
     if extracted_text is not None:
         content = [{"type": "text", "text": f"{prompt}\n\n{extracted_text}"}]
@@ -767,7 +767,7 @@ async def extract_document(
 
     result: LabExtractionResult | IntakeFormResult
     try:
-        if doc_type == "lab_pdf":
+        if doc_type == "lab":
             result = LabExtractionResult.model_validate(parsed)
         else:
             result = IntakeFormResult.model_validate(parsed)
@@ -783,7 +783,7 @@ async def extract_document(
             "Extracted content did not match schema strictly; returning safe partial structured result.",
         )
         _inject_source_id(fallback, sid)
-        if doc_type == "lab_pdf":
+        if doc_type == "lab":
             result = LabExtractionResult.model_validate(fallback)
         else:
             result = IntakeFormResult.model_validate(fallback)

@@ -102,7 +102,7 @@ def _make_lab_result() -> "LabExtractionResult":
                 abnormal_flag="",
                 confidence=0.95,
                 citation=ExtractionCitation(
-                    source_type="lab_pdf",
+                    source_type="lab",
                     source_id="sha256:abc123",
                     page_or_section="page 1",
                     field_or_chunk_id="sodium",
@@ -172,7 +172,7 @@ class TestExtractEndpoint(unittest.TestCase):
         self.assertIn("doc_type", body)
         self.assertIn("doc_type_inferred", body)
         self.assertTrue(body["doc_type_inferred"])
-        self.assertEqual(body["doc_type"], "lab_pdf")
+        self.assertEqual(body["doc_type"], "lab")
         self.assertEqual(body["source_id"], "doc-ref-001")
 
     def test_extract_endpoint_pinned_doc_type_short_circuits_classifier(self) -> None:
@@ -194,7 +194,7 @@ class TestExtractEndpoint(unittest.TestCase):
                 main_mod.app.state.settings = _settings_with_openrouter()
                 response = client.post(
                     "/v1/extract",
-                    data={"doc_type": "lab_pdf", "patient_id": "demo-001"},
+                    data={"doc_type": "lab", "patient_id": "demo-001"},
                     files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
                 )
 

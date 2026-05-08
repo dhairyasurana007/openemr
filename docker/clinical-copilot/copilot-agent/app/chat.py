@@ -148,7 +148,7 @@ async def multimodal_chat(
     }
 
 
-_ALLOWED_DOC_TYPES = frozenset({"lab_pdf", "intake_form"})
+_ALLOWED_DOC_TYPES = frozenset({"lab", "intake_form"})
 
 
 async def _extract_handler(
@@ -172,7 +172,7 @@ async def _extract_handler(
         )
 
     if doc_type is not None and doc_type not in _ALLOWED_DOC_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid doc_type. Allowed: lab_pdf, intake_form")
+        raise HTTPException(status_code=400, detail="Invalid doc_type. Allowed: lab, intake_form")
 
     was_inferred = doc_type is None
     file_bytes = await file.read()
@@ -239,7 +239,7 @@ async def _extract_handler(
     # the persisted resource rather than a VLM-generated placeholder.
     if persist_result is not None:
         fhir_source_id = persist_result.source_id
-        if resolved_doc_type == "lab_pdf":
+        if resolved_doc_type == "lab":
             for lab in extracted_dict.get("results", []):
                 if isinstance(lab.get("citation"), dict):
                     lab["citation"]["source_id"] = fhir_source_id

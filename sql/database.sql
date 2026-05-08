@@ -1148,7 +1148,7 @@ CREATE TABLE `clinical_copilot_extracted_data` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `pid` int(11) NOT NULL,
   `encounter` int(11) DEFAULT NULL,
-  `doc_type` varchar(32) NOT NULL COMMENT 'lab_pdf|intake_form',
+  `doc_type` varchar(32) NOT NULL COMMENT 'lab|intake_form',
   `source_file_name` varchar(255) NOT NULL DEFAULT '',
   `extracted_json` longtext NOT NULL,
   `extracted_hash` char(64) NOT NULL DEFAULT '',

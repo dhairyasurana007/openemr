@@ -20,7 +20,7 @@ from app.schemas.extraction import (
 
 def _citation(**overrides) -> dict:
     base = {
-        "source_type": "lab_pdf",
+        "source_type": "lab",
         "source_id": "sha256:abc123",
         "page_or_section": "page 1",
         "field_or_chunk_id": "sodium",
@@ -87,7 +87,7 @@ class TestExtractionCitation:
     def test_valid_round_trip(self) -> None:
         data = _citation()
         obj = ExtractionCitation.model_validate(data)
-        assert obj.source_type == "lab_pdf"
+        assert obj.source_type == "lab"
         assert obj.source_id == "sha256:abc123"
         assert obj.page_or_section == "page 1"
         assert obj.field_or_chunk_id == "sodium"
@@ -171,7 +171,7 @@ class TestLabResult:
 
     def test_citation_shape_enforced(self) -> None:
         bad = _lab_result()
-        bad["citation"] = {"source_type": "lab_pdf"}  # missing required fields
+        bad["citation"] = {"source_type": "lab"}  # missing required fields
         with pytest.raises(ValidationError):
             LabResult.model_validate(bad)
 
@@ -184,7 +184,7 @@ class TestLabExtractionResult:
     def test_valid_round_trip(self) -> None:
         obj = LabExtractionResult.model_validate(_lab_extraction())
         assert obj.schema_version == "1.0.0"
-        assert obj.doc_type == "lab_pdf"
+        assert obj.doc_type == "lab"
         assert len(obj.results) == 1
         assert obj.extraction_warnings == []
 
@@ -254,7 +254,7 @@ class TestIntakeFormResult:
 
     def test_doc_type_fixed(self) -> None:
         bad = _intake_form()
-        bad["doc_type"] = "lab_pdf"
+        bad["doc_type"] = "lab"
         with pytest.raises(ValidationError):
             IntakeFormResult.model_validate(bad)
 
