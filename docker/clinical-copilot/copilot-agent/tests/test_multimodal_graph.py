@@ -205,13 +205,13 @@ class TestRouteFromSupervisor(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSupervisorNode(unittest.TestCase):
-    def test_no_patient_context_forces_evidence_retriever(self) -> None:
+    def test_no_patient_context_routes_to_chart_retriever_first(self) -> None:
         llm = _mock_llm([{"decision": "chart_retriever", "reason": "needs chart"}])
         result = _make_supervisor(llm)(_empty_state(patient_id=None))
-        assert result["_next_node"] == "evidence_retriever"
-        assert result["routing_log"][-1]["decision"] == "evidence_retriever"
+        assert result["_next_node"] == "chart_retriever"
+        assert result["routing_log"][-1]["decision"] == "chart_retriever"
 
-    def test_no_patient_extracted_facts_routes_to_intake_extractor_first(self) -> None:
+    def test_no_patient_extracted_facts_still_routes_to_chart_retriever_first(self) -> None:
         llm = _mock_llm([])
         supervisor = _make_supervisor(llm)
         state = _empty_state(
@@ -219,9 +219,8 @@ class TestSupervisorNode(unittest.TestCase):
             extracted_facts={"doc_type": "lab_pdf", "results": []},
         )
         result = supervisor(state)
-        assert result["_next_node"] == "intake_extractor"
-        assert result["routing_log"][-1]["decision"] == "intake_extractor"
-        assert result["routing_log"][-1]["reason"] == "extracted_facts present, no intake_summary yet"
+        assert result["_next_node"] == "chart_retriever"
+        assert result["routing_log"][-1]["decision"] == "chart_retriever"
         llm.invoke.assert_not_called()
 
     def test_routes_to_intake_extractor(self) -> None:
@@ -430,14 +429,18 @@ class TestBuildAndRunGraph(unittest.TestCase):
     def _run(self, llm_responses: list[dict], **state_kwargs) -> dict:
         llm = _mock_llm(llm_responses)
         settings = _settings()
-        return run_multimodal_graph(
-            message="What is the BP target?",
-            settings=settings,
-            backend=StubRetrievalBackend(),
-            rag_retriever=None,
-            _llm=llm,
-            **state_kwargs,
-        )
+        with patch(
+            "app.multimodal_graph.run_chat_with_tools",
+            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+        ):
+            return run_multimodal_graph(
+                message="What is the BP target?",
+                settings=settings,
+                backend=StubRetrievalBackend(),
+                rag_retriever=None,
+                _llm=llm,
+                **state_kwargs,
+            )
 
     def test_returns_reply_string(self) -> None:
         result = self._run([
@@ -470,11 +473,11 @@ class TestBuildAndRunGraph(unittest.TestCase):
         assert isinstance(result["token_usage"], dict)
 
     def test_intake_extractor_runs_when_facts_present(self) -> None:
-        # No patient_id: supervisor deterministically routes to intake_extractor first,
-        # then to evidence_retriever (no RAG → empty), then to answer_composer.
-        # LLM is called only by workers, not by the supervisor in this branch.
+        # No patient_id: supervisor now routes chart_retriever first, then may run
+        # intake_extractor/evidence_retriever before answer composition.
         result = self._run(
             [
+                {"decision": "intake_extractor", "reason": "summarize upload"},
                 {"summary": "Patient has HTN.", "citations": []},  # intake_extractor
                 {"reply": "Based on extracted facts...", "citations": []},  # answer_composer
             ],
@@ -491,34 +494,44 @@ class TestBuildAndRunGraph(unittest.TestCase):
             {"decision": "answer", "reason": "evidence retrieved"},
             {"reply": "Guideline says...", "citations": []},
         ])
-        result = run_multimodal_graph(
-            message="What is the BP target?",
-            settings=_settings(),
-            backend=StubRetrievalBackend(),
-            rag_retriever=rag,
-            _llm=llm,
-        )
+        with patch(
+            "app.multimodal_graph.run_chat_with_tools",
+            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+        ):
+            result = run_multimodal_graph(
+                message="What is the BP target?",
+                settings=_settings(),
+                backend=StubRetrievalBackend(),
+                rag_retriever=rag,
+                _llm=llm,
+            )
         routing_nodes = [e["node"] for e in result["routing_log"]]
         assert "evidence_retriever" in routing_nodes
         rag.retrieve.assert_called_once()
 
     def test_evidence_retriever_runs_after_upload(self) -> None:
-        # No patient_id + extracted_facts: supervisor routes intake_extractor first,
-        # then evidence_retriever (with RAG), then answer_composer.
+        # No patient_id + extracted_facts: chart_retriever runs first, then
+        # intake/evidence routes as needed, then answer_composer.
         rag = MagicMock()
         rag.retrieve.return_value = [{"text": "BP target < 130.", "source": "uspstf.txt", "chunk_id": 0}]
         llm = _mock_llm([
+            {"decision": "intake_extractor", "reason": "summarize upload"},
             {"summary": "Lab results reviewed.", "citations": []},  # intake_extractor
+            {"decision": "evidence_retriever", "reason": "needs guideline support"},
             {"reply": "Guideline says...", "citations": []},        # answer_composer
         ])
-        result = run_multimodal_graph(
-            message="What is the BP target?",
-            settings=_settings(),
-            backend=StubRetrievalBackend(),
-            rag_retriever=rag,
-            extracted_facts={"doc_type": "lab_pdf", "results": []},
-            _llm=llm,
-        )
+        with patch(
+            "app.multimodal_graph.run_chat_with_tools",
+            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+        ):
+            result = run_multimodal_graph(
+                message="What is the BP target?",
+                settings=_settings(),
+                backend=StubRetrievalBackend(),
+                rag_retriever=rag,
+                extracted_facts={"doc_type": "lab_pdf", "results": []},
+                _llm=llm,
+            )
         routing_nodes = [e["node"] for e in result["routing_log"]]
         assert "intake_extractor" in routing_nodes
         assert "evidence_retriever" in routing_nodes

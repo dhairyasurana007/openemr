@@ -759,8 +759,16 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 }).then(function (r) {
-                    return r.json().then(function (data) {
-                        return {ok: r.ok, data: data};
+                    return r.text().then(function (text) {
+                        var data = null;
+                        if (text) {
+                            try {
+                                data = JSON.parse(text);
+                            } catch (e) {
+                                data = null;
+                            }
+                        }
+                        return {ok: r.ok, status: r.status, data: data, raw: text};
                     });
                 }).then(function (res) {
                     if (res.ok && res.data && res.data.ok === true) {
@@ -774,7 +782,13 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         }
                         appendBubble('assistant', savedLines.join('\n'), false);
                     } else {
-                        var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Failed to persist extracted data')); ?>;
+                        var err = (res.data && res.data.error) ? res.data.error : '';
+                        if (!err && res.raw) {
+                            err = res.raw;
+                        }
+                        if (!err) {
+                            err = <?php echo json_encode(xl('Failed to persist extracted data')); ?> + ' (HTTP ' + res.status + ')';
+                        }
                         appendBubble('assistant', err, true);
                     }
                 }).catch(function () {

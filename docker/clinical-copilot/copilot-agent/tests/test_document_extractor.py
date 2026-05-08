@@ -7,7 +7,6 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-from pydantic import ValidationError
 
 from app.document_extractor import (
     _heuristic_classify,
@@ -353,13 +352,16 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            with self.assertRaises(ValidationError):
-                await extract_document(
-                    file_bytes=b"img",
-                    mime_type="image/png",
-                    doc_type="lab_pdf",
-                    settings=settings,
-                )
+            result, _, _ = await extract_document(
+                file_bytes=b"img",
+                mime_type="image/png",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+        assert isinstance(result, LabExtractionResult)
+        assert result.results == []
+        assert len(result.extraction_warnings) == 1
 
     async def test_markdown_fences_stripped_before_parse(self) -> None:
         settings = _settings()
@@ -544,7 +546,10 @@ def _make_single_tiff() -> bytes:
     import fitz
     pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 10, 10))
     pix.set_rect(fitz.IRect(0, 0, 10, 10), (200, 200, 200))
-    return pix.tobytes("tiff")
+    try:
+        return pix.tobytes("tiff")
+    except ValueError as exc:
+        raise unittest.SkipTest(f"PyMuPDF build lacks TIFF encoder: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

@@ -133,7 +133,7 @@ def test_uc4_uses_sonnet_default_model() -> None:
         return base  # type: ignore[return-value]
 
     _, diag = run_chat_with_tools(
-        "Any recent labs?",
+        "Any recent labs?\n[CALLER_CONTEXT]{\"patient_uuid\":\"00000000-0000-4000-8000-0000000000aa\"}[/CALLER_CONTEXT]",
         _minimal_settings(),
         backend,
         llm_factory=factory,
@@ -187,15 +187,15 @@ def test_aborts_when_first_turn_returns_no_tool_calls() -> None:
         return base  # type: ignore[return-value]
 
     text, diag = run_chat_with_tools(
-        "What are labs for this patient?",
+        "What are labs for this patient?\n[CALLER_CONTEXT]{\"patient_uuid\":\"00000000-0000-4000-8000-0000000000aa\"}[/CALLER_CONTEXT]",
         _minimal_settings(),
         backend,
         llm_factory=factory,
     )
 
-    assert "patient context" in text.lower() or "open the patient chart" in text.lower()
-    assert diag.get("summarization_mode") == "aborted_missing_patient_context"
-    assert any(f.get("code") == "patient_context_missing" for f in diag.get("verification_findings", []))
+    assert "retrieval did not run" in text.lower() or "no summary can be shown" in text.lower()
+    assert diag.get("summarization_mode") == "aborted_no_retrieval"
+    assert any(f.get("code") == "retrieval_tool_calls_missing" for f in diag.get("verification_findings", []))
     assert base.invoke.call_count == 0
 
 
@@ -245,7 +245,7 @@ def test_aborts_when_patient_lookup_is_ambiguous() -> None:
         return base  # type: ignore[return-value]
 
     text, diag = run_chat_with_tools(
-        "Tell me about Reed",
+        "Tell me about this patient Reed",
         _minimal_settings(),
         backend,
         llm_factory=factory,
