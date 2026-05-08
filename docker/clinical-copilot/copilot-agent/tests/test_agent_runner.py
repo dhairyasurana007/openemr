@@ -239,7 +239,14 @@ def test_aborts_when_patient_lookup_is_ambiguous() -> None:
     )
     msg_planner = AIMessage(content="", tool_calls=[])
     msg_final = AIMessage(content="Should not be reached.")
-    base = _configure_two_phase_mock(msg_tools=msg_tools, msg_planner_no_tools=msg_planner, msg_final=msg_final)
+    base = MagicMock(spec=BaseChatModel)
+    bound_req = MagicMock()
+    bound_auto = MagicMock()
+    base.bind_tools.side_effect = [bound_req, bound_auto]
+    bound_req.invoke.side_effect = [msg_tools]
+    # No patient_uuid path uses `auto` on first round; return our tool call there.
+    bound_auto.invoke.side_effect = [msg_tools, msg_planner]
+    base.invoke.side_effect = [msg_final]
 
     def factory(_s: Settings) -> BaseChatModel:
         return base  # type: ignore[return-value]

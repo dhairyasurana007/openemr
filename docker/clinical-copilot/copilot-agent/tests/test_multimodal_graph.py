@@ -431,7 +431,10 @@ class TestBuildAndRunGraph(unittest.TestCase):
         settings = _settings()
         with patch(
             "app.multimodal_graph.run_chat_with_tools",
-            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+            return_value=(
+                "Stub chart retrieval reply.",
+                {"tool_payloads": [{"tool": "get_observations", "retrieval_status": {"ok": True}}], "tools_used": []},
+            ),
         ):
             return run_multimodal_graph(
                 message="What is the BP target?",
@@ -496,7 +499,10 @@ class TestBuildAndRunGraph(unittest.TestCase):
         ])
         with patch(
             "app.multimodal_graph.run_chat_with_tools",
-            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+            return_value=(
+                "Stub chart retrieval reply.",
+                {"tool_payloads": [{"tool": "get_observations", "retrieval_status": {"ok": True}}], "tools_used": []},
+            ),
         ):
             result = run_multimodal_graph(
                 message="What is the BP target?",
@@ -522,7 +528,10 @@ class TestBuildAndRunGraph(unittest.TestCase):
         ])
         with patch(
             "app.multimodal_graph.run_chat_with_tools",
-            return_value=("Stub chart retrieval reply.", {"tool_payloads": [], "tools_used": []}),
+            return_value=(
+                "Stub chart retrieval reply.",
+                {"tool_payloads": [{"tool": "get_observations", "retrieval_status": {"ok": True}}], "tools_used": []},
+            ),
         ):
             result = run_multimodal_graph(
                 message="What is the BP target?",
