@@ -39,5 +39,9 @@ jobs:
       working-directory: docker/clinical-copilot/copilot-agent
       run: python -m pytest tests -v
 
+    - name: Run eval gate (50-case golden suite, ≥80% per rubric)
+      working-directory: docker/clinical-copilot/copilot-agent
+      run: python evals/run_evals.py
+
     - name: Build copilot-agent Docker image (context matches Render)
       run: docker build -t openemr-copilot-agent:ci -f docker/clinical-copilot/copilot-agent/Dockerfile docker/clinical-copilot/copilot-agent
