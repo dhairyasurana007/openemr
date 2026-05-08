@@ -18,6 +18,10 @@ from app.settings import Settings
 
 DocType = Literal["lab_pdf", "intake_form"]
 
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_HL7_MIMES = frozenset({"application/hl7-v2", "application/hl7-v2+er7"})
+
 _LAB_SIGNALS = (
     "reference range", "specimen", "abnormal", "loinc",
     "result value", "collected:", "lab report",
@@ -86,6 +90,81 @@ def _tiff_pages_to_images(file_bytes: bytes) -> list[tuple[str, str]]:
 def _single_image_to_b64(file_bytes: bytes, mime_type: str) -> list[tuple[str, str]]:
     """Encode a single image file as base64. Returns a single-item list."""
     return [(base64.standard_b64encode(file_bytes).decode(), mime_type)]
+
+
+def _docx_to_text(file_bytes: bytes) -> str:
+    """Extract paragraph and table text from a DOCX document."""
+    try:
+        import io as _io
+        from docx import Document  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise RuntimeError("python-docx is required for DOCX extraction.") from exc
+    try:
+        doc = Document(_io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise ValueError(f"Cannot parse DOCX: {exc}") from exc
+    parts: list[str] = []
+    for para in doc.paragraphs:
+        if para.text.strip():
+            parts.append(para.text)
+    for table in doc.tables:
+        for row in table.rows:
+            parts.append("\t".join(cell.text for cell in row.cells))
+    return "\n".join(parts)
+
+
+def _xlsx_to_text(file_bytes: bytes) -> str:
+    """Extract cell values from all sheets of an XLSX workbook."""
+    try:
+        import io as _io
+        import openpyxl  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise RuntimeError("openpyxl is required for XLSX extraction.") from exc
+    try:
+        wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception as exc:
+        raise ValueError(f"Cannot parse XLSX: {exc}") from exc
+    parts: list[str] = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        parts.append(f"Sheet: {sheet_name}")
+        for row in ws.iter_rows(values_only=True):
+            row_text = "\t".join("" if v is None else str(v) for v in row)
+            if row_text.strip():
+                parts.append(row_text)
+    return "\n".join(parts)
+
+
+def _hl7_to_text(file_bytes: bytes) -> str:
+    """Extract segment-by-segment text from an HL7v2 message."""
+    try:
+        import hl7  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise RuntimeError("hl7 package is required for HL7v2 extraction.") from exc
+    try:
+        raw = file_bytes.decode("utf-8")
+        normalized = raw.replace("\r\n", "\r").replace("\n", "\r")
+        message = hl7.parse(normalized)
+        return "\r".join(str(seg) for seg in message)
+    except Exception as exc:
+        raise ValueError(f"Cannot parse HL7v2 message: {exc}") from exc
+
+
+def _text_parse_fallback(
+    doc_type: DocType | None,
+    sid: str,
+    warning: str,
+    start_time: float,
+) -> tuple[LabExtractionResult | IntakeFormResult, dict[str, Any], int]:
+    resolved: DocType = doc_type or "lab_pdf"
+    fallback = _fallback_parsed_for_doc_type(resolved, warning)
+    _inject_source_id(fallback, sid)
+    validated: LabExtractionResult | IntakeFormResult
+    if resolved == "lab_pdf":
+        validated = LabExtractionResult.model_validate(fallback)
+    else:
+        validated = IntakeFormResult.model_validate(fallback)
+    return validated, {}, int((time.perf_counter() - start_time) * 1000.0)
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -500,34 +579,88 @@ async def extract_document(
 
     Returns (validated_result, token_usage_dict, latency_ms).
     Returns safe partial structured output when parsing or strict validation fails.
+    Raises ValueError for unsupported or unrecognised MIME types.
     """
     req_start = time.perf_counter()
     sid = _source_id(file_bytes)
 
+    # Phase 1: Prepare content — images for PDF/TIFF/images, text for office/HL7 formats.
+    image_payload: list[tuple[str, str]] | None = None
+    extracted_text: str | None = None
+
     if mime_type == "application/pdf":
-        images = _pdf_pages_to_images(file_bytes)
+        image_payload = _pdf_pages_to_images(file_bytes)
     elif mime_type in ("image/tiff", "image/x-tiff"):
-        images = _tiff_pages_to_images(file_bytes)
-    else:
-        images = _single_image_to_b64(file_bytes, mime_type)
-
-    if doc_type is None:
-        first_page_b64, _ = images[0]
-        first_page_bytes = base64.standard_b64decode(first_page_b64)
-        doc_type = await classify_doc_type(
-            image_payload=[first_page_bytes],
-            settings=settings,
+        image_payload = _tiff_pages_to_images(file_bytes)
+    elif mime_type == _DOCX_MIME:
+        try:
+            extracted_text = _docx_to_text(file_bytes)
+        except ValueError as exc:
+            _LOG.warning("document_extractor_docx_parse_error error=%s", exc)
+            return _text_parse_fallback(doc_type, sid, f"Failed to parse DOCX: {exc}", req_start)
+    elif mime_type == _XLSX_MIME:
+        try:
+            extracted_text = _xlsx_to_text(file_bytes)
+        except ValueError as exc:
+            _LOG.warning("document_extractor_xlsx_parse_error error=%s", exc)
+            return _text_parse_fallback(doc_type, sid, f"Failed to parse XLSX: {exc}", req_start)
+    elif mime_type in _HL7_MIMES:
+        try:
+            extracted_text = _hl7_to_text(file_bytes)
+        except ValueError as exc:
+            _LOG.warning("document_extractor_hl7_parse_error error=%s", exc)
+            return _text_parse_fallback(doc_type, sid, f"Failed to parse HL7v2: {exc}", req_start)
+    elif mime_type == "text/plain":
+        raw_text = file_bytes.decode("utf-8", errors="replace")
+        first_nonempty = next((line for line in raw_text.splitlines() if line.strip()), "")
+        if first_nonempty.startswith("MSH|"):
+            try:
+                extracted_text = _hl7_to_text(file_bytes)
+            except ValueError as exc:
+                _LOG.warning("document_extractor_hl7_parse_error error=%s", exc)
+                return _text_parse_fallback(doc_type, sid, f"Failed to parse HL7v2: {exc}", req_start)
+        else:
+            raise ValueError("text/plain without HL7 MSH| prefix is not supported")
+    elif mime_type == "application/msword":
+        raise ValueError(
+            "Legacy .doc format (application/msword) is not supported; convert to .docx first"
         )
+    elif mime_type.startswith("image/"):
+        image_payload = _single_image_to_b64(file_bytes, mime_type)
+    else:
+        raise ValueError(f"Unsupported MIME type: {mime_type!r}")
 
+    # Phase 2: Classify doc type if not provided by caller.
+    if doc_type is None:
+        if extracted_text is not None:
+            doc_type = await classify_doc_type(text_content=extracted_text, settings=settings)
+        elif image_payload is not None:
+            first_page_b64, _ = image_payload[0]
+            first_page_bytes = base64.standard_b64decode(first_page_b64)
+            doc_type = await classify_doc_type(
+                image_payload=[first_page_bytes],
+                settings=settings,
+            )
+        else:
+            doc_type = "lab_pdf"
+
+    # Phase 3: Build VLM content list (text-only path or image path).
     prompt = _lab_pdf_prompt() if doc_type == "lab_pdf" else _intake_form_prompt()
+    content: list[dict[str, Any]]
+    if extracted_text is not None:
+        content = [{"type": "text", "text": f"{prompt}\n\n{extracted_text}"}]
+        page_count = 0
+    else:
+        assert image_payload is not None
+        content = [{"type": "text", "text": prompt}]
+        for b64_data, img_mime in image_payload:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{img_mime};base64,{b64_data}", "detail": "high"},
+            })
+        page_count = len(image_payload)
 
-    content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
-    for b64_data, img_mime in images:
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:{img_mime};base64,{b64_data}", "detail": "high"},
-        })
-
+    # Phase 4: Call VLM, parse, repair if needed, validate.
     model = settings.vlm_model
     token_usage: dict[str, Any] = {}
     async with httpx.AsyncClient(timeout=settings.openrouter_http_timeout_s) as client:
@@ -628,7 +761,7 @@ async def extract_document(
     _LOG.info(
         "document_extractor_ok doc_type=%s pages=%d model=%s latency_ms=%d prompt_tokens=%d completion_tokens=%d",
         doc_type,
-        len(images),
+        page_count,
         model,
         latency_ms,
         int(token_usage.get("prompt_tokens", 0)),

@@ -610,3 +610,296 @@ class TestTiffRendering(unittest.TestCase):
 
         result = asyncio.run(_run())
         assert isinstance(result, LabExtractionResult)
+
+
+# ---------------------------------------------------------------------------
+# Text extraction helper tests (_docx_to_text, _xlsx_to_text, _hl7_to_text)
+# ---------------------------------------------------------------------------
+
+class TestDocxToText(unittest.TestCase):
+    def test_paragraph_and_table_extracted(self) -> None:
+        from app.document_extractor import _docx_to_text
+
+        mock_para = MagicMock()
+        mock_para.text = "Chief complaint: headache"
+
+        mock_cell_a = MagicMock()
+        mock_cell_a.text = "Result"
+        mock_cell_b = MagicMock()
+        mock_cell_b.text = "138 mEq/L"
+        mock_row = MagicMock()
+        mock_row.cells = [mock_cell_a, mock_cell_b]
+        mock_table = MagicMock()
+        mock_table.rows = [mock_row]
+
+        mock_doc = MagicMock()
+        mock_doc.paragraphs = [mock_para]
+        mock_doc.tables = [mock_table]
+
+        mock_docx_module = MagicMock()
+        mock_docx_module.Document.return_value = mock_doc
+
+        import sys
+        with patch.dict(sys.modules, {"docx": mock_docx_module}):
+            text = _docx_to_text(b"fake docx bytes")
+
+        assert "Chief complaint: headache" in text
+        assert "Result" in text
+        assert "138 mEq/L" in text
+
+    def test_corrupt_bytes_raises_value_error(self) -> None:
+        from app.document_extractor import _docx_to_text
+
+        mock_docx_module = MagicMock()
+        mock_docx_module.Document.side_effect = Exception("bad zip")
+
+        import sys
+        with patch.dict(sys.modules, {"docx": mock_docx_module}):
+            with self.assertRaises(ValueError):
+                _docx_to_text(b"not a docx")
+
+
+class TestXlsxToText(unittest.TestCase):
+    def test_two_cells_in_output(self) -> None:
+        from app.document_extractor import _xlsx_to_text
+
+        mock_ws = MagicMock()
+        mock_ws.iter_rows.return_value = [("Sodium", "138")]
+        mock_wb = MagicMock()
+        mock_wb.sheetnames = ["Labs"]
+        mock_wb.__getitem__ = MagicMock(return_value=mock_ws)
+
+        mock_openpyxl = MagicMock()
+        mock_openpyxl.load_workbook.return_value = mock_wb
+
+        import sys
+        with patch.dict(sys.modules, {"openpyxl": mock_openpyxl}):
+            text = _xlsx_to_text(b"fake xlsx bytes")
+
+        assert "Sheet: Labs" in text
+        assert "Sodium" in text
+        assert "138" in text
+
+    def test_corrupt_bytes_raises_value_error(self) -> None:
+        from app.document_extractor import _xlsx_to_text
+
+        mock_openpyxl = MagicMock()
+        mock_openpyxl.load_workbook.side_effect = Exception("bad zip")
+
+        import sys
+        with patch.dict(sys.modules, {"openpyxl": mock_openpyxl}):
+            with self.assertRaises(ValueError):
+                _xlsx_to_text(b"not an xlsx")
+
+
+class TestHl7ToText(unittest.TestCase):
+    def _minimal_hl7(self) -> bytes:
+        return b"MSH|^~\\&|SendApp|SendFac|RecApp|RecFac|20260101120000||ORU^R01|MSG001|P|2.3\rPID|1||demo-001\r"
+
+    def test_segments_in_output(self) -> None:
+        from app.document_extractor import _hl7_to_text
+
+        mock_seg_msh = MagicMock()
+        mock_seg_msh.__str__ = lambda self: "MSH|^~\\&|SendApp|..."
+        mock_seg_pid = MagicMock()
+        mock_seg_pid.__str__ = lambda self: "PID|1||demo-001"
+        mock_message = [mock_seg_msh, mock_seg_pid]
+
+        mock_hl7 = MagicMock()
+        mock_hl7.parse.return_value = mock_message
+
+        import sys
+        with patch.dict(sys.modules, {"hl7": mock_hl7}):
+            text = _hl7_to_text(self._minimal_hl7())
+
+        assert "MSH" in text
+        assert "PID" in text
+
+    def test_corrupt_bytes_raises_value_error(self) -> None:
+        from app.document_extractor import _hl7_to_text
+
+        mock_hl7 = MagicMock()
+        mock_hl7.parse.side_effect = Exception("invalid HL7")
+
+        import sys
+        with patch.dict(sys.modules, {"hl7": mock_hl7}):
+            with self.assertRaises(ValueError):
+                _hl7_to_text(b"not hl7")
+
+
+# ---------------------------------------------------------------------------
+# extract_document text-format routing tests
+# ---------------------------------------------------------------------------
+
+class TestExtractDocumentTextFormats(unittest.IsolatedAsyncioTestCase):
+    def _mock_post(self, content: str) -> AsyncMock:
+        return AsyncMock(return_value=_openrouter_response(content))
+
+    async def _run_with_text_helper(
+        self,
+        mime_type: str,
+        helper_name: str,
+        extracted_text: str = "reference range 136-145 abnormal specimen",
+    ) -> LabExtractionResult | IntakeFormResult:
+        settings = _settings()
+        with patch(f"app.document_extractor.{helper_name}", return_value=extracted_text) as mock_helper, \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = self._mock_post(_VALID_LAB_JSON)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=b"fake",
+                mime_type=mime_type,
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+        mock_helper.assert_called_once_with(b"fake")
+        return result
+
+    async def test_docx_routes_through_text_helper(self) -> None:
+        result = await self._run_with_text_helper(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "_docx_to_text",
+        )
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_xlsx_routes_through_text_helper(self) -> None:
+        result = await self._run_with_text_helper(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "_xlsx_to_text",
+        )
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_hl7_v2_mime_routes_through_text_helper(self) -> None:
+        result = await self._run_with_text_helper(
+            "application/hl7-v2",
+            "_hl7_to_text",
+        )
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_hl7_v2_er7_mime_routes_through_text_helper(self) -> None:
+        result = await self._run_with_text_helper(
+            "application/hl7-v2+er7",
+            "_hl7_to_text",
+        )
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_text_plain_with_msh_prefix_routes_through_hl7(self) -> None:
+        settings = _settings()
+        hl7_bytes = b"MSH|^~\\&|A|B|||20260101||ORU^R01|1|P|2.3\rPID|1\r"
+        with patch("app.document_extractor._hl7_to_text", return_value="MSH segments") as mock_hl7, \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = self._mock_post(_VALID_LAB_JSON)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=hl7_bytes,
+                mime_type="text/plain",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+        mock_hl7.assert_called_once_with(hl7_bytes)
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_text_plain_without_msh_raises_value_error(self) -> None:
+        settings = _settings()
+        with self.assertRaises(ValueError, msg="text/plain without MSH| should raise"):
+            await extract_document(
+                file_bytes=b"just some plain text without HL7",
+                mime_type="text/plain",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+    async def test_unsupported_mime_raises_value_error(self) -> None:
+        settings = _settings()
+        with self.assertRaises(ValueError):
+            await extract_document(
+                file_bytes=b"PK\x03\x04",
+                mime_type="application/zip",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+    async def test_legacy_doc_mime_raises_value_error(self) -> None:
+        settings = _settings()
+        with self.assertRaises(ValueError):
+            await extract_document(
+                file_bytes=b"\xd0\xcf\x11\xe0",
+                mime_type="application/msword",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+    async def test_corrupt_docx_returns_safe_partial(self) -> None:
+        settings = _settings()
+        with patch("app.document_extractor._docx_to_text", side_effect=ValueError("bad zip")):
+            result, token_usage, latency_ms = await extract_document(
+                file_bytes=b"corrupt",
+                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+        assert isinstance(result, LabExtractionResult)
+        assert result.results == []
+        assert len(result.extraction_warnings) == 1
+        assert "DOCX" in result.extraction_warnings[0]
+        assert token_usage == {}
+
+    async def test_corrupt_xlsx_returns_safe_partial(self) -> None:
+        settings = _settings()
+        with patch("app.document_extractor._xlsx_to_text", side_effect=ValueError("corrupt")):
+            result, _, _ = await extract_document(
+                file_bytes=b"corrupt",
+                mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+        assert isinstance(result, LabExtractionResult)
+        assert result.results == []
+        assert len(result.extraction_warnings) == 1
+
+    async def test_corrupt_hl7_returns_safe_partial(self) -> None:
+        settings = _settings()
+        with patch("app.document_extractor._hl7_to_text", side_effect=ValueError("invalid")):
+            result, _, _ = await extract_document(
+                file_bytes=b"corrupt",
+                mime_type="application/hl7-v2",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+        assert isinstance(result, LabExtractionResult)
+        assert result.results == []
+        assert len(result.extraction_warnings) == 1
+
+    async def test_text_content_passed_to_vlm_not_images(self) -> None:
+        """VLM call for text formats must NOT include image_url items."""
+        settings = _settings()
+        captured_content: list[dict] = []
+
+        async def capturing_post(url: str, **kwargs: object) -> httpx.Response:
+            msgs = kwargs.get("json", {}).get("messages", [])  # type: ignore[union-attr]
+            if msgs:
+                captured_content.extend(msgs[0].get("content", []))
+            return _openrouter_response(_VALID_LAB_JSON)
+
+        with patch("app.document_extractor._docx_to_text", return_value="lab text"), \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = capturing_post
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await extract_document(
+                file_bytes=b"fake",
+                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+        image_items = [c for c in captured_content if c.get("type") == "image_url"]
+        assert image_items == [], "Text-mode VLM call should not include image_url items"
