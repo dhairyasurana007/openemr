@@ -10,10 +10,12 @@ import httpx
 from pydantic import ValidationError
 
 from app.document_extractor import (
+    _heuristic_classify,
     _inject_source_id,
     _single_image_to_b64,
     _source_id,
     _strip_markdown_fences,
+    classify_doc_type,
     estimate_cost_usd,
     extract_document,
 )
@@ -395,3 +397,216 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
 
         assert isinstance(result, IntakeFormResult)
         assert result.doc_type == "intake_form"
+
+
+# ---------------------------------------------------------------------------
+# Heuristic classifier tests
+# ---------------------------------------------------------------------------
+
+class TestHeuristicClassify(unittest.TestCase):
+    def test_heuristic_classifies_lab_text(self) -> None:
+        text = "reference range 136-145 mEq/L abnormal flag present specimen collected"
+        assert _heuristic_classify(text) == "lab_pdf"
+
+    def test_heuristic_classifies_intake_text(self) -> None:
+        text = "chief concern: headache current medications: aspirin 81mg family history: hypertension"
+        assert _heuristic_classify(text) == "intake_form"
+
+    def test_heuristic_abstains_on_ambiguous_text(self) -> None:
+        assert _heuristic_classify("") is None
+        assert _heuristic_classify("unrelated text with no clinical signals") is None
+
+    def test_heuristic_requires_two_signals_for_lab(self) -> None:
+        assert _heuristic_classify("reference range only") is None
+
+    def test_heuristic_requires_two_signals_for_intake(self) -> None:
+        assert _heuristic_classify("chief complaint only") is None
+
+
+# ---------------------------------------------------------------------------
+# classify_doc_type tests
+# ---------------------------------------------------------------------------
+
+class TestClassifyDocType(unittest.IsolatedAsyncioTestCase):
+    async def test_classify_doc_type_uses_heuristic_when_text_available(self) -> None:
+        settings = _settings()
+        text = "reference range 136-145 mEq/L abnormal flag present specimen"
+        result = await classify_doc_type(text_content=text, settings=settings)
+        assert result == "lab_pdf"
+
+    async def test_classify_doc_type_falls_back_to_vlm(self) -> None:
+        settings = _settings()
+        with patch("app.document_extractor._heuristic_classify", return_value=None), \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openrouter_response("intake_form"))
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await classify_doc_type(
+                text_content="some text",
+                image_payload=[b"\x89PNG\r\n\x1a\n"],
+                settings=settings,
+            )
+
+        assert result == "intake_form"
+        mock_client.post.assert_called_once()
+
+    async def test_classify_doc_type_normalizes_vlm_garbage(self) -> None:
+        settings = _settings()
+        with patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=_openrouter_response("Lab Report type"))
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await classify_doc_type(
+                image_payload=[b"\x89PNG\r\n\x1a\n"],
+                settings=settings,
+            )
+
+        assert result == "lab_pdf"
+
+    async def test_classify_doc_type_defaults_to_lab_pdf_on_empty_payload(self) -> None:
+        settings = _settings()
+        result = await classify_doc_type(settings=settings)
+        assert result == "lab_pdf"
+
+
+# ---------------------------------------------------------------------------
+# Auto-classification integration tests in extract_document
+# ---------------------------------------------------------------------------
+
+class TestExtractDocumentAutoClassify(unittest.IsolatedAsyncioTestCase):
+    def _mock_post(self, content: str) -> AsyncMock:
+        return AsyncMock(return_value=_openrouter_response(content))
+
+    async def test_extract_document_calls_classifier_when_doc_type_none(self) -> None:
+        settings = _settings()
+        tiny_png = b"\x89PNG\r\n\x1a\n"
+
+        with patch("app.document_extractor.classify_doc_type", new_callable=AsyncMock, return_value="lab_pdf") as mock_clf, \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = self._mock_post(_VALID_LAB_JSON)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=tiny_png,
+                mime_type="image/png",
+                doc_type=None,
+                settings=settings,
+            )
+
+        mock_clf.assert_called_once()
+        assert isinstance(result, LabExtractionResult)
+
+    async def test_extract_document_skips_classifier_when_doc_type_provided(self) -> None:
+        settings = _settings()
+        tiny_png = b"\x89PNG\r\n\x1a\n"
+
+        with patch("app.document_extractor.classify_doc_type", new_callable=AsyncMock) as mock_clf, \
+             patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = self._mock_post(_VALID_LAB_JSON)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=tiny_png,
+                mime_type="image/png",
+                doc_type="lab_pdf",
+                settings=settings,
+            )
+
+        mock_clf.assert_not_called()
+        assert isinstance(result, LabExtractionResult)
+
+
+try:
+    import fitz as _fitz_module
+    _FITZ_AVAILABLE = True
+except ModuleNotFoundError:
+    _FITZ_AVAILABLE = False
+
+
+def _make_single_tiff() -> bytes:
+    """Create a minimal single-page TIFF using PyMuPDF. Requires fitz to be installed."""
+    import fitz
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 10, 10))
+    pix.set_rect(fitz.IRect(0, 0, 10, 10), (200, 200, 200))
+    return pix.tobytes("tiff")
+
+
+# ---------------------------------------------------------------------------
+# TIFF rendering tests
+# ---------------------------------------------------------------------------
+
+class TestTiffRendering(unittest.TestCase):
+    @unittest.skipUnless(_FITZ_AVAILABLE, "pymupdf not installed in this environment")
+    def test_tiff_single_page_renders_one_image(self) -> None:
+        from app.document_extractor import _tiff_pages_to_images
+        tiff_bytes = _make_single_tiff()
+        images = _tiff_pages_to_images(tiff_bytes)
+        assert len(images) == 1
+        _, mime = images[0]
+        assert mime == "image/png"
+
+    @unittest.skipUnless(_FITZ_AVAILABLE, "pymupdf not installed in this environment")
+    def test_tiff_single_page_b64_is_decodable(self) -> None:
+        import base64
+        from app.document_extractor import _tiff_pages_to_images
+        tiff_bytes = _make_single_tiff()
+        images = _tiff_pages_to_images(tiff_bytes)
+        b64_data, _ = images[0]
+        decoded = base64.standard_b64decode(b64_data)
+        assert len(decoded) > 0
+
+    def test_tiff_multi_page_renders_correct_count(self) -> None:
+        import sys
+        from app.document_extractor import _tiff_pages_to_images
+
+        mock_pix = MagicMock()
+        mock_pix.tobytes.return_value = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50
+        mock_page = MagicMock()
+        mock_page.get_pixmap.return_value = mock_pix
+
+        mock_doc = [mock_page, mock_page, mock_page]
+        mock_fitz = MagicMock()
+        mock_fitz.open.return_value = mock_doc
+
+        # Inject mock into sys.modules so the local `import fitz` inside the
+        # function picks it up regardless of whether fitz is installed here.
+        with patch.dict(sys.modules, {"fitz": mock_fitz}):
+            images = _tiff_pages_to_images(b"fake-tiff-bytes")
+
+        assert len(images) == 3
+        for _, mime in images:
+            assert mime == "image/png"
+
+    def test_extract_document_routes_tiff_mime_type(self) -> None:
+        """TIFF mime type must route through _tiff_pages_to_images."""
+        import asyncio
+        settings = _settings()
+        fake_image = ("FAKEBASE64==", "image/png")
+
+        async def _run() -> LabExtractionResult | IntakeFormResult:
+            with patch("app.document_extractor._tiff_pages_to_images", return_value=[fake_image]) as mock_tiff, \
+                 patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.post = AsyncMock(return_value=_openrouter_response(_VALID_LAB_JSON))
+                mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+                r, _, _ = await extract_document(
+                    file_bytes=b"TIFF\x00",
+                    mime_type="image/tiff",
+                    doc_type="lab_pdf",
+                    settings=settings,
+                )
+            mock_tiff.assert_called_once_with(b"TIFF\x00")
+            return r
+
+        result = asyncio.run(_run())
+        assert isinstance(result, LabExtractionResult)

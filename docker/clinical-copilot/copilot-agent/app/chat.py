@@ -134,7 +134,7 @@ _ALLOWED_DOC_TYPES = frozenset({"lab_pdf", "intake_form"})
 async def extract(
     request: Request,
     file: UploadFile = File(...),
-    doc_type: str = Form(...),
+    doc_type: str | None = Form(default=None),
     x_clinical_copilot_internal_secret: Annotated[
         str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
     ] = None,
@@ -152,9 +152,10 @@ async def extract(
             detail="OPENROUTER_API_KEY is not configured on the copilot-agent service.",
         )
 
-    if doc_type not in _ALLOWED_DOC_TYPES:
+    if doc_type is not None and doc_type not in _ALLOWED_DOC_TYPES:
         raise HTTPException(status_code=400, detail="Invalid doc_type. Allowed: lab_pdf, intake_form")
 
+    was_inferred = doc_type is None
     file_bytes = await file.read()
     mime_type = file.content_type or "application/octet-stream"
 
@@ -180,15 +181,19 @@ async def extract(
         )
         raise HTTPException(status_code=502, detail="Upstream extraction request failed.") from exc
 
+    resolved_doc_type = result.doc_type
     _LOG.info(
-        "clinical_copilot_extract_ok request_id=%s doc_type=%s latency_ms=%d",
+        "clinical_copilot_extract_ok request_id=%s doc_type=%s doc_type_inferred=%s latency_ms=%d",
         request_id,
-        doc_type,
+        resolved_doc_type,
+        was_inferred,
         latency_ms,
     )
 
     return {
         "extracted": result.model_dump(),
+        "doc_type": resolved_doc_type,
+        "doc_type_inferred": was_inferred,
         "latency_ms": latency_ms,
         "token_usage": token_usage,
         "cost_estimate_usd": estimate_cost_usd(settings.vlm_model, token_usage),

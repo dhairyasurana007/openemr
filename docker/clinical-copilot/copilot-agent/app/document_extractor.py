@@ -8,13 +8,36 @@ import json
 import logging
 import re
 import time
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from pydantic import ValidationError
 
 from app.schemas.extraction import IntakeFormResult, LabExtractionResult
 from app.settings import Settings
+
+DocType = Literal["lab_pdf", "intake_form"]
+
+_LAB_SIGNALS = (
+    "reference range", "specimen", "abnormal", "loinc",
+    "result value", "collected:", "lab report",
+)
+_INTAKE_SIGNALS = (
+    "chief complaint", "chief concern", "patient information",
+    "intake form", "current medications", "allergies",
+    "family history", "date of birth",
+)
+
+
+def _heuristic_classify(text: str) -> DocType | None:
+    t = text.lower()
+    lab = sum(s in t for s in _LAB_SIGNALS)
+    intake = sum(s in t for s in _INTAKE_SIGNALS)
+    if lab >= 2 and lab > intake:
+        return "lab_pdf"
+    if intake >= 2 and intake > lab:
+        return "intake_form"
+    return None
 
 _LOG = logging.getLogger("clinical_copilot.document_extractor")
 
@@ -41,6 +64,21 @@ def _pdf_pages_to_images(file_bytes: bytes) -> list[tuple[str, str]]:
     pages: list[tuple[str, str]] = []
     for page in doc:
         pix = page.get_pixmap(dpi=150)
+        pages.append((base64.standard_b64encode(pix.tobytes("png")).decode(), "image/png"))
+    return pages
+
+
+def _tiff_pages_to_images(file_bytes: bytes) -> list[tuple[str, str]]:
+    """Render every TIFF page to a base64 PNG. Returns list of (b64_data, mime_type)."""
+    try:
+        import fitz  # pymupdf
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("PyMuPDF (fitz) is required for TIFF extraction but is not installed.") from exc
+
+    doc = fitz.open(stream=file_bytes, filetype="tiff")
+    pages: list[tuple[str, str]] = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=150, alpha=False)
         pages.append((base64.standard_b64encode(pix.tobytes("png")).decode(), "image/png"))
     return pages
 
@@ -394,10 +432,68 @@ def _intake_form_prompt() -> str:
     )
 
 
+async def classify_doc_type(
+    *,
+    image_payload: list[bytes] | None = None,
+    text_content: str | None = None,
+    settings: Settings,
+) -> DocType:
+    """Classify a document as lab_pdf or intake_form.
+
+    Strategy:
+    - If text_content available, try heuristic first (zero cost).
+    - Otherwise (or on heuristic abstain), make ONE VLM call with the first
+      page only, asking for a single token: "lab_pdf" or "intake_form".
+    - Default to "lab_pdf" only if the VLM returns garbage; emit a warning.
+    """
+    if text_content is not None:
+        result = _heuristic_classify(text_content[:2048])
+        if result is not None:
+            return result
+
+    if not image_payload:
+        _LOG.warning("classify_doc_type_no_content defaulting to lab_pdf")
+        return "lab_pdf"
+
+    classify_prompt = (
+        'You are classifying a clinical document. Reply with EXACTLY one word, '
+        'either "lab_pdf" or "intake_form". No punctuation. No explanation.'
+    )
+    first_page_b64 = base64.standard_b64encode(image_payload[0]).decode()
+    content: list[dict[str, Any]] = [
+        {"type": "text", "text": classify_prompt},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{first_page_b64}", "detail": "low"},
+        },
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.openrouter_http_timeout_s) as client:
+            _, _, raw = await _call_openrouter_completion(
+                client,
+                settings=settings,
+                model=settings.vlm_model,
+                content=content,
+                doc_type="lab_pdf",
+                enforce_schema=False,
+            )
+        normalized = raw.strip().lower().rstrip(".,!;: ")
+        if "intake" in normalized:
+            return "intake_form"
+        if "lab" in normalized:
+            return "lab_pdf"
+        _LOG.warning("classify_doc_type_vlm_unexpected_response raw=%s defaulting to lab_pdf", raw[:100])
+        return "lab_pdf"
+    except Exception:
+        _LOG.warning("classify_doc_type_vlm_failed defaulting to lab_pdf", exc_info=True)
+        return "lab_pdf"
+
+
 async def extract_document(
     file_bytes: bytes,
     mime_type: str,
-    doc_type: str,
+    doc_type: DocType | None,
     settings: Settings,
 ) -> tuple[LabExtractionResult | IntakeFormResult, dict[str, Any], int]:
     """Extract structured data from a document via VLM.
@@ -410,8 +506,18 @@ async def extract_document(
 
     if mime_type == "application/pdf":
         images = _pdf_pages_to_images(file_bytes)
+    elif mime_type in ("image/tiff", "image/x-tiff"):
+        images = _tiff_pages_to_images(file_bytes)
     else:
         images = _single_image_to_b64(file_bytes, mime_type)
+
+    if doc_type is None:
+        first_page_b64, _ = images[0]
+        first_page_bytes = base64.standard_b64decode(first_page_b64)
+        doc_type = await classify_doc_type(
+            image_payload=[first_page_bytes],
+            settings=settings,
+        )
 
     prompt = _lab_pdf_prompt() if doc_type == "lab_pdf" else _intake_form_prompt()
 

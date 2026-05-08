@@ -190,20 +190,15 @@ $agentReady = $handoff->isConfigured();
                 </div>
                 <small id="clinical-copilot-compose-help" class="form-text text-muted"><?php echo xlt('Requires OPENROUTER_API_KEY on the agent. Override model with OPENROUTER_MODEL.'); ?></small>
             </div>
-            <div class="form-group mb-0 mt-2 d-flex align-items-center">
-                <select id="ccp-doc-type" class="form-control form-control-sm mr-2" style="max-width: 150px;"
-                    aria-label="<?php echo xla('Document type'); ?>"
-                    <?php echo $agentReady ? '' : 'disabled'; ?>>
-                    <option value="lab_pdf"><?php echo xlt('Lab PDF'); ?></option>
-                    <option value="intake_form"><?php echo xlt('Intake Form'); ?></option>
-                </select>
+            <div class="form-group mb-0 mt-2 d-flex align-items-center flex-wrap gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="ccp-upload-btn"
                     <?php echo $agentReady ? '' : 'disabled'; ?>
                     title="<?php echo $agentReady ? xla('Upload a lab PDF or intake form image for extraction') : xla('Configure CLINICAL_COPILOT_AGENT_BASE_URL first'); ?>"
                     aria-label="<?php echo xla('Upload document for extraction'); ?>">
                     <span class="fa fa-upload mr-1" aria-hidden="true"></span><?php echo xlt('Upload Document'); ?>
                 </button>
-                <input type="file" id="ccp-file-input" accept=".pdf,image/*" class="d-none"
+                <span id="ccp-doc-type-chip" class="badge badge-info d-none" style="font-size:0.8rem;"></span>
+                <input type="file" id="ccp-file-input" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.hl7,.txt" class="d-none"
                     aria-label="<?php echo xla('Select file to extract'); ?>">
             </div>
         </div>
@@ -223,7 +218,7 @@ $agentReady = $handoff->isConfigured();
             var messagesEl = document.getElementById('clinical-copilot-messages');
             var uploadBtn = document.getElementById('ccp-upload-btn');
             var fileInput = document.getElementById('ccp-file-input');
-            var docTypeSelect = document.getElementById('ccp-doc-type');
+            var docTypeChip = document.getElementById('ccp-doc-type-chip');
             var pendingExtractConfirmation = false;
             var pendingExtractDocType = '';
             var pendingExtractFileName = '';
@@ -701,7 +696,7 @@ $agentReady = $handoff->isConfigured();
                 return true;
             }
 
-            if (uploadBtn && fileInput && docTypeSelect) {
+            if (uploadBtn && fileInput) {
                 uploadBtn.addEventListener('click', function () {
                     if (!agentReady) {
                         return;
@@ -742,7 +737,6 @@ $agentReady = $handoff->isConfigured();
 
                     var formData = new FormData();
                     formData.append('file', file);
-                    formData.append('doc_type', docTypeSelect.value);
                     formData.append('csrf_token_form', csrfToken);
 
                     fetch(extractUrl, {
@@ -761,8 +755,17 @@ $agentReady = $handoff->isConfigured();
                         }
                         if (res.ok && res.data && res.data.extracted) {
                             extractedFacts = res.data.extracted;
-                            pendingExtractDocType = docTypeSelect.value;
+                            pendingExtractDocType = res.data.doc_type || 'lab_pdf';
                             pendingExtractFileName = file.name || 'uploaded-document';
+                            if (docTypeChip) {
+                                var chipLabel = pendingExtractDocType;
+                                var chipTitle = res.data.doc_type_inferred
+                                    ? <?php echo json_encode(xl('Detected automatically')); ?>
+                                    : <?php echo json_encode(xl('Type specified')); ?>;
+                                docTypeChip.textContent = chipLabel;
+                                docTypeChip.title = chipTitle;
+                                docTypeChip.classList.remove('d-none');
+                            }
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
                             var missingFields = getMissingIdentityFields(extractedFacts);
                             pendingIdentityMissingFields = missingFields;
