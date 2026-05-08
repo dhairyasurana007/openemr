@@ -134,7 +134,7 @@ final class ClinicalCopilotExtractedDataApplyService
         array $facts,
         ?int $vitalsFormId
     ): int {
-        $title = $docType === 'lab_pdf'
+        $title = $docType === 'lab'
             ? 'Clinical Co-Pilot Lab Extraction'
             : 'Clinical Co-Pilot Intake Extraction';
 
@@ -258,4 +258,3 @@ final class ClinicalCopilotExtractedDataApplyService
         return $result;
     }
 }
-

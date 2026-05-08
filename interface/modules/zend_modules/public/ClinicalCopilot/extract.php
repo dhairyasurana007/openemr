@@ -70,6 +70,14 @@ function ccpExtractNormalizeFieldName(string $name): string
     return strtolower(preg_replace('/[^a-z0-9]/', '', $name) ?? '');
 }
 
+function ccpExtractInferDocType(string $mimeType, string $fileExtension): string
+{
+    if ($mimeType === 'application/pdf' || $fileExtension === 'pdf') {
+        return 'lab';
+    }
+    return 'intake_form';
+}
+
 /**
  * @param array<string, mixed> $extractedFacts
  * @param list<string> $fieldCandidates
@@ -124,15 +132,6 @@ try {
 
     $docType = trim((string) ($_POST['doc_type'] ?? ''));
     $docTypeInferred = false;
-    if ($docType === '') {
-        $docType = 'lab_pdf';
-        $docTypeInferred = true;
-    }
-    if (!in_array($docType, ['lab_pdf', 'intake_form'], true)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid doc_type. Allowed values: lab_pdf, intake_form']);
-        exit;
-    }
 
     if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         $uploadErr = $_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE;
@@ -168,6 +167,18 @@ try {
     if (!$isAllowedMime && !$isAllowedGenericMime) {
         http_response_code(415);
         echo json_encode(['error' => 'Unsupported file type. Allowed: PDF, images (JPEG, PNG, GIF, WebP, TIFF), DOCX, XLSX, HL7, and TXT.']);
+        exit;
+    }
+    if ($docType === '') {
+        $docType = ccpExtractInferDocType($mimeType, $fileExtension);
+        $docTypeInferred = true;
+    }
+    if ($docType === 'lab_pdf') {
+        $docType = 'lab';
+    }
+    if (!in_array($docType, ['lab', 'intake_form'], true)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid doc_type. Allowed values: lab, intake_form']);
         exit;
     }
 

@@ -210,7 +210,6 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     aria-label="<?php echo xla('Upload document for extraction'); ?>">
                     <span class="fa fa-upload mr-1" aria-hidden="true"></span><?php echo xlt('Upload Document'); ?>
                 </button>
-                <span id="ccp-doc-type-chip" class="badge badge-info d-none" style="font-size:0.8rem;"></span>
                 <input type="file" id="ccp-file-input" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.hl7,.txt" class="d-none"
                     aria-label="<?php echo xla('Select file to extract'); ?>">
             </div>
@@ -231,7 +230,6 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
             var messagesEl = document.getElementById('clinical-copilot-messages');
             var uploadBtn = document.getElementById('ccp-upload-btn');
             var fileInput = document.getElementById('ccp-file-input');
-            var docTypeChip = document.getElementById('ccp-doc-type-chip');
             var pendingExtractConfirmation = false;
             var pendingExtractDocType = '';
             var pendingExtractFileName = '';
@@ -731,6 +729,14 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return !!noPhrases[normalized];
             }
 
+            function inferDocTypeFromFile(file) {
+                if (!file || !file.name) {
+                    return 'intake_form';
+                }
+                var fileName = String(file.name).toLowerCase();
+                return fileName.endsWith('.pdf') ? 'lab' : 'intake_form';
+            }
+
             function handleExtractConfirmationReply(messageText) {
                 if (!pendingExtractConfirmation) {
                     return false;
@@ -842,7 +848,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var formData = new FormData();
                     formData.append('file', file);
                     formData.append('csrf_token_form', csrfToken);
-                    formData.append('doc_type', 'lab_pdf');
+                    formData.append('doc_type', inferDocTypeFromFile(file));
 
                     fetch(extractUrl, {
                         method: 'POST',
@@ -871,17 +877,8 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             if (extr && extr.citation && extr.citation.source_id) {
                                 pdfBlobMap[extr.citation.source_id] = blobUrl;
                             }
-                            pendingExtractDocType = res.data.doc_type || 'lab_pdf';
+                            pendingExtractDocType = res.data.doc_type || 'lab';
                             pendingExtractFileName = file.name || 'uploaded-document';
-                            if (docTypeChip) {
-                                var chipLabel = pendingExtractDocType;
-                                var chipTitle = res.data.doc_type_inferred
-                                    ? <?php echo json_encode(xl('Detected automatically')); ?>
-                                    : <?php echo json_encode(xl('Type specified')); ?>;
-                                docTypeChip.textContent = chipLabel;
-                                docTypeChip.title = chipTitle;
-                                docTypeChip.classList.remove('d-none');
-                            }
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
                             var missingFields = getMissingIdentityFields(extractedFacts);
                             pendingIdentityMissingFields = missingFields;
