@@ -780,6 +780,9 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         if (applied && applied.pnote_id) {
                             savedLines.push('- ' + <?php echo json_encode(xl('Patient note created')); ?> + ': ' + applied.pnote_id);
                         }
+                        if (res.data.warning) {
+                            savedLines.push('- ' + <?php echo json_encode(xl('Warning')); ?> + ': ' + res.data.warning);
+                        }
                         appendBubble('assistant', savedLines.join('\n'), false);
                     } else {
                         var err = (res.data && res.data.error) ? res.data.error : '';
@@ -888,8 +891,8 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                                 appendBubble(
                                     'assistant',
                                     <?php echo json_encode(xl('Unable to map data to a patient because required identity fields are missing')); ?>
-                                        + ': ' + missingFields.join(', ')
-                                        + '\n' + <?php echo json_encode(xl('You can reply with only a first or last name when name is missing. For multiple fields, use format like: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
+                                        + ':\n' + missingFields.join('\n')
+                                        + '\n' + <?php echo json_encode(xl('You can reply with only a first or last name when name is missing. Use this format: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
                                     true
                                 );
                             } else {

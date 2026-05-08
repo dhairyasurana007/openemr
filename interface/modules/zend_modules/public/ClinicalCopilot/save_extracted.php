@@ -15,6 +15,7 @@ $sessionAllowWrite = true;
 require_once(__DIR__ . '/../../../../globals.php');
 
 use OpenEMR\Common\Acl\AclMain;
+use OpenEMR\BC\ServiceContainer;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotExtractedDataApplyService;
@@ -218,6 +219,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 try {
     $session = SessionWrapperFactory::getInstance()->getActiveSession();
+    $logger = ServiceContainer::getLogger();
     $raw = file_get_contents('php://input') ?: '';
     $payload = json_decode($raw, true);
     if (!is_array($payload)) {
@@ -316,15 +318,27 @@ try {
         $authProvider = 'Default';
     }
 
-    $repository = new ClinicalCopilotExtractedDataRepository();
-    $repository->saveConfirmedExtraction(
-        $pid,
-        $encounter,
-        $docType,
-        $fileName,
-        $authUserId,
-        $extractedFacts
-    );
+    $saveWarning = null;
+    try {
+        $repository = new ClinicalCopilotExtractedDataRepository();
+        $repository->saveConfirmedExtraction(
+            $pid,
+            $encounter,
+            $docType,
+            $fileName,
+            $authUserId,
+            $extractedFacts
+        );
+    } catch (\Throwable $throwable) {
+        $saveWarning = 'Failed to persist extracted-data audit row; continuing with patient record apply.';
+        $logger->warning('clinical_copilot_save_extracted_audit_failed', [
+            'pid' => $pid,
+            'encounter' => $encounter,
+            'doc_type' => $docType,
+            'source_file_name' => $fileName,
+            'exception' => $throwable,
+        ]);
+    }
     $applyService = new ClinicalCopilotExtractedDataApplyService();
     $applyResult = $applyService->applyConfirmedExtraction(
         $pid,
@@ -336,7 +350,7 @@ try {
         $extractedFacts
     );
 
-    echo json_encode(['ok' => true, 'applied' => $applyResult], JSON_THROW_ON_ERROR);
+    echo json_encode(['ok' => true, 'applied' => $applyResult, 'warning' => $saveWarning], JSON_THROW_ON_ERROR);
 } catch (\JsonException) {
     http_response_code(500);
     echo json_encode(['error' => 'Encoding error']);
