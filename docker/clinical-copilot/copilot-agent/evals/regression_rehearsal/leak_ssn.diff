@@ -1,0 +1,10 @@
+diff --git a/docker/clinical-copilot/copilot-agent/app/log_redaction.py b/docker/clinical-copilot/copilot-agent/app/log_redaction.py
+--- a/docker/clinical-copilot/copilot-agent/app/log_redaction.py
++++ b/docker/clinical-copilot/copilot-agent/app/log_redaction.py
+@@ -25,5 +25,3 @@ class PHIRedactionFilter(logging.Filter):
+     def filter(self, record: logging.LogRecord) -> bool:
+-        record.msg = redact(str(record.msg))
+-        if record.args:
+-            record.args = tuple(redact(str(a)) for a in record.args)
++        # Regression: redaction bypassed — PHI survives into captured logs
+         return True

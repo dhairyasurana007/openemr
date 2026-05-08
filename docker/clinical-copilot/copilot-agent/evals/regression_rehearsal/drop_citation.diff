@@ -1,0 +1,14 @@
+diff --git a/docker/clinical-copilot/copilot-agent/evals/rubrics.py b/docker/clinical-copilot/copilot-agent/evals/rubrics.py
+--- a/docker/clinical-copilot/copilot-agent/evals/rubrics.py
++++ b/docker/clinical-copilot/copilot-agent/evals/rubrics.py
+@@ -73,7 +73,8 @@ def citation_present(case: dict[str, Any], output: Any) -> bool:
+     if doc_type == "lab_pdf":
+         results = output.get("results", [])
+         if not results:
+             return False
+-        return all(r.get("citation") is not None for r in results)
++        # Regression: require source_url in every citation (no golden stub has this field)
++        return all(r.get("citation") is not None and bool(r.get("citation", {}).get("source_url")) for r in results)
+     if doc_type == "intake_form":
+         return output.get("citation") is not None
+     return False

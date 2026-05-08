@@ -78,3 +78,60 @@ Thanks to our [ONC Certification Major Sponsors](https://www.open-emr.org/wiki/i
 ### License
 
 [GNU GPL](LICENSE)
+
+---
+
+## Week 2 — Clinical Co-Pilot Multimodal Flow
+
+The `docker/clinical-copilot/copilot-agent/` directory contains a FastAPI +
+LangGraph agent that adds AI-assisted document extraction, hybrid RAG retrieval,
+and FHIR round-trip persistence to OpenEMR.
+
+### Required Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | Yes | Routes chat completions and VLM document extraction |
+| `VLM_MODEL` | No | Model for document extraction (default: `anthropic/claude-sonnet-4.6`) |
+| `OPENROUTER_MODEL` | No | Model for supervisor / answer composer (default: `anthropic/claude-3.5-haiku`) |
+| `OPENEMR_INTERNAL_HOSTPORT` | Yes | Host:port of the OpenEMR web container (e.g. `openemr-web:80`) |
+| `CLINICAL_COPILOT_INTERNAL_SECRET` | Yes (prod) | Shared secret for `X-Clinical-Copilot-Internal-Secret` header |
+| `COHERE_API_KEY` | No | Enables Cohere `rerank-english-v3.0` in the RAG pipeline |
+| `LANGCHAIN_API_KEY` | No | LangSmith tracing (auto-enables when key is present) |
+| `LANGCHAIN_TRACING_V2` | No | Override tracing on/off (default: on when key set) |
+| `LANGCHAIN_PROJECT` | No | LangSmith project name (default: `clinical-copilot`) |
+| `GUIDELINES_CORPUS_DIR` | No | Directory of plain-text guideline files (default: `app/guidelines`) |
+
+### Running the Week 2 Flow End-to-End
+
+```bash
+# 1. Start OpenEMR (includes the copilot-agent sidecar)
+cd docker/development-easy && docker compose up --detach --wait
+
+# 2. Run the copilot-agent unit + integration tests
+cd ../clinical-copilot/copilot-agent && python -m pytest tests -v
+
+# 3. Run the 50-case offline eval suite (must exit 0 for CI to pass)
+python evals/run_evals.py
+```
+
+### Week 1 vs Week 2
+
+| Area | Week 1 | Week 2 |
+|------|--------|--------|
+| Document formats | PDF, PNG, JPEG | + TIFF, DOCX, XLSX, HL7v2 |
+| Doc-type selection | Manual dropdown | Auto-detected (heuristic → VLM) |
+| FHIR persistence | None | `DocumentReference` + `Observation` round-trip |
+| Retrieval | Chart tools only | Chart tools + hybrid RAG (BM25 + dense + Cohere) |
+| Observability | Basic logs | Per-encounter `EncounterTrace` + PHI redaction |
+| Eval | Manual smoke tests | 50-case golden suite with CI gate |
+| Citation UI | Text only | Clickable bbox overlay on rendered PDF |
+
+### Design Details
+
+See [W2_ARCHITECTURE.md](W2_ARCHITECTURE.md) for full design documentation
+covering the ingestion flow, worker graph, RAG pipeline, eval gate, FHIR
+sequence, and observability schema.
+
+See [W2_COST_LATENCY_REPORT.md](W2_COST_LATENCY_REPORT.md) for cost/latency
+measurements, projected production costs, and bottleneck analysis.
