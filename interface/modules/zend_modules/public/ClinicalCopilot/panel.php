@@ -549,6 +549,28 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 scrollToBottom();
             }
 
+            function collectCitationsFromExtracted(extracted) {
+                var citations = [];
+                if (!extracted || typeof extracted !== 'object') {
+                    return citations;
+                }
+                if (extracted.citation && typeof extracted.citation === 'object') {
+                    citations.push(extracted.citation);
+                }
+                if (Array.isArray(extracted.results)) {
+                    for (var i = 0; i < extracted.results.length; i++) {
+                        var result = extracted.results[i];
+                        if (!result || typeof result !== 'object') {
+                            continue;
+                        }
+                        if (result.citation && typeof result.citation === 'object') {
+                            citations.push(result.citation);
+                        }
+                    }
+                }
+                return citations;
+            }
+
             function removeIntroIfPresent() {
                 var intro = document.getElementById('clinical-copilot-intro');
                 if (intro) {
@@ -880,6 +902,10 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             pendingExtractDocType = res.data.doc_type || 'lab';
                             pendingExtractFileName = file.name || 'uploaded-document';
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
+                            var extractionCitations = collectCitationsFromExtracted(res.data.extracted);
+                            if (extractionCitations.length > 0) {
+                                appendCitationRow(extractionCitations);
+                            }
                             var missingFields = getMissingIdentityFields(extractedFacts);
                             pendingIdentityMissingFields = missingFields;
                             if (missingFields.length > 0) {
