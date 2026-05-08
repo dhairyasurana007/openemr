@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Optional
 from dataclasses import dataclass
 
 
@@ -35,6 +36,14 @@ def _standard_api_path_prefix() -> str:
     return "/" + raw.strip("/")
 
 
+def _optional(name: str) -> Optional[str]:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    return value if value != "" else None
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime configuration loaded once at process start."""
@@ -53,6 +62,22 @@ class Settings:
     """OpenRouter optional ``X-Title`` header."""
     clinical_copilot_internal_secret: str
     """When non-empty, copilot endpoints require matching ``X-Clinical-Copilot-Internal-Secret``."""
+    openemr_fhir_bearer_token: str
+    """Optional Bearer token for agent writes to OpenEMR FHIR endpoints."""
+    openemr_oauth_token_url: str | None
+    """Optional OAuth token endpoint override. Defaults to ``{openemr_base_url}/oauth2/default/token``."""
+    openemr_oauth_client_id: str | None
+    """OAuth client id used to mint client-credentials access tokens for FHIR writes."""
+    openemr_oauth_client_secret: str | None
+    """OAuth client secret used to mint client-credentials access tokens for FHIR writes."""
+    openemr_oauth_scope: str | None
+    """Optional scope parameter for OAuth client-credentials token requests."""
+    openemr_oauth_bootstrap_enabled: bool
+    """When true, agent can auto-provision/update its OAuth client in OpenEMR using internal secret auth."""
+    openemr_oauth_bootstrap_client_id: str
+    """OAuth client_id used for bootstrap provisioning."""
+    openemr_oauth_bootstrap_scope: str
+    """Scope stored on the auto-provisioned OAuth client."""
     openemr_internal_hostport: str
     """Host:port or full URL for OpenEMR HTTP (e.g. ``openemr-web:80``). Document root; not the API prefix."""
     openemr_standard_api_path_prefix: str
@@ -112,6 +137,18 @@ class Settings:
             openrouter_app_title=(os.environ.get("OPENROUTER_APP_TITLE") or "OpenEMR Clinical Co-Pilot").strip(),
             clinical_copilot_internal_secret=(
                 os.environ.get("CLINICAL_COPILOT_INTERNAL_SECRET") or ""
+            ).strip(),
+            openemr_fhir_bearer_token=(os.environ.get("OPENEMR_FHIR_BEARER_TOKEN") or "").strip(),
+            openemr_oauth_token_url=_optional("OPENEMR_OAUTH_TOKEN_URL"),
+            openemr_oauth_client_id=_optional("OPENEMR_OAUTH_CLIENT_ID"),
+            openemr_oauth_client_secret=_optional("OPENEMR_OAUTH_CLIENT_SECRET"),
+            openemr_oauth_scope=_optional("OPENEMR_OAUTH_SCOPE"),
+            openemr_oauth_bootstrap_enabled=_bool("OPENEMR_OAUTH_BOOTSTRAP_ENABLED", True),
+            openemr_oauth_bootstrap_client_id=(
+                os.environ.get("OPENEMR_OAUTH_BOOTSTRAP_CLIENT_ID") or "clinical-copilot-agent"
+            ).strip(),
+            openemr_oauth_bootstrap_scope=(
+                os.environ.get("OPENEMR_OAUTH_BOOTSTRAP_SCOPE") or "api:fhir"
             ).strip(),
             openemr_internal_hostport=os.environ.get(
                 "OPENEMR_INTERNAL_HOSTPORT", "openemr-web:80"

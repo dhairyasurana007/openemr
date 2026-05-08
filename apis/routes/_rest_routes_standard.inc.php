@@ -733,6 +733,9 @@ return [
     "GET /api/clinical-copilot/retrieval/referrals-orders-care-gaps" => function (HttpRestRequest $request) {
         return (new ClinicalCopilotRetrievalRestController())->getReferralsOrdersCareGaps($request);
     },
+    "POST /api/clinical-copilot/retrieval/bootstrap-oauth-client" => function (HttpRestRequest $request) {
+        return (new ClinicalCopilotRetrievalRestController())->bootstrapOauthClient($request);
+    },
     // No request_authorization_check on "/api/background_service/$run":
     // this endpoint advances only services that are due, cannot force-run,
     // and cannot bypass intervals. Any authenticated user calling it has

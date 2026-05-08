@@ -172,7 +172,12 @@ try {
 
     // Resolve the current patient identifier from the OpenEMR session.
     // pid is the integer primary-key; use it as the stable patient_id string.
-    $patientId = trim((string) ($_SESSION['pid'] ?? ''));
+    $patientId = trim((string) ($session->get('pid') ?? ''));
+    if ($patientId === '' || $patientId === '0') {
+        http_response_code(400);
+        echo json_encode(['error' => 'No patient selected in session']);
+        exit;
+    }
 
     $handoff = AgentRuntimeHandoff::fromEnvironment();
     $base = $handoff->privateAgentBaseUrl;

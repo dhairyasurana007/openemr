@@ -17,6 +17,9 @@ declare(strict_types=1);
 
 namespace OpenEMR\RestControllers\ClinicalCopilot;
 
+use OpenEMR\BC\ServiceContainer;
+use OpenEMR\Common\Auth\OpenIDConnect\Repositories\ClientRepository;
+use OpenEMR\Common\Database\QueryUtils;
 use OpenEMR\Common\Http\HttpRestRequest;
 use OpenEMR\RestControllers\Config\RestConfig;
 use OpenEMR\Services\AllergyIntoleranceService;
@@ -606,6 +609,63 @@ final class ClinicalCopilotRetrievalRestController
             'DOB' => (string) ($row['DOB'] ?? ''),
             'sex' => (string) ($row['sex'] ?? ''),
         ];
+    }
+
+    public function bootstrapOauthClient(HttpRestRequest $request): JsonResponse
+    {
+        ClinicalCopilotInternalAuth::assertConfiguredSecretMatches($request);
+
+        $raw = $request->getContent();
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            throw new BadRequestHttpException('Invalid JSON payload');
+        }
+
+        $clientId = trim((string) ($payload['client_id'] ?? ''));
+        $clientSecret = trim((string) ($payload['client_secret'] ?? ''));
+        $scope = trim((string) ($payload['scope'] ?? 'api:fhir'));
+        if ($clientId === '' || $clientSecret === '') {
+            throw new BadRequestHttpException('Missing required fields: client_id and client_secret');
+        }
+
+        $siteId = (string) ($GLOBALS['oe_site_id'] ?? 'default');
+        $encryptedSecret = ServiceContainer::getCrypto()->encryptStandard($clientSecret);
+        $existing = QueryUtils::querySingleRow('SELECT client_id FROM oauth_clients WHERE client_id = ?', [$clientId]);
+
+        if (is_array($existing)) {
+            QueryUtils::sqlStatementThrowException(
+                'UPDATE oauth_clients SET client_secret = ?, grant_types = ?, scope = ?, is_confidential = 1, is_enabled = 1 WHERE client_id = ?',
+                [$encryptedSecret, 'client_credentials', $scope, $clientId]
+            );
+            $status = 'updated';
+        } else {
+            $repo = new ClientRepository();
+            $ok = $repo->insertNewClient($clientId, [
+                'client_role' => 'service',
+                'client_name' => 'Clinical Copilot Agent',
+                'client_secret' => $clientSecret,
+                'registration_access_token' => '',
+                'registration_client_uri_path' => '',
+                'contacts' => '',
+                'redirect_uris' => '',
+                'grant_types' => 'client_credentials',
+                'scope' => $scope,
+                'skip_ehr_launch_authorization_flow' => true,
+                'dsi_type' => 0,
+            ], $siteId);
+            if (!$ok) {
+                return new JsonResponse(['error' => 'Failed to create OAuth client'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+            $status = 'created';
+        }
+
+        return new JsonResponse([
+            'ok' => true,
+            'status' => $status,
+            'client_id' => $clientId,
+            'scope' => $scope,
+            'site_id' => $siteId,
+        ], Response::HTTP_OK);
     }
 
     /**

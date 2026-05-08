@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import time
+import asyncio
+import hmac
 from typing import TYPE_CHECKING, Literal
 
 import httpx
@@ -28,6 +31,9 @@ _ABNORMAL_FLAG_MAP: dict[str, str] = {
 _FHIR_INTERPRETATION_SYSTEM = (
     "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation"
 )
+_TOKEN_CACHE: dict[str, str | float] = {"access_token": "", "expires_at": 0.0}
+_TOKEN_LOCK = asyncio.Lock()
+_BOOTSTRAP_LOCK = asyncio.Lock()
 
 
 class PersistResult(BaseModel):
@@ -64,11 +70,126 @@ def _make_client(settings: Settings) -> httpx.AsyncClient:
     )
 
 
-def _auth_headers(settings: Settings) -> dict[str, str]:
+def _oauth_is_configured(settings: Settings) -> bool:
+    has_static = bool(settings.openemr_oauth_client_id and settings.openemr_oauth_client_secret)
+    has_bootstrap = bool(
+        settings.openemr_oauth_bootstrap_enabled
+        and settings.clinical_copilot_internal_secret
+        and settings.openemr_oauth_bootstrap_client_id
+    )
+    return has_static or has_bootstrap
+
+
+def _bootstrap_oauth_client_secret(settings: Settings) -> str:
+    internal_secret = settings.clinical_copilot_internal_secret
+    if internal_secret == "":
+        raise ValueError("CLINICAL_COPILOT_INTERNAL_SECRET is required for OAuth bootstrap")
+    material = f"openemr-oauth-bootstrap:{settings.openemr_oauth_bootstrap_client_id}".encode("utf-8")
+    digest = hmac.new(internal_secret.encode("utf-8"), material, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+async def _ensure_bootstrap_oauth_client(client: httpx.AsyncClient, settings: Settings) -> tuple[str, str] | None:
+    if not settings.openemr_oauth_bootstrap_enabled:
+        return None
+    if settings.clinical_copilot_internal_secret == "":
+        return None
+
+    async with _BOOTSTRAP_LOCK:
+        client_id = settings.openemr_oauth_bootstrap_client_id.strip()
+        if client_id == "":
+            return None
+        client_secret = _bootstrap_oauth_client_secret(settings)
+        base = settings.openemr_base_url().rstrip("/")
+        prefix = settings.openemr_standard_api_path_prefix.rstrip("/")
+        url = f"{base}{prefix}/clinical-copilot/retrieval/bootstrap-oauth-client"
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Clinical-Copilot-Internal-Secret": settings.clinical_copilot_internal_secret,
+        }
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": settings.openemr_oauth_bootstrap_scope,
+        }
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return client_id, client_secret
+
+
+def _oauth_token_url(settings: Settings) -> str:
+    if settings.openemr_oauth_token_url:
+        return settings.openemr_oauth_token_url
+    return f"{settings.openemr_base_url().rstrip('/')}/oauth2/default/token"
+
+
+async def _get_oauth_access_token(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    force_refresh: bool = False,
+) -> str | None:
+    local_client_id = settings.openemr_oauth_client_id
+    local_client_secret = settings.openemr_oauth_client_secret
+    if not local_client_id or not local_client_secret:
+        bootstrap_pair = await _ensure_bootstrap_oauth_client(client, settings)
+        if bootstrap_pair is not None:
+            local_client_id, local_client_secret = bootstrap_pair
+    if not local_client_id or not local_client_secret:
+        return None
+
+    now = time.time()
+    cached_token = str(_TOKEN_CACHE.get("access_token") or "")
+    cached_expiry = float(_TOKEN_CACHE.get("expires_at") or 0.0)
+    if not force_refresh and cached_token != "" and (cached_expiry - 30.0) > now:
+        return cached_token
+
+    async with _TOKEN_LOCK:
+        now = time.time()
+        cached_token = str(_TOKEN_CACHE.get("access_token") or "")
+        cached_expiry = float(_TOKEN_CACHE.get("expires_at") or 0.0)
+        if not force_refresh and cached_token != "" and (cached_expiry - 30.0) > now:
+            return cached_token
+
+        form_data = {"grant_type": "client_credentials"}
+        if settings.openemr_oauth_scope:
+            form_data["scope"] = settings.openemr_oauth_scope
+
+        response = await client.post(
+            _oauth_token_url(settings),
+            data=form_data,
+            auth=(local_client_id, local_client_secret),
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        access_token = str(payload.get("access_token") or "").strip()
+        if access_token == "":
+            raise ValueError("OAuth token response missing access_token")
+        expires_in = int(payload.get("expires_in") or 300)
+        _TOKEN_CACHE["access_token"] = access_token
+        _TOKEN_CACHE["expires_at"] = time.time() + float(max(expires_in, 60))
+        return access_token
+
+
+async def _auth_headers(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    force_refresh_oauth: bool = False,
+) -> dict[str, str]:
+    headers: dict[str, str] = {}
     secret = settings.clinical_copilot_internal_secret
-    if secret == "":
-        return {}
-    return {"X-Clinical-Copilot-Internal-Secret": secret}
+    if secret != "":
+        headers["X-Clinical-Copilot-Internal-Secret"] = secret
+    bearer = settings.openemr_fhir_bearer_token
+    if bearer != "":
+        headers["Authorization"] = f"Bearer {bearer}"
+        return headers
+
+    token = await _get_oauth_access_token(client, settings, force_refresh=force_refresh_oauth)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 async def _find_existing_doc_ref(
@@ -201,11 +322,14 @@ async def persist_extraction(
     Idempotent: if the same file bytes are uploaded for the same patient,
     returns existing FHIR ids without creating new resources.
     """
+    patient_id = patient_id.strip()
+    if patient_id == "":
+        raise ValueError("patient_id is required for FHIR persistence")
+
     content_hash = hashlib.sha256(file_bytes).hexdigest()
     fhir_base = _fhir_base_url(settings)
-    headers = _auth_headers(settings)
-
     async with _make_client(settings) as client:
+        headers = await _auth_headers(client, settings)
         existing_id = await _find_existing_doc_ref(
             client, fhir_base, patient_id, content_hash, headers
         )
@@ -230,10 +354,18 @@ async def persist_extraction(
             resp = await client.post(
                 f"{fhir_base}/DocumentReference", json=doc_ref_body, headers=headers
             )
+            if resp.status_code == 401 and _oauth_is_configured(settings) and settings.openemr_fhir_bearer_token == "":
+                headers = await _auth_headers(client, settings, force_refresh_oauth=True)
+                resp = await client.post(
+                    f"{fhir_base}/DocumentReference", json=doc_ref_body, headers=headers
+                )
             resp.raise_for_status()
             doc_ref_id = str(resp.json()["id"])
         except (httpx.HTTPError, KeyError, ValueError) as exc:
-            _LOG.error("persist_doc_ref_failed patient=%s: %s", patient_id, exc)
+            detail = ""
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+                detail = f" status={exc.response.status_code} body={exc.response.text[:500]}"
+            _LOG.error("persist_doc_ref_failed patient=%s: %s%s", patient_id, exc, detail)
             # Use content hash as fallback so extraction still returns a stable source_id
             doc_ref_id = f"sha256:{content_hash}"
             doc_ref_persisted = False
