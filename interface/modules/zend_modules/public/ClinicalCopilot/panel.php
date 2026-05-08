@@ -518,7 +518,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var sType = normalizeCitationValue(cit.source_type) || 'source';
                     var pageLabel = normalizeCitationValue(cit.page_or_section);
                     var displayName = badgeLabel || sType;
-                    badge.textContent = displayName + (pageLabel ? ' · ' + pageLabel : '');
+                    badge.textContent = displayName + (pageLabel ? ' - ' + pageLabel : '');
 
                     var quoteText = normalizeCitationValue(cit.quote_or_value);
                     badge.title = quoteText || displayName;
@@ -566,6 +566,23 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 if (!result || typeof result !== 'object') {
                     return <?php echo json_encode(xl('Field')); ?> + ' ' + String(index + 1);
                 }
+
+                var scalarFields = [];
+                Object.keys(result).forEach(function (key) {
+                    if (key === 'citation') {
+                        return;
+                    }
+                    var value = result[key];
+                    if (value === null || typeof value === 'object') {
+                        return;
+                    }
+                    var textValue = String(value).trim();
+                    if (textValue === '') {
+                        return;
+                    }
+                    scalarFields.push({ key: key, value: textValue });
+                });
+
                 var labelCandidates = [
                     result.field_label,
                     result.field_name,
@@ -579,6 +596,18 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var label = toHumanFieldLabel(labelCandidates[i]);
                     if (label) {
                         return label;
+                    }
+                }
+
+                var quotedValue = normalizeCitationValue(citation && citation.quote_or_value).toLowerCase();
+                if (quotedValue) {
+                    for (var q = 0; q < scalarFields.length; q++) {
+                        if (scalarFields[q].value.toLowerCase() === quotedValue) {
+                            var quotedKeyLabel = toHumanFieldLabel(scalarFields[q].key);
+                            if (quotedKeyLabel) {
+                                return quotedKeyLabel;
+                            }
+                        }
                     }
                 }
 
@@ -609,9 +638,16 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         return keyLabel;
                     }
                 }
+
+                if (scalarFields.length === 1) {
+                    var singleFieldLabel = toHumanFieldLabel(scalarFields[0].key);
+                    if (singleFieldLabel) {
+                        return singleFieldLabel;
+                    }
+                }
+
                 return <?php echo json_encode(xl('Field')); ?> + ' ' + String(index + 1);
             }
-
             function collectCitationsFromExtracted(extracted) {
                 var citations = [];
                 if (!extracted || typeof extracted !== 'object') {
