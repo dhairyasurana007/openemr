@@ -170,6 +170,10 @@ try {
         exit;
     }
 
+    // Resolve the current patient identifier from the OpenEMR session.
+    // pid is the integer primary-key; use it as the stable patient_id string.
+    $patientId = trim((string) ($_SESSION['pid'] ?? ''));
+
     $handoff = AgentRuntimeHandoff::fromEnvironment();
     $base = $handoff->privateAgentBaseUrl;
     if ($base === '') {
@@ -209,6 +213,10 @@ try {
             [
                 'name'     => 'doc_type',
                 'contents' => $docType,
+            ],
+            [
+                'name'     => 'patient_id',
+                'contents' => $patientId,
             ],
         ],
     ]);

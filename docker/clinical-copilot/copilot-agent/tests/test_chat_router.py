@@ -130,15 +130,24 @@ class TestExtractEndpoint(unittest.TestCase):
 
     def test_extract_endpoint_accepts_missing_doc_type(self) -> None:
         import app.main as main_mod
+        from app.openemr_persistence import PersistResult
 
         mock_result = _make_lab_result()
+        mock_persist = PersistResult(
+            source_id="doc-ref-001",
+            document_reference_id="doc-ref-001",
+            observation_ids=["obs-001"],
+            deduplicated=False,
+        )
 
-        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))):
+        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)):
             with TestClient(main_mod.app) as client:
                 # Override AFTER lifespan runs so our key isn't reset
                 main_mod.app.state.settings = _settings_with_openrouter()
                 response = client.post(
                     "/v1/extract",
+                    data={"patient_id": "demo-001"},
                     files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
                 )
 
@@ -148,19 +157,28 @@ class TestExtractEndpoint(unittest.TestCase):
         self.assertIn("doc_type_inferred", body)
         self.assertTrue(body["doc_type_inferred"])
         self.assertEqual(body["doc_type"], "lab_pdf")
+        self.assertEqual(body["source_id"], "doc-ref-001")
 
     def test_extract_endpoint_pinned_doc_type_short_circuits_classifier(self) -> None:
         import app.main as main_mod
+        from app.openemr_persistence import PersistResult
 
         mock_result = _make_lab_result()
+        mock_persist = PersistResult(
+            source_id="doc-ref-002",
+            document_reference_id="doc-ref-002",
+            observation_ids=[],
+            deduplicated=False,
+        )
 
         with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)), \
              patch("app.document_extractor.classify_doc_type", new_callable=AsyncMock) as mock_clf:
             with TestClient(main_mod.app) as client:
                 main_mod.app.state.settings = _settings_with_openrouter()
                 response = client.post(
                     "/v1/extract",
-                    data={"doc_type": "lab_pdf"},
+                    data={"doc_type": "lab_pdf", "patient_id": "demo-001"},
                     files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
                 )
 
@@ -176,11 +194,23 @@ class TestExtractEndpoint(unittest.TestCase):
             main_mod.app.state.settings = _settings_with_openrouter()
             response = client.post(
                 "/v1/extract",
-                data={"doc_type": "bad_type"},
+                data={"doc_type": "bad_type", "patient_id": "demo-001"},
                 files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
             )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_extract_endpoint_returns_422_when_patient_id_missing(self) -> None:
+        import app.main as main_mod
+
+        with TestClient(main_mod.app) as client:
+            main_mod.app.state.settings = _settings_with_openrouter()
+            response = client.post(
+                "/v1/extract",
+                files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+            )
+
+        self.assertEqual(response.status_code, 422)
 
     def test_extract_endpoint_returns_503_when_openrouter_key_missing(self) -> None:
         import app.main as main_mod
@@ -188,7 +218,63 @@ class TestExtractEndpoint(unittest.TestCase):
         with TestClient(main_mod.app) as client:
             response = client.post(
                 "/v1/extract",
+                data={"patient_id": "demo-001"},
                 files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
             )
 
         self.assertEqual(response.status_code, 503)
+
+    def test_attach_and_extract_alias_works(self) -> None:
+        import app.main as main_mod
+        from app.openemr_persistence import PersistResult
+
+        mock_result = _make_lab_result()
+        mock_persist = PersistResult(
+            source_id="doc-ref-003",
+            document_reference_id="doc-ref-003",
+            observation_ids=["obs-001"],
+            deduplicated=True,
+        )
+
+        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)):
+            with TestClient(main_mod.app) as client:
+                main_mod.app.state.settings = _settings_with_openrouter()
+                response = client.post(
+                    "/v1/attach-and-extract",
+                    data={"patient_id": "demo-001"},
+                    files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["source_id"], "doc-ref-003")
+        self.assertTrue(body["deduplicated"])
+
+    def test_extract_citations_backfilled_with_fhir_source_id(self) -> None:
+        import app.main as main_mod
+        from app.openemr_persistence import PersistResult
+
+        mock_result = _make_lab_result()
+        mock_persist = PersistResult(
+            source_id="fhir-doc-ref-xyz",
+            document_reference_id="fhir-doc-ref-xyz",
+            observation_ids=["obs-001"],
+            deduplicated=False,
+        )
+
+        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)):
+            with TestClient(main_mod.app) as client:
+                main_mod.app.state.settings = _settings_with_openrouter()
+                response = client.post(
+                    "/v1/extract",
+                    data={"patient_id": "demo-001"},
+                    files={"file": ("test.pdf", b"%PDF-1.4", "application/pdf")},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        # Every lab result citation must point at the FHIR DocumentReference id
+        for lab in body["extracted"]["results"]:
+            self.assertEqual(lab["citation"]["source_id"], "fhir-doc-ref-xyz")
