@@ -604,7 +604,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
 
             function getMissingIdentityFields(extracted) {
                 var missing = [];
-                if (!hasNonEmptyExtractedField(extracted, ['name', 'full_name', 'patient_name'])) {
+                if (!hasNonEmptyExtractedField(extracted, ['name', 'full_name', 'patient_name', 'first_name', 'last_name', 'fname', 'lname', 'patient_first_name', 'patient_last_name'])) {
                     missing.push('name');
                 }
                 if (!hasNonEmptyExtractedField(extracted, ['gender', 'sex'])) {
@@ -633,6 +633,13 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 var dobMatch = /(?:^|[\n,;])\s*(?:date\s*of\s*birth|dob|birth\s*date)\s*[:=]\s*([^\n,;]+)/i.exec(text);
                 if (dobMatch && dobMatch[1]) {
                     parsed.date_of_birth = dobMatch[1].trim();
+                }
+
+                if (!parsed.name && pendingIdentityCollection && pendingIdentityMissingFields.indexOf('name') !== -1) {
+                    var compactText = text.replace(/\s+/g, ' ').trim();
+                    if (compactText !== '' && compactText.indexOf(':') === -1 && compactText.indexOf('=') === -1) {
+                        parsed.name = compactText;
+                    }
                 }
 
                 return parsed;
@@ -665,7 +672,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     appendBubble(
                         'assistant',
                         <?php echo json_encode(xl('Still missing required fields')); ?> + ': ' + stillMissing.join(', ')
-                            + '\n' + <?php echo json_encode(xl('Please provide them in this format: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
+                            + '\n' + <?php echo json_encode(xl('You can reply with only a first or last name when name is missing. For multiple fields, use format like: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
                         true
                     );
                     return true;
@@ -868,7 +875,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                                     'assistant',
                                     <?php echo json_encode(xl('Unable to map data to a patient because required identity fields are missing')); ?>
                                         + ': ' + missingFields.join(', ')
-                                        + '\n' + <?php echo json_encode(xl('Please provide them in this format: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
+                                        + '\n' + <?php echo json_encode(xl('You can reply with only a first or last name when name is missing. For multiple fields, use format like: Name: <value>, DOB: <value>, Gender: <value>.')); ?>,
                                     true
                                 );
                             } else {

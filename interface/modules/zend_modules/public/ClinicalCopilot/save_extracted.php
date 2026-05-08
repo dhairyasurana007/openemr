@@ -145,12 +145,22 @@ try {
         echo json_encode(['error' => 'Invalid extracted_facts']);
         exit;
     }
-    $hasName = ccpHasNonEmptyField($extractedFacts, ['name', 'full_name', 'patient_name']);
+    $hasName = ccpHasNonEmptyField($extractedFacts, [
+        'name',
+        'full_name',
+        'patient_name',
+        'first_name',
+        'last_name',
+        'fname',
+        'lname',
+        'patient_first_name',
+        'patient_last_name',
+    ]);
     $hasGender = ccpHasNonEmptyField($extractedFacts, ['gender', 'sex']);
     $hasDob = ccpHasNonEmptyField($extractedFacts, ['date_of_birth', 'dob', 'birth_date']);
     if (!$hasName || !$hasGender || !$hasDob) {
         http_response_code(422);
-        echo json_encode(['error' => 'Unable to map data to a patient. Extraction must include non-empty name, gender, and date_of_birth fields.']);
+        echo json_encode(['error' => 'Unable to map data to a patient. Extraction must include non-empty patient identity fields for name (full, first, or last), gender, and date_of_birth.']);
         exit;
     }
 
