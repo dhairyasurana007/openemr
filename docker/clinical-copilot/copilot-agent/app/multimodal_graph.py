@@ -285,6 +285,17 @@ def _make_supervisor(llm: Any):
         evidence_done = bool(state.get("guideline_evidence"))
 
         if not has_patient_context:
+            if has_extracted and not intake_done and hops < _MAX_WORKER_HOPS:
+                entry = {
+                    "node": "supervisor",
+                    "decision": "intake_extractor",
+                    "reason": "extracted_facts present, no intake_summary yet",
+                    "timestamp_ms": int(time.time() * 1000),
+                }
+                return {
+                    "routing_log": list(state.get("routing_log") or []) + [entry],
+                    "_next_node": "intake_extractor",
+                }
             if not evidence_done and hops < _MAX_WORKER_HOPS:
                 entry = {
                     "node": "supervisor",
@@ -497,6 +508,10 @@ def _make_answer_composer(llm: Any):
         if state.get("chart_tool_payloads"):
             context_parts.append(
                 "Chart retrieval payloads:\n" + json.dumps(state.get("chart_tool_payloads"), indent=2)[:3000]
+            )
+        if not state.get("intake_summary") and state.get("extracted_facts") is not None:
+            context_parts.append(
+                f"Extracted facts:\n{json.dumps(state.get('extracted_facts'), indent=2)}"
             )
         user_prompt = f"User query: {query[:500]}\n\nContext:\n---\n" + "\n---\n".join(context_parts)
         system_prompt = RAG_ANSWER_SYSTEM_PROMPT if state.get("guideline_evidence") else _ANSWER_SYSTEM

@@ -203,6 +203,19 @@ class TestSupervisorNode(unittest.TestCase):
         assert result["_next_node"] == "evidence_retriever"
         assert result["routing_log"][-1]["decision"] == "evidence_retriever"
 
+    def test_no_patient_extracted_facts_routes_to_intake_extractor_first(self) -> None:
+        llm = _mock_llm([])
+        supervisor = _make_supervisor(llm)
+        state = _empty_state(
+            patient_id=None,
+            extracted_facts={"doc_type": "lab_pdf", "results": []},
+        )
+        result = supervisor(state)
+        assert result["_next_node"] == "intake_extractor"
+        assert result["routing_log"][-1]["decision"] == "intake_extractor"
+        assert result["routing_log"][-1]["reason"] == "extracted_facts present, no intake_summary yet"
+        llm.invoke.assert_not_called()
+
     def test_routes_to_intake_extractor(self) -> None:
         llm = _mock_llm([{"decision": "intake_extractor", "reason": "facts present"}])
         supervisor = _make_supervisor(llm)
@@ -327,6 +340,7 @@ class TestEvidenceRetrieverNode(unittest.TestCase):
 
     def test_rag_runs_without_uploaded_document(self) -> None:
         rag = MagicMock()
+        rag.retrieve.return_value = []
         result = _make_evidence_retriever(rag)(_empty_state(extracted_facts=None))
         rag.retrieve.assert_called_once()
         assert isinstance(result["guideline_evidence"], list)
@@ -367,7 +381,18 @@ class TestAnswerComposerNode(unittest.TestCase):
         _make_answer_composer(llm)(state)
         call_args = llm.invoke.call_args[0][0]
         content = " ".join(str(m.content) for m in call_args)
-        assert "Extracted document facts" in content
+        assert "Extracted facts:" in content
+
+    def test_no_extracted_facts_in_prompt_when_intake_summary_present(self) -> None:
+        llm = _mock_llm([{"reply": "Based on intake...", "citations": []}])
+        state = _empty_state(
+            extracted_facts={"doc_type": "lab_pdf", "results": []},
+            intake_summary="Patient has hypertension.",
+        )
+        _make_answer_composer(llm)(state)
+        call_args = llm.invoke.call_args[0][0]
+        content = " ".join(str(m.content) for m in call_args)
+        assert "Extracted facts:" not in content
 
     def test_routing_log_entry_added(self) -> None:
         llm = _mock_llm([{"reply": "done", "citations": []}])
@@ -437,12 +462,13 @@ class TestBuildAndRunGraph(unittest.TestCase):
         assert isinstance(result["token_usage"], dict)
 
     def test_intake_extractor_runs_when_facts_present(self) -> None:
+        # No patient_id: supervisor deterministically routes to intake_extractor first,
+        # then to evidence_retriever (no RAG → empty), then to answer_composer.
+        # LLM is called only by workers, not by the supervisor in this branch.
         result = self._run(
             [
-                {"decision": "intake_extractor", "reason": "facts present"},
-                {"summary": "Patient has HTN.", "citations": []},
-                {"decision": "answer", "reason": "intake done"},
-                {"reply": "Based on extracted facts...", "citations": []},
+                {"summary": "Patient has HTN.", "citations": []},  # intake_extractor
+                {"reply": "Based on extracted facts...", "citations": []},  # answer_composer
             ],
             extracted_facts={"doc_type": "lab_pdf"},
         )
@@ -469,12 +495,13 @@ class TestBuildAndRunGraph(unittest.TestCase):
         rag.retrieve.assert_called_once()
 
     def test_evidence_retriever_runs_after_upload(self) -> None:
+        # No patient_id + extracted_facts: supervisor routes intake_extractor first,
+        # then evidence_retriever (with RAG), then answer_composer.
         rag = MagicMock()
         rag.retrieve.return_value = [{"text": "BP target < 130.", "source": "uspstf.txt", "chunk_id": 0}]
         llm = _mock_llm([
-            {"decision": "evidence_retriever", "reason": "needs guidelines"},
-            {"decision": "answer", "reason": "evidence retrieved"},
-            {"reply": "Guideline says...", "citations": []},
+            {"summary": "Lab results reviewed.", "citations": []},  # intake_extractor
+            {"reply": "Guideline says...", "citations": []},        # answer_composer
         ])
         result = run_multimodal_graph(
             message="What is the BP target?",
@@ -485,6 +512,7 @@ class TestBuildAndRunGraph(unittest.TestCase):
             _llm=llm,
         )
         routing_nodes = [e["node"] for e in result["routing_log"]]
+        assert "intake_extractor" in routing_nodes
         assert "evidence_retriever" in routing_nodes
         rag.retrieve.assert_called_once()
 
