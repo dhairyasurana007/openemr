@@ -176,26 +176,6 @@ def _last_message_text(state: CopilotState) -> str:
     return str(last)
 
 
-def _looks_like_patient_specific_query(query: str) -> bool:
-    lower = query.strip().lower()
-    if lower == "":
-        return False
-    markers = (
-        "patient ",
-        " pt ",
-        " mrn",
-        "dob",
-        "chart",
-        "encounter",
-        "medication",
-        "allerg",
-        "problem list",
-        "vitals",
-        "labs",
-    )
-    return any(marker in f" {lower} " for marker in markers)
-
-
 _SUPERVISOR_SYSTEM = """\
 You are a clinical co-pilot routing supervisor. Decide which worker to run next given current state.
 Workers:
@@ -306,12 +286,11 @@ def _make_supervisor(llm: Any):
         evidence_done = bool(state.get("guideline_evidence"))
 
         if not has_patient_context:
-            query = _last_message_text(state)
-            if _looks_like_patient_specific_query(query) and not chart_done and hops < _MAX_WORKER_HOPS:
+            if not chart_done and hops < _MAX_WORKER_HOPS:
                 entry = {
                     "node": "supervisor",
                     "decision": "chart_retriever",
-                    "reason": "patient-specific query without patient_id; attempting chart retrieval",
+                    "reason": "no patient_id provided; attempt chart retrieval before evidence",
                     "timestamp_ms": int(time.time() * 1000),
                 }
                 return {
