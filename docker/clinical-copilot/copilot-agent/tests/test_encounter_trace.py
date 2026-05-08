@@ -152,14 +152,14 @@ def test_phi_filter_scrubs_phi_from_log_during_emit(caplog: pytest.LogCaptureFix
 
 
 # ---------------------------------------------------------------------------
-# LangSmith hide-inputs/outputs env-var fallback
+# LangSmith payload visibility env-var wiring
 # ---------------------------------------------------------------------------
 
 
-def test_langsmith_hide_inputs_env_set_after_apply() -> None:
+def test_langsmith_inputs_outputs_visible_env_set_after_apply() -> None:
     from app.langsmith_env import apply_langchain_runtime_env
     from app.settings import Settings
 
     apply_langchain_runtime_env(Settings.load())
-    assert os.environ.get("LANGCHAIN_HIDE_INPUTS") == "true"
-    assert os.environ.get("LANGCHAIN_HIDE_OUTPUTS") == "true"
+    assert os.environ.get("LANGCHAIN_HIDE_INPUTS") == "false"
+    assert os.environ.get("LANGCHAIN_HIDE_OUTPUTS") == "false"

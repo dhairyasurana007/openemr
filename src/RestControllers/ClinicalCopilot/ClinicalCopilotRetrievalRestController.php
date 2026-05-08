@@ -312,7 +312,7 @@ final class ClinicalCopilotRetrievalRestController
             throw new BadRequestHttpException('Missing required query parameter: patient (patient UUID)');
         }
 
-        $processingResult = $this->prescriptionService->getAll(['patient.uuid' => $puuid], true);
+        $processingResult = $this->prescriptionService->getAll(['puuid' => $puuid], true);
         if ($processingResult->hasErrors()) {
             return $this->processingResultJson($processingResult);
         }
@@ -406,7 +406,7 @@ final class ClinicalCopilotRetrievalRestController
             throw new BadRequestHttpException('Missing required query parameter: patient (patient UUID)');
         }
 
-        $ordersResult = $this->procedureService->getAll(['patient.uuid' => $puuid], true, $puuid);
+        $ordersResult = $this->procedureService->getAll(['puuid' => $puuid], true, $puuid);
         if ($ordersResult->hasErrors()) {
             return $this->processingResultJson($ordersResult);
         }
@@ -467,7 +467,7 @@ final class ClinicalCopilotRetrievalRestController
             $vitalsPayload[] = $this->normalizeVitalsPanel($v);
         }
 
-        $labResult = $this->procedureService->getAll(['patient.uuid' => $puuid], true, $puuid);
+        $labResult = $this->procedureService->getAll(['puuid' => $puuid], true, $puuid);
         if ($labResult->hasErrors()) {
             return $this->processingResultJson($labResult);
         }

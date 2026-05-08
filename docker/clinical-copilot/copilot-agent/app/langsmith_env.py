@@ -29,7 +29,6 @@ def apply_langchain_runtime_env(settings: Settings) -> None:
     else:
         os.environ.pop("LANGCHAIN_ENDPOINT", None)
 
-    # Belt-and-suspenders PHI guard: prevent LangSmith from logging raw inputs/outputs.
-    # Even when tracing is disabled these stay set so any accidental enable doesn't leak PHI.
-    os.environ["LANGCHAIN_HIDE_INPUTS"] = "true"
-    os.environ["LANGCHAIN_HIDE_OUTPUTS"] = "true"
+    # Keep LangSmith run payloads visible for debugging and evaluation workflows.
+    os.environ["LANGCHAIN_HIDE_INPUTS"] = "false"
+    os.environ["LANGCHAIN_HIDE_OUTPUTS"] = "false"
