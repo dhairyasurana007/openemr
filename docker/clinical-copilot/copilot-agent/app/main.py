@@ -18,6 +18,12 @@ from app.openemr_retrieval_backend import OpenEmrRetrievalBackend, retrieval_bac
 from app.settings import Settings
 
 _LOG = logging.getLogger("clinical_copilot.main")
+
+# Install PHI redaction on root logger before any other logging occurs so that
+# library logs (httpx, langchain, etc.) are also scrubbed.
+from app.log_redaction import PHIRedactionFilter as _PHIRedactionFilter  # noqa: E402
+logging.getLogger().addFilter(_PHIRedactionFilter())
+
 _SETTINGS = Settings.load()
 apply_langchain_runtime_env(_SETTINGS)
 

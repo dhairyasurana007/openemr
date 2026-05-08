@@ -26,6 +26,7 @@ class CopilotState(TypedDict):
     final_answer: str | None
     citations: list[dict]
     token_usage: dict
+    step_latency_ms: dict[str, int]
     composer_brief: dict
     _next_node: str
 
@@ -386,6 +387,7 @@ def _make_supervisor(llm: Any):
 
 def _make_intake_extractor(llm: Any):
     def intake_extractor(state: CopilotState) -> dict:
+        _t0 = time.perf_counter()
         _LOG.info("worker_start node=intake_extractor")
         facts = state.get("extracted_facts") or {}
         user_prompt = f"Extracted document facts:\n{json.dumps(facts, indent=2)[:3000]}"
@@ -406,12 +408,15 @@ def _make_intake_extractor(llm: Any):
         _LOG.info("worker_done node=intake_extractor")
         messages = list(state.get("messages") or [])
         messages.append({"role": "assistant", "content": f"[Intake summary]\n{summary}"})
+        _step = dict(state.get("step_latency_ms") or {})
+        _step["intake_extractor"] = int((time.perf_counter() - _t0) * 1000)
         return {
             "messages": messages,
             "intake_summary": summary,
             "citations": list(state.get("citations") or []) + new_citations,
             "routing_log": list(state.get("routing_log") or []) + [entry],
             "token_usage": _merge_usage(state.get("token_usage") or {}, usage),
+            "step_latency_ms": _step,
         }
 
     return intake_extractor
@@ -419,6 +424,7 @@ def _make_intake_extractor(llm: Any):
 
 def _make_chart_retriever(settings: Any, backend: Any):
     def chart_retriever(state: CopilotState) -> dict:
+        _t0 = time.perf_counter()
         _LOG.info("worker_start node=chart_retriever")
         query = _last_message_text(state)
         if state.get("patient_id"):
@@ -443,11 +449,14 @@ def _make_chart_retriever(settings: Any, backend: Any):
             "timestamp_ms": int(time.time() * 1000),
         }
         _LOG.info("worker_done node=chart_retriever payload_count=%d", len(payloads))
+        _step = dict(state.get("step_latency_ms") or {})
+        _step["chart_retriever"] = int((time.perf_counter() - _t0) * 1000)
         return {
             "chart_reply": reply,
             "chart_tool_payloads": payloads,
             "chart_tools_used": tools_used,
             "routing_log": list(state.get("routing_log") or []) + [entry],
+            "step_latency_ms": _step,
         }
 
     return chart_retriever
@@ -455,6 +464,7 @@ def _make_chart_retriever(settings: Any, backend: Any):
 
 def _make_evidence_retriever(rag_retriever: Any):
     def evidence_retriever(state: CopilotState) -> dict:
+        _t0 = time.perf_counter()
         _LOG.info("worker_start node=evidence_retriever")
         query = _last_message_text(state)
         snippets: list[dict] = []
@@ -482,10 +492,13 @@ def _make_evidence_retriever(rag_retriever: Any):
             "timestamp_ms": int(time.time() * 1000),
         }
         _LOG.info("worker_done node=evidence_retriever snippet_count=%d", len(snippets))
+        _step = dict(state.get("step_latency_ms") or {})
+        _step["evidence_retriever"] = int((time.perf_counter() - _t0) * 1000)
         return {
             "guideline_evidence": snippets,
             "citations": list(state.get("citations") or []) + citations,
             "routing_log": list(state.get("routing_log") or []) + [entry],
+            "step_latency_ms": _step,
         }
 
     return evidence_retriever
@@ -493,6 +506,7 @@ def _make_evidence_retriever(rag_retriever: Any):
 
 def _make_answer_composer(llm: Any):
     def answer_composer(state: CopilotState) -> dict:
+        _t0 = time.perf_counter()
         _LOG.info("worker_start node=answer_composer")
         query = _last_message_text(state)
         brief = state.get("composer_brief") or _build_composer_brief(state)
@@ -532,11 +546,14 @@ def _make_answer_composer(llm: Any):
             "timestamp_ms": int(time.time() * 1000),
         }
         _LOG.info("worker_done node=answer_composer")
+        _step = dict(state.get("step_latency_ms") or {})
+        _step["answer_composer"] = int((time.perf_counter() - _t0) * 1000)
         return {
             "final_answer": reply,
             "citations": _dedupe_citations(list(state.get("citations") or []) + new_citations),
             "routing_log": list(state.get("routing_log") or []) + [entry],
             "token_usage": _merge_usage(state.get("token_usage") or {}, usage),
+            "step_latency_ms": _step,
         }
 
     return answer_composer
@@ -611,6 +628,7 @@ def run_multimodal_graph(
         "final_answer": None,
         "citations": _extract_citations_from_facts(extracted_facts),
         "token_usage": {},
+        "step_latency_ms": {},
         "composer_brief": {},
         "_next_node": "supervisor",
     }
@@ -620,6 +638,7 @@ def run_multimodal_graph(
         "citations": final.get("citations") or [],
         "routing_log": final.get("routing_log") or [],
         "token_usage": final.get("token_usage") or {},
+        "step_latency_ms": final.get("step_latency_ms") or {},
         "guideline_evidence": final.get("guideline_evidence") or [],
         "composer_brief": final.get("composer_brief") or {},
         "chart_tool_payload_count": len(final.get("chart_tool_payloads") or []),

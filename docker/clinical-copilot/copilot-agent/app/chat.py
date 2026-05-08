@@ -12,8 +12,10 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, Request, Uploa
 from pydantic import BaseModel, Field
 
 from app.document_extractor import estimate_cost_usd, extract_document
+from app.encounter_trace import EncounterTrace, emit_trace
 from app.openemr_persistence import persist_extraction
 from app.retrieval_backends import RetrievalBackend
+from app.schemas.extraction import LabExtractionResult
 from app.settings import Settings
 
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -103,6 +105,7 @@ async def multimodal_chat(
 
     latency_ms = int((time.perf_counter() - req_start) * 1000.0)
     token_usage = result.get("token_usage") or {}
+    cost_usd = estimate_cost_usd(settings.openrouter_model, token_usage)
     routing_path = ",".join(
         e.get("node", "?") + ":" + e.get("decision", "?")
         for e in (result.get("routing_log") or [])
@@ -116,8 +119,23 @@ async def multimodal_chat(
         routing_path,
         token_usage.get("prompt_tokens", 0),
         token_usage.get("completion_tokens", 0),
-        estimate_cost_usd(settings.openrouter_model, token_usage),
+        cost_usd,
         len(result.get("guideline_evidence") or []),
+    )
+
+    emit_trace(
+        EncounterTrace(
+            request_id=request_id,
+            endpoint="/v1/multimodal-chat",
+            tool_sequence=[e.get("node", "") for e in (result.get("routing_log") or [])],
+            step_latency_ms=result.get("step_latency_ms") or {},
+            token_usage={k: int(v) for k, v in token_usage.items()},
+            cost_estimate_usd=cost_usd,
+            retrieval_hits=len(result.get("guideline_evidence") or []),
+            extraction_confidence=None,
+            eval_outcome=None,
+        ),
+        _LOG,
     )
 
     return {
@@ -125,8 +143,8 @@ async def multimodal_chat(
         "citations": result.get("citations", []),
         "routing_log": result.get("routing_log", []),
         "latency_ms": latency_ms,
-        "token_usage": result.get("token_usage", {}),
-        "cost_estimate_usd": estimate_cost_usd(settings.openrouter_model, result.get("token_usage", {})),
+        "token_usage": token_usage,
+        "cost_estimate_usd": cost_usd,
     }
 
 
@@ -229,13 +247,33 @@ async def _extract_handler(
             if isinstance(extracted_dict.get("citation"), dict):
                 extracted_dict["citation"]["source_id"] = fhir_source_id
 
+    extraction_confidence: float | None = None
+    if isinstance(result, LabExtractionResult) and result.results:
+        extraction_confidence = min(r.confidence for r in result.results)
+
+    cost_usd = estimate_cost_usd(settings.vlm_model, token_usage)
+    emit_trace(
+        EncounterTrace(
+            request_id=request_id,
+            endpoint=str(request.url.path),
+            tool_sequence=[],
+            step_latency_ms={},
+            token_usage={k: int(v) for k, v in token_usage.items()},
+            cost_estimate_usd=cost_usd,
+            retrieval_hits=0,
+            extraction_confidence=extraction_confidence,
+            eval_outcome=None,
+        ),
+        _LOG,
+    )
+
     response: dict[str, Any] = {
         "extracted": extracted_dict,
         "doc_type": resolved_doc_type,
         "doc_type_inferred": was_inferred,
         "latency_ms": latency_ms,
         "token_usage": token_usage,
-        "cost_estimate_usd": estimate_cost_usd(settings.vlm_model, token_usage),
+        "cost_estimate_usd": cost_usd,
     }
     if persist_result is not None:
         response["source_id"] = persist_result.source_id
