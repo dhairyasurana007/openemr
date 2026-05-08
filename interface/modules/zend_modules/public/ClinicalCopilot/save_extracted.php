@@ -19,6 +19,7 @@ use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotExtractedDataApplyService;
 use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotExtractedDataRepository;
+use OpenEMR\Services\PatientService;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -59,6 +60,133 @@ function ccpFlattenArray(array $input): array
 function ccpNormalizeFieldName(string $name): string
 {
     return strtolower(preg_replace('/[^a-z0-9]/', '', $name) ?? '');
+}
+
+function ccpNormalizeSex(string $value): string
+{
+    $normalized = strtolower(trim($value));
+    if ($normalized === '') {
+        return '';
+    }
+    if (in_array($normalized, ['m', 'male', 'man', 'boy'], true)) {
+        return 'M';
+    }
+    if (in_array($normalized, ['f', 'female', 'woman', 'girl'], true)) {
+        return 'F';
+    }
+    return strtoupper(substr($normalized, 0, 1));
+}
+
+function ccpNormalizeDateYmd(string $value): string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return '';
+    }
+    $timestamp = strtotime($trimmed);
+    if ($timestamp === false) {
+        return '';
+    }
+    return date('Y-m-d', $timestamp);
+}
+
+/**
+ * @param array<string, mixed> $extractedFacts
+ * @param list<string> $fieldCandidates
+ */
+function ccpFirstNonEmptyFieldValue(array $extractedFacts, array $fieldCandidates): ?string
+{
+    $normalizedCandidates = array_map(static fn(string $candidate): string => ccpNormalizeFieldName($candidate), $fieldCandidates);
+    $flat = ccpFlattenArray($extractedFacts);
+    foreach ($flat as $path => $value) {
+        $lastDot = strrpos($path, '.');
+        $fieldName = $lastDot === false ? $path : substr($path, $lastDot + 1);
+        if (!in_array(ccpNormalizeFieldName($fieldName), $normalizedCandidates, true)) {
+            continue;
+        }
+        if (is_scalar($value)) {
+            $candidate = trim((string) $value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * @param array<string, mixed> $extractedFacts
+ */
+function ccpResolvePidFromExtractedFacts(array $extractedFacts): ?int
+{
+    $name = ccpFirstNonEmptyFieldValue($extractedFacts, [
+        'name',
+        'full_name',
+        'patient_name',
+        'first_name',
+        'last_name',
+        'fname',
+        'lname',
+        'patient_first_name',
+        'patient_last_name',
+    ]);
+    $dobRaw = ccpFirstNonEmptyFieldValue($extractedFacts, ['date_of_birth', 'dob', 'birth_date']);
+    $sexRaw = ccpFirstNonEmptyFieldValue($extractedFacts, ['gender', 'sex']);
+    if ($name === null || $dobRaw === null || $sexRaw === null) {
+        return null;
+    }
+
+    $dob = ccpNormalizeDateYmd($dobRaw);
+    $sex = ccpNormalizeSex($sexRaw);
+    if ($dob === '' || $sex === '') {
+        return null;
+    }
+
+    $search = [];
+    $nameParts = preg_split('/\s+/', trim($name)) ?: [];
+    if (count($nameParts) >= 2) {
+        $search['fname'] = $nameParts[0];
+        $search['lname'] = $nameParts[count($nameParts) - 1];
+    } else {
+        $search['fname'] = $name;
+        $search['lname'] = $name;
+        $search['mname'] = $name;
+    }
+    $search['DOB'] = $dob;
+    $search['sex'] = $sex;
+
+    $patientService = new PatientService();
+    $result = $patientService->getAll($search, false);
+    if (!$result->isValid()) {
+        return null;
+    }
+    $rows = $result->getData();
+    if (!is_array($rows) || $rows === []) {
+        return null;
+    }
+
+    $candidates = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $rowDob = ccpNormalizeDateYmd((string) ($row['DOB'] ?? ''));
+        $rowSex = ccpNormalizeSex((string) ($row['sex'] ?? ''));
+        $rowPid = (int) ($row['pid'] ?? 0);
+        if ($rowPid <= 0) {
+            continue;
+        }
+        if ($rowDob !== $dob || $rowSex !== $sex) {
+            continue;
+        }
+        $candidates[$rowPid] = true;
+    }
+
+    if (count($candidates) !== 1) {
+        return null;
+    }
+
+    return (int) array_key_first($candidates);
 }
 
 /**
@@ -111,13 +239,6 @@ try {
         exit;
     }
 
-    $pid = (int) trim((string) ($session->get('pid') ?? '0'));
-    if ($pid <= 0) {
-        http_response_code(400);
-        echo json_encode(['error' => 'No patient selected in session']);
-        exit;
-    }
-
     $encounterRaw = trim((string) ($session->get('encounter') ?? ''));
     $encounter = null;
     if ($encounterRaw !== '' && $encounterRaw !== '0') {
@@ -161,6 +282,20 @@ try {
     if (!$hasName || !$hasGender || !$hasDob) {
         http_response_code(422);
         echo json_encode(['error' => 'Unable to map data to a patient. Extraction must include non-empty patient identity fields for name (full, first, or last), gender, and date_of_birth.']);
+        exit;
+    }
+
+    $pid = (int) trim((string) ($session->get('pid') ?? '0'));
+    if ($pid <= 0) {
+        $resolvedPid = ccpResolvePidFromExtractedFacts($extractedFacts);
+        if ($resolvedPid !== null && $resolvedPid > 0) {
+            $pid = $resolvedPid;
+            $session->set('pid', (string) $pid);
+        }
+    }
+    if ($pid <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No patient selected in session and unable to uniquely resolve patient from extracted identity fields.']);
         exit;
     }
 

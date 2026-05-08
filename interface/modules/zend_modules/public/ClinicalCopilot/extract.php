@@ -22,6 +22,7 @@ use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\RestControllers\ClinicalCopilot\ClinicalCopilotInternalAuth;
 use OpenEMR\Services\ClinicalCopilot\AgentRuntimeHandoff;
+use OpenEMR\Services\ClinicalCopilot\ClinicalCopilotLoginAppointmentSummaryResolver;
 
 function ccpExtractReleaseSessionLock(): void
 {
@@ -174,9 +175,19 @@ try {
     // pid is the integer primary-key; use it as the stable patient_id string.
     $patientId = trim((string) ($session->get('pid') ?? ''));
     if ($patientId === '' || $patientId === '0') {
-        http_response_code(400);
-        echo json_encode(['error' => 'No patient selected in session']);
-        exit;
+        // Fallback: use the logged-in provider's current/imminent appointment patient.
+        // This matches the login auto-summary context when an encounter hasn't yet set session pid.
+        require_once($GLOBALS['srcdir'] . '/appointments.inc.php');
+        $authUserId = (int) ($session->get('authUserID') ?? 0);
+        $resolver = new ClinicalCopilotLoginAppointmentSummaryResolver();
+        $match = $resolver->findForProvider($authUserId, new \DateTimeImmutable('now'));
+        if ($match !== null && $match->patientPid > 0) {
+            $patientId = (string) $match->patientPid;
+            $session->set('pid', $patientId);
+        }
+    }
+    if ($patientId === '0') {
+        $patientId = '';
     }
 
     $handoff = AgentRuntimeHandoff::fromEnvironment();
