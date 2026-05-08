@@ -514,12 +514,14 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var badge = document.createElement('span');
                     badge.className = 'citation-badge';
 
+                    var badgeLabel = normalizeCitationValue(cit.badge_label) || normalizeCitationValue(cit.field_or_chunk_id);
                     var sType = normalizeCitationValue(cit.source_type) || 'source';
                     var pageLabel = normalizeCitationValue(cit.page_or_section);
-                    badge.textContent = sType + (pageLabel ? ' · ' + pageLabel : '');
+                    var displayName = badgeLabel || sType;
+                    badge.textContent = displayName + (pageLabel ? ' · ' + pageLabel : '');
 
                     var quoteText = normalizeCitationValue(cit.quote_or_value);
-                    badge.title = quoteText || sType;
+                    badge.title = quoteText || displayName;
 
                     var hasBbox = Array.isArray(cit.bbox) && cit.bbox.length >= 4;
                     var hasPage = (typeof cit.page_number === 'number' && cit.page_number >= 1);
@@ -549,13 +551,77 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 scrollToBottom();
             }
 
+            function toHumanFieldLabel(value) {
+                var textValue = String(value || '').trim();
+                if (!textValue) {
+                    return '';
+                }
+                textValue = textValue.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+                textValue = textValue.replace(/[._-]+/g, ' ');
+                textValue = textValue.replace(/\s+/g, ' ').trim();
+                return textValue ? (textValue.charAt(0).toUpperCase() + textValue.slice(1)) : '';
+            }
+
+            function inferCitationBadgeLabel(result, citation, index) {
+                if (!result || typeof result !== 'object') {
+                    return <?php echo json_encode(xl('Field')); ?> + ' ' + String(index + 1);
+                }
+                var labelCandidates = [
+                    result.field_label,
+                    result.field_name,
+                    result.field,
+                    result.label,
+                    result.name,
+                    result.key,
+                    citation && citation.field_or_chunk_id
+                ];
+                for (var i = 0; i < labelCandidates.length; i++) {
+                    var label = toHumanFieldLabel(labelCandidates[i]);
+                    if (label) {
+                        return label;
+                    }
+                }
+
+                var ignoredKeys = {
+                    citation: true,
+                    source: true,
+                    source_type: true,
+                    source_id: true,
+                    page_number: true,
+                    page_or_section: true,
+                    bbox: true
+                };
+                var keys = Object.keys(result);
+                for (var j = 0; j < keys.length; j++) {
+                    var key = keys[j];
+                    if (ignoredKeys[key]) {
+                        continue;
+                    }
+                    var value = result[key];
+                    if (value === null || typeof value === 'object') {
+                        continue;
+                    }
+                    if (String(value).trim() === '') {
+                        continue;
+                    }
+                    var keyLabel = toHumanFieldLabel(key);
+                    if (keyLabel) {
+                        return keyLabel;
+                    }
+                }
+                return <?php echo json_encode(xl('Field')); ?> + ' ' + String(index + 1);
+            }
+
             function collectCitationsFromExtracted(extracted) {
                 var citations = [];
                 if (!extracted || typeof extracted !== 'object') {
                     return citations;
                 }
                 if (extracted.citation && typeof extracted.citation === 'object') {
-                    citations.push(extracted.citation);
+                    var topCitation = Object.assign({}, extracted.citation);
+                    topCitation.badge_label = toHumanFieldLabel(topCitation.field_or_chunk_id)
+                        || <?php echo json_encode(xl('Document summary')); ?>;
+                    citations.push(topCitation);
                 }
                 if (Array.isArray(extracted.results)) {
                     for (var i = 0; i < extracted.results.length; i++) {
@@ -564,7 +630,9 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             continue;
                         }
                         if (result.citation && typeof result.citation === 'object') {
-                            citations.push(result.citation);
+                            var citationCopy = Object.assign({}, result.citation);
+                            citationCopy.badge_label = inferCitationBadgeLabel(result, result.citation, i);
+                            citations.push(citationCopy);
                         }
                     }
                 }
