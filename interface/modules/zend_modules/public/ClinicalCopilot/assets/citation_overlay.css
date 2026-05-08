@@ -1,0 +1,36 @@
+/* Clinical Co-Pilot — citation badges and PDF overlay panel */
+
+.citation-badge {
+    display: inline-block;
+    margin: 2px 3px;
+    padding: 2px 7px;
+    background: rgba(0, 123, 255, 0.08);
+    border: 1px solid rgba(0, 123, 255, 0.35);
+    border-radius: 3px;
+    font-size: 0.78em;
+    color: #0056b3;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+}
+
+.citation-badge[data-has-bbox="true"] {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.45);
+    color: #155724;
+    cursor: pointer;
+}
+
+.citation-badge[data-has-bbox="true"]:hover {
+    background: rgba(40, 167, 69, 0.22);
+    border-color: rgba(40, 167, 69, 0.8);
+    text-decoration: underline;
+}
+
+#ccp-pdf-overlay-panel canvas {
+    display: block;
+    max-width: 100%;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+}

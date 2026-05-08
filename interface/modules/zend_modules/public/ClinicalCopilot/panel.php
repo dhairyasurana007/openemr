@@ -37,6 +37,8 @@ $saveExtractedUrl = $web_root . '/interface/modules/zend_modules/public/Clinical
 $multimodalChatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/multimodal_chat.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
+$citationOverlayCssUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/assets/citation_overlay.css';
+$citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/assets/citation_overlay.js';
 
 ?>
 <!DOCTYPE html>
@@ -157,6 +159,9 @@ $agentReady = $handoff->isConfigured();
             }
         }
     </style>
+    <link rel="stylesheet" href="<?php echo text($citationOverlayCssUrl); ?>">
+    <!-- PDF.js 3.11.174 — vendor under public/assets/vendor/pdfjs/ and add SRI hash before production deploy -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
     <div id="clinical-copilot-shell" class="px-0">
@@ -169,6 +174,14 @@ $agentReady = $handoff->isConfigured();
             <div id="clinical-copilot-intro" class="clinical-copilot-msg clinical-copilot-msg-assistant mb-2">
                 <div class="clinical-copilot-bubble text-muted border"><?php echo xlt('Conversation will appear here. Type below and press send.'); ?></div>
             </div>
+        </div>
+
+        <div id="ccp-pdf-overlay-panel" class="d-none flex-shrink-0" style="max-height:420px;overflow-y:auto;border-top:1px solid rgba(0,0,0,.12);background:#fff;padding:8px 10px;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <small class="text-muted font-weight-bold"><?php echo xlt('PDF Source'); ?></small>
+                <button type="button" id="ccp-pdf-overlay-close" class="btn btn-link btn-sm p-0" style="font-size:1.25rem;line-height:1;color:#6c757d;" aria-label="<?php echo xla('Close PDF preview'); ?>">&#215;</button>
+            </div>
+            <canvas id="ccp-pdf-canvas" style="max-width:100%;display:block;"></canvas>
         </div>
 
         <div id="clinical-copilot-composer" class="px-3 py-3">
@@ -224,8 +237,18 @@ $agentReady = $handoff->isConfigured();
             var pendingExtractFileName = '';
             var pendingIdentityCollection = false;
             var pendingIdentityMissingFields = [];
+            var pdfBlobMap = {};
+            var pdfOverlayPanel = document.getElementById('ccp-pdf-overlay-panel');
+            var pdfOverlayClose = document.getElementById('ccp-pdf-overlay-close');
             if (!btn || !input || !messagesEl) {
                 return;
+            }
+            if (pdfOverlayClose) {
+                pdfOverlayClose.addEventListener('click', function () {
+                    if (pdfOverlayPanel) {
+                        pdfOverlayPanel.classList.add('d-none');
+                    }
+                });
             }
 
             function scrollToBottom() {
@@ -469,6 +492,63 @@ $agentReady = $handoff->isConfigured();
                     return '';
                 }
                 return lines.join('\n');
+            }
+
+            function appendCitationRow(citations) {
+                if (!Array.isArray(citations) || citations.length === 0) {
+                    return;
+                }
+                var row = document.createElement('div');
+                row.className = 'clinical-copilot-msg mb-2 clinical-copilot-msg-assistant';
+                var bubble = document.createElement('div');
+                bubble.className = 'clinical-copilot-bubble';
+
+                var labelEl = document.createElement('div');
+                labelEl.style.cssText = 'font-size:0.8rem;color:#6c757d;margin-bottom:4px;';
+                labelEl.textContent = <?php echo json_encode(xl('Sources') . ':'); ?>;
+                bubble.appendChild(labelEl);
+
+                for (var i = 0; i < citations.length; i++) {
+                    var cit = citations[i];
+                    if (!cit || typeof cit !== 'object') {
+                        continue;
+                    }
+                    var badge = document.createElement('span');
+                    badge.className = 'citation-badge';
+
+                    var sType = normalizeCitationValue(cit.source_type) || 'source';
+                    var pageLabel = normalizeCitationValue(cit.page_or_section);
+                    badge.textContent = sType + (pageLabel ? ' · ' + pageLabel : '');
+
+                    var quoteText = normalizeCitationValue(cit.quote_or_value);
+                    badge.title = quoteText || sType;
+
+                    var hasBbox = Array.isArray(cit.bbox) && cit.bbox.length >= 4;
+                    var hasPage = (typeof cit.page_number === 'number' && cit.page_number >= 1);
+                    var sid = normalizeCitationValue(cit.source_id);
+                    var blobUrl = (sid && pdfBlobMap[sid]) ? pdfBlobMap[sid] : null;
+
+                    if (hasBbox && hasPage && blobUrl) {
+                        badge.setAttribute('data-has-bbox', 'true');
+                        badge.title = (badge.title ? badge.title + ' ' : '') + <?php echo json_encode('(' . xl('click to view in PDF') . ')'); ?>;
+                        (function (url, pn, bx) {
+                            badge.addEventListener('click', function () {
+                                if (window.ClinicalCopilotCitationOverlay) {
+                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx);
+                                }
+                            });
+                        })(blobUrl, cit.page_number, cit.bbox);
+                    }
+                    bubble.appendChild(badge);
+                }
+
+                var meta = document.createElement('div');
+                meta.className = 'clinical-copilot-msg-meta pl-1';
+                meta.textContent = <?php echo json_encode(xl('Citations')); ?>;
+                row.appendChild(bubble);
+                row.appendChild(meta);
+                messagesEl.appendChild(row);
+                scrollToBottom();
             }
 
             function removeIntroIfPresent() {
@@ -756,6 +836,17 @@ $agentReady = $handoff->isConfigured();
                         }
                         if (res.ok && res.data && res.data.extracted) {
                             extractedFacts = res.data.extracted;
+                            var blobUrl = URL.createObjectURL(file);
+                            var extr = res.data.extracted;
+                            if (extr && Array.isArray(extr.results)) {
+                                for (var ri = 0; ri < extr.results.length; ri++) {
+                                    var rc = extr.results[ri] && extr.results[ri].citation;
+                                    if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
+                                }
+                            }
+                            if (extr && extr.citation && extr.citation.source_id) {
+                                pdfBlobMap[extr.citation.source_id] = blobUrl;
+                            }
                             pendingExtractDocType = res.data.doc_type || 'lab_pdf';
                             pendingExtractFileName = file.name || 'uploaded-document';
                             if (docTypeChip) {
@@ -874,9 +965,8 @@ $agentReady = $handoff->isConfigured();
                         if (activityText) {
                             appendBubble('assistant', activityText, false, <?php echo json_encode(xl('Trace')); ?>);
                         }
-                        var citationsText = formatCitations(res.data.citations);
-                        if (citationsText) {
-                            appendBubble('assistant', citationsText, false, <?php echo json_encode(xl('Citations')); ?>);
+                        if (Array.isArray(res.data.citations) && res.data.citations.length > 0) {
+                            appendCitationRow(res.data.citations);
                         }
                     } else {
                         var err = (res.data && res.data.error) ? res.data.error : <?php echo json_encode(xl('Request failed')); ?>;
@@ -943,5 +1033,6 @@ $agentReady = $handoff->isConfigured();
             }
         })();
     </script>
+    <script src="<?php echo text($citationOverlayJsUrl); ?>"></script>
 </body>
 </html>

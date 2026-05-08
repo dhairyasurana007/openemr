@@ -30,6 +30,14 @@ class ExtractionCitation(BaseModel):
         min_length=1,
         description="Verbatim text excerpt or raw value from the source that supports the claim.",
     )
+    bbox: tuple[float, float, float, float] | None = Field(
+        default=None,
+        description="Bounding box (x0, y0, x1, y1) in PDF points, origin top-left. Null for HL7/DOCX/XLSX.",
+    )
+    page_number: int | None = Field(
+        default=None,
+        description="1-indexed page number within the source document. Null for non-paginated formats.",
+    )
 
 
 class LabResult(BaseModel):

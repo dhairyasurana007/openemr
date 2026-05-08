@@ -246,6 +246,15 @@ def _json_schema_for_doc_type(doc_type: str) -> dict[str, Any]:
                                     "page_or_section": {"type": "string"},
                                     "field_or_chunk_id": {"type": "string"},
                                     "quote_or_value": {"type": "string"},
+                                    "bbox": {
+                                        "anyOf": [
+                                            {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                                            {"type": "null"},
+                                        ]
+                                    },
+                                    "page_number": {
+                                        "anyOf": [{"type": "integer"}, {"type": "null"}]
+                                    },
                                 },
                                 "required": [
                                     "source_type",
@@ -253,6 +262,8 @@ def _json_schema_for_doc_type(doc_type: str) -> dict[str, Any]:
                                     "page_or_section",
                                     "field_or_chunk_id",
                                     "quote_or_value",
+                                    "bbox",
+                                    "page_number",
                                 ],
                             },
                         },
@@ -304,6 +315,15 @@ def _json_schema_for_doc_type(doc_type: str) -> dict[str, Any]:
                     "page_or_section": {"type": "string"},
                     "field_or_chunk_id": {"type": "string"},
                     "quote_or_value": {"type": "string"},
+                    "bbox": {
+                        "anyOf": [
+                            {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                            {"type": "null"},
+                        ]
+                    },
+                    "page_number": {
+                        "anyOf": [{"type": "integer"}, {"type": "null"}]
+                    },
                 },
                 "required": [
                     "source_type",
@@ -311,6 +331,8 @@ def _json_schema_for_doc_type(doc_type: str) -> dict[str, Any]:
                     "page_or_section",
                     "field_or_chunk_id",
                     "quote_or_value",
+                    "bbox",
+                    "page_number",
                 ],
             },
         },
@@ -451,6 +473,8 @@ async def _repair_json_once(
         "Fix the following model output into valid JSON that matches the requested extraction schema exactly. "
         "Return JSON only, no prose, no markdown.\n\n"
         f"doc_type={doc_type}\n\n"
+        "REMINDER: Every citation object MUST include \"bbox\" ([x0,y0,x1,y1] floats or null) "
+        "and \"page_number\" (1-indexed integer or null).\n\n"
         "RAW OUTPUT START\n"
         + raw_content[:8000]
         + "\nRAW OUTPUT END"
@@ -489,9 +513,13 @@ def _lab_pdf_prompt() -> str:
         '"collection_date":"<ISO-8601 or empty>","abnormal_flag":"<H|L|HH|LL|A or empty>",'
         '"confidence":<0.0-1.0>,"citation":{"source_type":"lab_pdf","source_id":"PLACEHOLDER",'
         '"page_or_section":"<page N>","field_or_chunk_id":"<test slug>",'
-        '"quote_or_value":"<verbatim text>"}}],"extraction_warnings":[]}\n\n'
+        '"quote_or_value":"<verbatim text>","bbox":[x0,y0,x1,y1],"page_number":<N>}}],'
+        '"extraction_warnings":[]}\n\n'
         "Rules: extract every analyte visible; copy verbatim text into quote_or_value; "
-        "lower confidence for unclear scans; use empty string for absent fields."
+        "lower confidence for unclear scans; use empty string for absent fields. "
+        "Each citation MUST include \"bbox\" as [x0,y0,x1,y1] in PDF points (origin top-left) "
+        "and \"page_number\" (1-indexed integer) when the source location is determinable; "
+        "set both to null for HL7/DOCX/XLSX sources where spatial coordinates are not meaningful."
     )
 
 
@@ -505,9 +533,12 @@ def _intake_form_prompt() -> str:
         '"extraction_warnings":[],'
         '"citation":{"source_type":"intake_form","source_id":"PLACEHOLDER",'
         '"page_or_section":"page 1","field_or_chunk_id":"intake_form_summary",'
-        '"quote_or_value":"<brief verbatim excerpt>"}}\n\n'
+        '"quote_or_value":"<brief verbatim excerpt>","bbox":[x0,y0,x1,y1],"page_number":<N>}}\n\n'
         "Rules: empty string for absent text fields; empty list for absent list fields; "
-        "include medication name and dose as written; note illegible text in extraction_warnings."
+        "include medication name and dose as written; note illegible text in extraction_warnings. "
+        "The citation MUST include \"bbox\" as [x0,y0,x1,y1] in PDF points (origin top-left) "
+        "and \"page_number\" (1-indexed integer) when the source location is determinable; "
+        "set both to null for HL7/DOCX/XLSX sources where spatial coordinates are not meaningful."
     )
 
 

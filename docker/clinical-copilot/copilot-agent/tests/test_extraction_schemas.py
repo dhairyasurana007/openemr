@@ -18,13 +18,15 @@ from app.schemas.extraction import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _citation(**overrides: str) -> dict:
+def _citation(**overrides) -> dict:
     base = {
         "source_type": "lab_pdf",
         "source_id": "sha256:abc123",
         "page_or_section": "page 1",
         "field_or_chunk_id": "sodium",
         "quote_or_value": "Na 138 mEq/L",
+        "bbox": None,
+        "page_number": None,
     }
     base.update(overrides)
     return base
@@ -105,6 +107,23 @@ class TestExtractionCitation:
             bad = _citation(**{field: ""})
             with pytest.raises(ValidationError):
                 ExtractionCitation.model_validate(bad)
+
+    def test_bbox_and_page_number_default_to_none(self) -> None:
+        obj = ExtractionCitation.model_validate(_citation())
+        assert obj.bbox is None
+        assert obj.page_number is None
+
+    def test_citation_with_bbox_and_page_number(self) -> None:
+        data = _citation(bbox=[10.0, 20.0, 100.0, 50.0], page_number=2)
+        obj = ExtractionCitation.model_validate(data)
+        assert obj.bbox == (10.0, 20.0, 100.0, 50.0)
+        assert obj.page_number == 2
+
+    def test_bbox_none_is_accepted(self) -> None:
+        data = _citation(bbox=None, page_number=None)
+        obj = ExtractionCitation.model_validate(data)
+        assert obj.bbox is None
+        assert obj.page_number is None
 
 
 # ---------------------------------------------------------------------------
