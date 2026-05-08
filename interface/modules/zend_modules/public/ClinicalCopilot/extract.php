@@ -181,6 +181,7 @@ try {
         echo json_encode(['error' => 'Invalid doc_type. Allowed values: lab, intake_form']);
         exit;
     }
+    $agentDocType = $docType === 'lab' ? 'lab_pdf' : $docType;
 
     // Resolve the current patient identifier from the OpenEMR session.
     // pid is the integer primary-key; use it as the stable patient_id string.
@@ -239,7 +240,7 @@ try {
             ],
             [
                 'name'     => 'doc_type',
-                'contents' => $docType,
+                'contents' => $agentDocType,
             ],
             [
                 'name'     => 'patient_id',
