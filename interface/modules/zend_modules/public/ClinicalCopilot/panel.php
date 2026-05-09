@@ -706,6 +706,58 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return citations;
             }
 
+            function enrichExtractedWithPdfCoordinates(extracted) {
+                if (!extracted || typeof extracted !== 'object') {
+                    return extracted;
+                }
+
+                function buildCoordinates(citation) {
+                    if (!citation || typeof citation !== 'object') {
+                        return null;
+                    }
+                    var bbox = Array.isArray(citation.bbox) ? citation.bbox : null;
+                    var hasValidBbox = bbox && bbox.length >= 4
+                        && isFinite(Number(bbox[0])) && isFinite(Number(bbox[1]))
+                        && isFinite(Number(bbox[2])) && isFinite(Number(bbox[3]));
+                    var hasPage = (typeof citation.page_number === 'number' && citation.page_number >= 1);
+                    if (!hasValidBbox && !hasPage) {
+                        return null;
+                    }
+                    var coords = {
+                        page_number: hasPage ? citation.page_number : null,
+                        bbox: hasValidBbox ? [
+                            Number(bbox[0]),
+                            Number(bbox[1]),
+                            Number(bbox[2]),
+                            Number(bbox[3])
+                        ] : null,
+                        source_id: normalizeCitationValue(citation.source_id) || null,
+                        page_or_section: normalizeCitationValue(citation.page_or_section) || null
+                    };
+                    return coords;
+                }
+
+                if (Array.isArray(extracted.results)) {
+                    for (var i = 0; i < extracted.results.length; i++) {
+                        var result = extracted.results[i];
+                        if (!result || typeof result !== 'object') {
+                            continue;
+                        }
+                        var resultCoords = buildCoordinates(result.citation);
+                        if (resultCoords) {
+                            result.pdf_coordinates = resultCoords;
+                        }
+                    }
+                }
+
+                var topCoords = buildCoordinates(extracted.citation);
+                if (topCoords) {
+                    extracted.pdf_coordinates = topCoords;
+                }
+
+                return extracted;
+            }
+
             function removeIntroIfPresent() {
                 var intro = document.getElementById('clinical-copilot-intro');
                 if (intro) {
@@ -1022,6 +1074,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             lr.remove();
                         }
                         if (res.ok && res.data && res.data.extracted) {
+                            res.data.extracted = enrichExtractedWithPdfCoordinates(res.data.extracted);
                             extractedFacts = res.data.extracted;
                             var blobUrl = URL.createObjectURL(file);
                             var extr = res.data.extracted;
