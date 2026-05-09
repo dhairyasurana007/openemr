@@ -1,26 +1,35 @@
-FROM openemr/openemr:latest
+FROM composer:2 AS composer-bin
+
+# Keep base image pinned for reproducible/faster deploys.
+# Update this ARG value intentionally when you want a newer OpenEMR base.
+ARG OPENEMR_BASE_IMAGE=openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+FROM ${OPENEMR_BASE_IMAGE}
 
 WORKDIR /var/www/localhost/htdocs/openemr
 
-# Copy current repository code over the base OpenEMR image so
-# Railway deploys this workspace state instead of the upstream image code.
-COPY . .
+# Reuse Composer from a pinned upstream image instead of downloading it each build.
+COPY --from=composer-bin /usr/bin/composer /usr/local/bin/composer
+
+# Cache-friendly dependency layering:
+# 1) copy lockfiles/manifests
+# 2) install deps
+# 3) copy app source
+COPY composer.json composer.lock ./
+COPY ccdaservice/package.json ccdaservice/package-lock.json ./ccdaservice/
 
 # Production PHP dependencies (`vendor/` is listed in `.dockerignore`).
 RUN set -eux; \
     if command -v apt-get >/dev/null 2>&1; then \
       export DEBIAN_FRONTEND=noninteractive; \
       apt-get update; \
-      apt-get install -y --no-install-recommends ca-certificates curl git unzip; \
+      apt-get install -y --no-install-recommends ca-certificates git unzip; \
     elif command -v apk >/dev/null 2>&1; then \
-      apk add --no-cache ca-certificates curl git unzip; \
+      apk add --no-cache ca-certificates git unzip; \
     else \
-      echo 'No apt-get or apk; install curl, git, unzip, and Composer prerequisites for this base image.' >&2; \
+      echo 'No apt-get or apk; install git, unzip, and Composer prerequisites for this base image.' >&2; \
       exit 1; \
     fi; \
-    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --ignore-platform-reqs --no-interaction --prefer-dist --no-scripts --no-dev; \
-    rm -f /usr/local/bin/composer; \
     rm -rf /root/.composer; \
     if command -v apt-get >/dev/null 2>&1; then \
       apt-get purge -y git unzip; \
@@ -33,8 +42,12 @@ RUN set -eux; \
 # ccdaservice/node_modules is omitted from the Docker build context (.dockerignore). Reinstall so
 # flex `openemr.sh` permission passes and nested paths (e.g. oe-schematron-service) exist.
 RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \
-    cd ccdaservice && npm install --unsafe-perm --omit=dev && cd /var/www/localhost/htdocs/openemr; \
+    cd ccdaservice && npm ci --unsafe-perm --omit=dev && cd /var/www/localhost/htdocs/openemr; \
     fi
+
+# Copy current repository code over the base OpenEMR image after dependency layers
+# so regular source changes do not invalidate dependency cache.
+COPY . .
 
 # OpenEMR installer expects this file to be writable during first-time setup.
 RUN mkdir -p sites/default \

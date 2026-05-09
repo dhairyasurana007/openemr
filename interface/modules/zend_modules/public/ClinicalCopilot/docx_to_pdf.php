@@ -1,7 +1,8 @@
 <?php
 
 /**
- * DOCX -> PDF conversion endpoint for Clinical Co-Pilot source-overlay preview.
+ * File -> PDF conversion endpoint for Clinical Co-Pilot source-overlay preview.
+ * Supports DOCX/XLSX and common image types used by intake uploads.
  *
  * @package   OpenEMR
  * @link      https://www.open-emr.org
@@ -68,9 +69,13 @@ try {
     }
 
     $originalName = (string) ($_FILES['file']['name'] ?? '');
-    if (!str_ends_with(strtolower($originalName), '.docx')) {
+    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $supportedImageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'tif', 'tiff'];
+    $isOffice = in_array($ext, ['docx', 'xlsx'], true);
+    $isImage = in_array($ext, $supportedImageExt, true);
+    if (!$isOffice && !$isImage) {
         http_response_code(400);
-        echo json_encode(['error' => 'Only .docx is supported']);
+        echo json_encode(['error' => 'Only .docx, .xlsx, and image uploads are supported']);
         exit;
     }
 
@@ -79,7 +84,7 @@ try {
         throw new RuntimeException('Failed to create conversion temp directory');
     }
 
-    $tmpDocx = $tmpDir . DIRECTORY_SEPARATOR . 'input.docx';
+    $tmpDocx = $tmpDir . DIRECTORY_SEPARATOR . 'input.' . $ext;
     $tmpPdf = $tmpDir . DIRECTORY_SEPARATOR . 'input.pdf';
 
     $uploadedTmp = (string) ($_FILES['file']['tmp_name'] ?? '');
@@ -89,22 +94,46 @@ try {
         exit;
     }
     if (!move_uploaded_file($uploadedTmp, $tmpDocx)) {
-        throw new RuntimeException('Failed to move uploaded docx');
+        throw new RuntimeException('Failed to move uploaded file');
     }
 
-    // Convert with LibreOffice/soffice (must be available in PATH on server host).
-    $cmd = 'soffice --headless --convert-to pdf --outdir '
-        . escapeshellarg($tmpDir)
-        . ' '
-        . escapeshellarg($tmpDocx);
-    $output = [];
-    $exitCode = 0;
-    exec($cmd, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($tmpPdf)) {
-        http_response_code(500);
-        echo json_encode(['error' => 'DOCX to PDF conversion failed']);
-        ccpCleanupPaths([$tmpDocx, $tmpPdf, $tmpDir]);
-        exit;
+    if ($isOffice) {
+        // Convert with LibreOffice/soffice (must be available in PATH on server host).
+        $cmd = 'soffice --headless --convert-to pdf --outdir '
+            . escapeshellarg($tmpDir)
+            . ' '
+            . escapeshellarg($tmpDocx);
+        $output = [];
+        $exitCode = 0;
+        exec($cmd, $output, $exitCode);
+        if ($exitCode !== 0 || !is_file($tmpPdf)) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Office file to PDF conversion failed']);
+            ccpCleanupPaths([$tmpDocx, $tmpPdf, $tmpDir]);
+            exit;
+        }
+    } else {
+        if (!extension_loaded('imagick')) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Image to PDF conversion requires imagick extension']);
+            ccpCleanupPaths([$tmpDocx, $tmpPdf, $tmpDir]);
+            exit;
+        }
+
+        $imagick = new Imagick();
+        $imagick->setResolution(150, 150);
+        $imagick->readImage($tmpDocx);
+        $imagick->setImageFormat('pdf');
+        if (!$imagick->writeImages($tmpPdf, true)) {
+            $imagick->clear();
+            $imagick->destroy();
+            http_response_code(500);
+            echo json_encode(['error' => 'Image to PDF conversion failed']);
+            ccpCleanupPaths([$tmpDocx, $tmpPdf, $tmpDir]);
+            exit;
+        }
+        $imagick->clear();
+        $imagick->destroy();
     }
 
     $pdfBytes = file_get_contents($tmpPdf);
@@ -127,4 +156,3 @@ try {
     ccpCleanupPaths([$tmpDocx, $tmpPdf, $tmpDir]);
     exit;
 }
-

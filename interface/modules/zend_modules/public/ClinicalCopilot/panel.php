@@ -977,16 +977,24 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return fileName.endsWith('.pdf') ? 'lab' : 'intake_form';
             }
 
-            function isDocxFile(file) {
+            function isConvertibleToPdfPreview(file) {
                 if (!file || !file.name) {
                     return false;
                 }
                 var fileName = String(file.name).toLowerCase();
-                return fileName.endsWith('.docx');
+                return fileName.endsWith('.docx')
+                    || fileName.endsWith('.xlsx')
+                    || fileName.endsWith('.jpg')
+                    || fileName.endsWith('.jpeg')
+                    || fileName.endsWith('.png')
+                    || fileName.endsWith('.gif')
+                    || fileName.endsWith('.webp')
+                    || fileName.endsWith('.tif')
+                    || fileName.endsWith('.tiff');
             }
 
-            function convertDocxToPdfBlob(file) {
-                if (!isDocxFile(file)) {
+            function convertToPdfPreviewBlob(file) {
+                if (!isConvertibleToPdfPreview(file)) {
                     return Promise.resolve(file);
                 }
                 var formData = new FormData();
@@ -1120,20 +1128,31 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     );
 
                     uploadBtn.disabled = true;
-                    var previewBlobPromise = convertDocxToPdfBlob(file);
+                    convertToPdfPreviewBlob(file).then(function (previewBlob) {
+                        var extractionFile = file;
+                        var previewForOverlay = previewBlob || file;
+                        if (previewBlob && previewBlob !== file && previewBlob.type === 'application/pdf') {
+                            extractionFile = previewBlob;
+                        }
 
-                    var formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('csrf_token_form', csrfToken);
-                    formData.append('doc_type', inferDocTypeFromFile(file));
+                        var formData = new FormData();
+                        if (extractionFile === file) {
+                            formData.append('file', file);
+                        } else {
+                            var baseName = String(file.name || 'uploaded-document').replace(/\.[^.]+$/, '');
+                            formData.append('file', extractionFile, baseName + '.pdf');
+                        }
+                        formData.append('csrf_token_form', csrfToken);
+                        formData.append('doc_type', inferDocTypeFromFile(file));
 
-                    fetch(extractUrl, {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        body: formData
-                    }).then(function (r) {
-                        return r.json().then(function (data) {
-                            return {ok: r.ok, status: r.status, data: data};
+                        return fetch(extractUrl, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            body: formData
+                        }).then(function (r) {
+                            return r.json().then(function (data) {
+                                return {ok: r.ok, status: r.status, data: data, previewBlob: previewForOverlay};
+                            });
                         });
                     }).then(function (res) {
                         stopExtractStatus();
@@ -1145,18 +1164,16 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             res.data.extracted = enrichExtractedWithPdfCoordinates(res.data.extracted);
                             extractedFacts = res.data.extracted;
                             var extr = res.data.extracted;
-                            previewBlobPromise.then(function (previewBlob) {
-                                var blobUrl = URL.createObjectURL(previewBlob || file);
-                                if (extr && Array.isArray(extr.results)) {
-                                    for (var ri = 0; ri < extr.results.length; ri++) {
-                                        var rc = extr.results[ri] && extr.results[ri].citation;
-                                        if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
-                                    }
+                            var blobUrl = URL.createObjectURL(res.previewBlob || file);
+                            if (extr && Array.isArray(extr.results)) {
+                                for (var ri = 0; ri < extr.results.length; ri++) {
+                                    var rc = extr.results[ri] && extr.results[ri].citation;
+                                    if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
                                 }
-                                if (extr && extr.citation && extr.citation.source_id) {
-                                    pdfBlobMap[extr.citation.source_id] = blobUrl;
-                                }
-                            });
+                            }
+                            if (extr && extr.citation && extr.citation.source_id) {
+                                pdfBlobMap[extr.citation.source_id] = blobUrl;
+                            }
                             pendingExtractDocType = res.data.doc_type || 'lab';
                             pendingExtractFileName = file.name || 'uploaded-document';
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);

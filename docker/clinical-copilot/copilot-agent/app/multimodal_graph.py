@@ -197,7 +197,7 @@ If context is insufficient, say so explicitly rather than speculating.
 Respond ONLY with valid JSON: {"reply":"<answer>","citations":[{"source_type":"<str>","source_id":"<str>","page_or_section":"<str>","field_or_chunk_id":"<str>","quote_or_value":"<str>"}]}"""
 
 _MAX_ROUTING_STEPS = 6
-_MAX_WORKER_HOPS = 2
+_MAX_WORKER_HOPS = 4
 
 
 def _dedupe_citations(citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
