@@ -35,7 +35,7 @@
      * @param {number} pageNumber - 1-indexed page to render
      * @param {number[]} bbox - [x0, y0, x1, y1] in PDF points, origin top-left
      */
-    function renderBboxOverlay(blobUrl, pageNumber, bbox, bboxStats) {
+    function renderBboxOverlay(blobUrl, pageNumber, bbox, bboxStats, coordMeta) {
         var panel = document.getElementById('ccp-pdf-overlay-panel');
         var canvas = document.getElementById('ccp-pdf-canvas');
         if (!panel || !canvas || !blobUrl) {
@@ -112,6 +112,67 @@
                 py0 = y0 * sy;
                 px1 = x1 * sx;
                 py1 = y1 * sy;
+            }
+
+            // Deterministic mapping for cropped raster coordinate metadata.
+            var hasCropMeta = coordMeta && typeof coordMeta === 'object'
+                && String(coordMeta.coordinate_space || '').toLowerCase() === 'cropped_raster'
+                && isFinite(Number(coordMeta.source_image_width))
+                && isFinite(Number(coordMeta.source_image_height))
+                && isFinite(Number(coordMeta.crop_origin_x))
+                && isFinite(Number(coordMeta.crop_origin_y))
+                && isFinite(Number(coordMeta.crop_width_pts))
+                && isFinite(Number(coordMeta.crop_height_pts))
+                && Number(coordMeta.source_image_width) > 0
+                && Number(coordMeta.source_image_height) > 0
+                && Number(coordMeta.crop_width_pts) > 0
+                && Number(coordMeta.crop_height_pts) > 0;
+
+            if (hasCropMeta) {
+                var srcW = Number(coordMeta.source_image_width);
+                var srcH = Number(coordMeta.source_image_height);
+                var cropX = Number(coordMeta.crop_origin_x);
+                var cropY = Number(coordMeta.crop_origin_y);
+                var cropW = Number(coordMeta.crop_width_pts);
+                var cropH = Number(coordMeta.crop_height_pts);
+
+                var bx0 = Math.min(x0, x1);
+                var by0 = Math.min(y0, y1);
+                var bx1 = Math.max(x0, x1);
+                var by1 = Math.max(y0, y1);
+
+                var nx0 = bx0 / srcW;
+                var nx1 = bx1 / srcW;
+                var ny0 = by0 / srcH;
+                var ny1 = by1 / srcH;
+
+                var pdfX0 = cropX + (nx0 * cropW);
+                var pdfX1 = cropX + (nx1 * cropW);
+
+                // Default extractor contract: bbox y is top-origin in raster space.
+                var origin = String(coordMeta.coordinate_origin || 'top_left').toLowerCase();
+                var pdfY0;
+                var pdfY1;
+                if (origin === 'bottom_left') {
+                    pdfY0 = cropY + (ny0 * cropH);
+                    pdfY1 = cropY + (ny1 * cropH);
+                } else {
+                    pdfY0 = cropY + (cropH - (ny1 * cropH));
+                    pdfY1 = cropY + (cropH - (ny0 * cropH));
+                }
+
+                var rectFromMeta = toViewportRectFromPdfRect([pdfX0, pdfY0, pdfX1, pdfY1]);
+                if (rectFromMeta && rectFromMeta.w > 0 && rectFromMeta.h > 0) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255, 180, 0, 1)';
+                    ctx.fillStyle = 'rgba(255, 220, 0, 0.28)';
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeRect(rectFromMeta.x, rectFromMeta.y, rectFromMeta.w, rectFromMeta.h);
+                    ctx.fillRect(rectFromMeta.x, rectFromMeta.y, rectFromMeta.w, rectFromMeta.h);
+                    ctx.restore();
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    return;
+                }
             }
 
             function scoreRect(rect) {

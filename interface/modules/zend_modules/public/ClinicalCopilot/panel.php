@@ -560,15 +560,16 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var pageStats = bboxStatsBySourcePage[statsKey] || null;
 
                     if (hasBbox && hasPage && blobUrl) {
+                        var coordMeta = (cit.pdf_coordinates && typeof cit.pdf_coordinates === 'object') ? cit.pdf_coordinates : null;
                         badge.setAttribute('data-has-bbox', 'true');
                         badge.title = (badge.title ? badge.title + ' ' : '') + <?php echo json_encode('(' . xl('click to view in PDF') . ')'); ?>;
-                        (function (url, pn, bx, stats) {
+                        (function (url, pn, bx, stats, meta) {
                             badge.addEventListener('click', function () {
                                 if (window.ClinicalCopilotCitationOverlay) {
-                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx, stats);
+                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx, stats, meta);
                                 }
                             });
-                        })(blobUrl, cit.page_number, cit.bbox, pageStats);
+                        })(blobUrl, cit.page_number, cit.bbox, pageStats, coordMeta);
                     }
                     bubble.appendChild(badge);
                 }
@@ -688,6 +689,9 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var topCitation = Object.assign({}, extracted.citation);
                     topCitation.badge_label = toHumanFieldLabel(topCitation.field_or_chunk_id)
                         || <?php echo json_encode(xl('Document summary')); ?>;
+                    if (extracted.pdf_coordinates && typeof extracted.pdf_coordinates === 'object') {
+                        topCitation.pdf_coordinates = extracted.pdf_coordinates;
+                    }
                     citations.push(topCitation);
                 }
                 if (Array.isArray(extracted.results)) {
@@ -699,6 +703,9 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         if (result.citation && typeof result.citation === 'object') {
                             var citationCopy = Object.assign({}, result.citation);
                             citationCopy.badge_label = inferCitationBadgeLabel(result, result.citation, i);
+                            if (result.pdf_coordinates && typeof result.pdf_coordinates === 'object') {
+                                citationCopy.pdf_coordinates = result.pdf_coordinates;
+                            }
                             citations.push(citationCopy);
                         }
                     }
@@ -734,6 +741,28 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         source_id: normalizeCitationValue(citation.source_id) || null,
                         page_or_section: normalizeCitationValue(citation.page_or_section) || null
                     };
+                    if (typeof citation.coordinate_space === 'string' && citation.coordinate_space.trim() !== '') {
+                        coords.coordinate_space = citation.coordinate_space.trim();
+                    }
+                    if (typeof citation.coordinate_origin === 'string' && citation.coordinate_origin.trim() !== '') {
+                        coords.coordinate_origin = citation.coordinate_origin.trim();
+                    }
+                    var numericMetaFields = [
+                        'source_image_width',
+                        'source_image_height',
+                        'crop_origin_x',
+                        'crop_origin_y',
+                        'crop_width_pts',
+                        'crop_height_pts',
+                        'rotation_degrees'
+                    ];
+                    for (var m = 0; m < numericMetaFields.length; m++) {
+                        var metaKey = numericMetaFields[m];
+                        var metaValue = Number(citation[metaKey]);
+                        if (isFinite(metaValue)) {
+                            coords[metaKey] = metaValue;
+                        }
+                    }
                     return coords;
                 }
 
