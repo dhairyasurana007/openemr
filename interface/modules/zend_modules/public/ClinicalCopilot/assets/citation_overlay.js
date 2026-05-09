@@ -114,8 +114,33 @@
                 py1 = y1 * sy;
             }
 
-            // Extractor coordinates are top-left; convert to PDF bottom-left coordinates before viewport conversion.
-            var bestRect = toViewportRectFromPdfRect([px0, pageHeightPts - py0, px1, pageHeightPts - py1]);
+            function scoreRect(rect) {
+                if (!rect || rect.w <= 0 || rect.h <= 0) {
+                    return -Infinity;
+                }
+                var vx0 = Math.max(0, rect.x);
+                var vy0 = Math.max(0, rect.y);
+                var vx1 = Math.min(canvas.width, rect.r);
+                var vy1 = Math.min(canvas.height, rect.b);
+                var visibleW = Math.max(0, vx1 - vx0);
+                var visibleH = Math.max(0, vy1 - vy0);
+                var visibleArea = visibleW * visibleH;
+                var area = rect.w * rect.h;
+                if (area <= 0) {
+                    return -Infinity;
+                }
+                return visibleArea / area;
+            }
+
+            // Evaluate both coordinate orientations:
+            // A) direct PDF-space bbox (already bottom-left origin)
+            // B) top-left extractor bbox converted to PDF-space via Y inversion
+            var rectDirect = toViewportRectFromPdfRect([px0, py0, px1, py1]);
+            var rectInverted = toViewportRectFromPdfRect([px0, pageHeightPts - py0, px1, pageHeightPts - py1]);
+
+            var scoreDirect = scoreRect(rectDirect);
+            var scoreInverted = scoreRect(rectInverted);
+            var bestRect = scoreDirect >= scoreInverted ? rectDirect : rectInverted;
             if (!bestRect || bestRect.w <= 0 || bestRect.h <= 0) {
                 return;
             }
