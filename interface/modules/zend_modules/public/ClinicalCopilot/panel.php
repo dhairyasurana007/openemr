@@ -205,12 +205,19 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 <small id="clinical-copilot-compose-help" class="form-text text-muted"><?php echo xlt('Requires OPENROUTER_API_KEY on the agent. Override model with OPENROUTER_MODEL.'); ?></small>
             </div>
             <div class="form-group mb-0 mt-2 d-flex align-items-center flex-wrap gap-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="ccp-upload-btn"
-                    <?php echo $agentReady ? '' : 'disabled'; ?>
-                    title="<?php echo $agentReady ? xla('Upload a lab PDF or intake form image for extraction') : xla('Configure CLINICAL_COPILOT_AGENT_BASE_URL first'); ?>"
-                    aria-label="<?php echo xla('Upload document for extraction'); ?>">
-                    <span class="fa fa-upload mr-1" aria-hidden="true"></span><?php echo xlt('Upload Document'); ?>
-                </button>
+                <div class="dropdown">
+                    <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" id="ccp-upload-btn"
+                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"
+                        <?php echo $agentReady ? '' : 'disabled'; ?>
+                        title="<?php echo $agentReady ? xla('Upload a lab or intake form document for extraction') : xla('Configure CLINICAL_COPILOT_AGENT_BASE_URL first'); ?>"
+                        aria-label="<?php echo xla('Upload document for extraction'); ?>">
+                        <span class="fa fa-upload mr-1" aria-hidden="true"></span><?php echo xlt('Upload Document'); ?>
+                    </button>
+                    <div class="dropdown-menu" aria-labelledby="ccp-upload-btn">
+                        <button type="button" class="dropdown-item" id="ccp-upload-lab"><?php echo xlt('Lab'); ?></button>
+                        <button type="button" class="dropdown-item" id="ccp-upload-intake"><?php echo xlt('Intake Form'); ?></button>
+                    </div>
+                </div>
                 <input type="file" id="ccp-file-input" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.hl7,.txt" class="d-none"
                     aria-label="<?php echo xla('Select file to extract'); ?>">
             </div>
@@ -231,7 +238,10 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
             var input = document.getElementById('clinical-copilot-message');
             var messagesEl = document.getElementById('clinical-copilot-messages');
             var uploadBtn = document.getElementById('ccp-upload-btn');
+            var uploadLabBtn = document.getElementById('ccp-upload-lab');
+            var uploadIntakeBtn = document.getElementById('ccp-upload-intake');
             var fileInput = document.getElementById('ccp-file-input');
+            var selectedUploadDocType = 'intake_form';
             var pendingExtractConfirmation = false;
             var pendingExtractDocType = '';
             var pendingExtractFileName = '';
@@ -1012,14 +1022,6 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return !!noPhrases[normalized];
             }
 
-            function inferDocTypeFromFile(file) {
-                if (!file || !file.name) {
-                    return 'intake_form';
-                }
-                var fileName = String(file.name).toLowerCase();
-                return fileName.endsWith('.pdf') ? 'lab' : 'intake_form';
-            }
-
             function isConvertibleToPdfPreview(file) {
                 if (!file || !file.name) {
                     return false;
@@ -1133,11 +1135,20 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return true;
             }
 
-            if (uploadBtn && fileInput) {
-                uploadBtn.addEventListener('click', function () {
-                    if (!agentReady) {
+            if (uploadBtn && fileInput && uploadLabBtn && uploadIntakeBtn) {
+                uploadLabBtn.addEventListener('click', function () {
+                    if (!agentReady || uploadBtn.disabled) {
                         return;
                     }
+                    selectedUploadDocType = 'lab';
+                    fileInput.click();
+                });
+
+                uploadIntakeBtn.addEventListener('click', function () {
+                    if (!agentReady || uploadBtn.disabled) {
+                        return;
+                    }
+                    selectedUploadDocType = 'intake_form';
                     fileInput.click();
                 });
 
@@ -1186,7 +1197,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             formData.append('file', extractionFile, baseName + '.pdf');
                         }
                         formData.append('csrf_token_form', csrfToken);
-                        formData.append('doc_type', inferDocTypeFromFile(file));
+                        formData.append('doc_type', selectedUploadDocType);
 
                         return fetch(extractUrl, {
                             method: 'POST',
