@@ -43,7 +43,7 @@ RUN set -eux; \
 # ccdaservice/node_modules is omitted from the Docker build context (.dockerignore). Reinstall so
 # flex `openemr.sh` permission passes and nested paths (e.g. oe-schematron-service) exist.
 RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \
-    cd ccdaservice && npm ci --unsafe-perm --omit=dev && cd /var/www/localhost/htdocs/openemr; \
+    cd ccdaservice && npm install --unsafe-perm --omit=dev && cd /var/www/localhost/htdocs/openemr; \
     fi
 
 # Copy current repository code over the base OpenEMR image after dependency layers
