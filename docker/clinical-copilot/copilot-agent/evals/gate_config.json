@@ -1,0 +1,4 @@
+{
+  "min_absolute_rate": 0.8,
+  "max_regression_delta": 0.05
+}

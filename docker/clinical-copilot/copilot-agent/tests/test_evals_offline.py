@@ -25,6 +25,7 @@ from evals.rubrics import (
     safe_refusal,
     schema_valid,
 )
+from evals.run_evals import _compute_status, _load_gate_config
 
 
 # ---------------------------------------------------------------------------
@@ -351,3 +352,46 @@ class TestRunnerSmoke:
             data = json.load(fh)
         required = {"schema_valid", "citation_present", "factually_consistent", "safe_refusal", "no_phi_in_logs"}
         assert required.issubset(data.keys()), f"baseline missing keys: {required - data.keys()}"
+
+    def test_gate_config_has_expected_thresholds(self) -> None:
+        gate = _load_gate_config()
+        assert gate["min_absolute_rate"] == 0.80
+        assert gate["max_regression_delta"] == 0.05
+
+
+class TestGateDecisionLogic:
+    def test_fails_when_rate_below_absolute_threshold(self) -> None:
+        status, failed = _compute_status(
+            rate=0.79,
+            baseline=1.0,
+            pass_count=79,
+            total_count=100,
+            min_absolute_rate=0.80,
+            max_regression_delta=0.05,
+        )
+        assert failed is True
+        assert status.startswith("FAIL <80%")
+
+    def test_fails_when_regression_exceeds_delta(self) -> None:
+        status, failed = _compute_status(
+            rate=0.90,
+            baseline=1.0,
+            pass_count=90,
+            total_count=100,
+            min_absolute_rate=0.80,
+            max_regression_delta=0.05,
+        )
+        assert failed is True
+        assert status.startswith("FAIL regression")
+
+    def test_passes_when_within_thresholds(self) -> None:
+        status, failed = _compute_status(
+            rate=0.96,
+            baseline=1.0,
+            pass_count=96,
+            total_count=100,
+            min_absolute_rate=0.80,
+            max_regression_delta=0.05,
+        )
+        assert failed is False
+        assert status.startswith("PASS")
