@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from collections.abc import Callable
 from typing import Any
@@ -120,6 +121,13 @@ def _ambiguous_patient_candidates(tool_payloads: list[dict[str, Any]]) -> list[d
             return candidates
         return []
     return []
+
+
+def _invoke_tool_safe(tool: Any, args: dict[str, Any]) -> tuple[bool, str]:
+    try:
+        return True, str(tool.invoke(args))
+    except Exception as exc:
+        return False, str(exc)
 
 
 def run_chat_with_tools(
@@ -246,7 +254,9 @@ def run_chat_with_tools(
 
         name_to_tool = {t.name: t for t in tools}
         allowed = sorted(name_to_tool.keys())
-        for call in tcalls:
+        indexed_calls = list(enumerate(tcalls))
+        pending: list[tuple[int, str, str, dict[str, Any], Any]] = []
+        for idx, call in indexed_calls:
             name = call.get("name")
             raw_args = call.get("args") or {}
             args: dict[str, Any] = dict(raw_args) if isinstance(raw_args, dict) else {}
@@ -271,33 +281,52 @@ def run_chat_with_tools(
                 }
                 messages.append(ToolMessage(content=json.dumps(err), tool_call_id=tool_call_id))
                 continue
-            try:
-                payload = tool.invoke(args)
-            except Exception as exc:
-                tools_used.append(
-                    {
-                        "name": tool_name,
-                        "args": args,
-                        "tool_call_id": tool_call_id,
-                        "status": "error",
-                        "error": "tool_execution_exception",
-                    }
-                )
-                err = {"error": "tool_execution_exception", "detail": str(exc)}
-                messages.append(ToolMessage(content=json.dumps(err), tool_call_id=tool_call_id))
-                continue
-            messages.append(ToolMessage(content=payload, tool_call_id=tool_call_id))
-            tools_used.append(
-                {
-                    "name": tool_name,
-                    "args": args,
-                    "tool_call_id": tool_call_id,
-                    "status": "ok",
-                }
+            pending.append((idx, tool_name, tool_call_id, args, tool))
+
+        if pending:
+            max_workers = min(
+                len(pending),
+                max(1, int(getattr(settings, "openemr_max_concurrent_requests", 8))),
             )
-            parsed = parse_tool_json_content(payload)
-            if parsed is not None:
-                tool_payloads.append(parsed)
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                future_map = {
+                    idx: pool.submit(_invoke_tool_safe, tool, args)
+                    for idx, _tool_name, _tool_call_id, args, tool in pending
+                }
+
+                call_meta = {
+                    idx: (tool_name, tool_call_id, args)
+                    for idx, tool_name, tool_call_id, args, _tool in pending
+                }
+
+                for idx in sorted(future_map.keys()):
+                    ok, payload_or_error = future_map[idx].result()
+                    tool_name, tool_call_id, args = call_meta[idx]
+                    if not ok:
+                        tools_used.append(
+                            {
+                                "name": tool_name,
+                                "args": args,
+                                "tool_call_id": tool_call_id,
+                                "status": "error",
+                                "error": "tool_execution_exception",
+                            }
+                        )
+                        err = {"error": "tool_execution_exception", "detail": payload_or_error}
+                        messages.append(ToolMessage(content=json.dumps(err), tool_call_id=tool_call_id))
+                        continue
+                    messages.append(ToolMessage(content=payload_or_error, tool_call_id=tool_call_id))
+                    tools_used.append(
+                        {
+                            "name": tool_name,
+                            "args": args,
+                            "tool_call_id": tool_call_id,
+                            "status": "ok",
+                        }
+                    )
+                    parsed = parse_tool_json_content(payload_or_error)
+                    if parsed is not None:
+                        tool_payloads.append(parsed)
     else:
         retrieval_truncated = True
 
