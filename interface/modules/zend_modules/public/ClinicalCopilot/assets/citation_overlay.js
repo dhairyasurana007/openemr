@@ -128,8 +128,124 @@
                             tokens.unshift(fieldToken);
                         }
                     }
+                    var uniqueTokens = [];
+                    var seenTokens = {};
+                    for (var ut = 0; ut < tokens.length; ut++) {
+                        var tok = tokens[ut];
+                        if (!tok || seenTokens[tok]) {
+                            continue;
+                        }
+                        seenTokens[tok] = true;
+                        uniqueTokens.push(tok);
+                    }
+
+                    function tokenMatches(itemToken, token) {
+                        if (!itemToken || !token) {
+                            return false;
+                        }
+                        if (itemToken === token) {
+                            return true;
+                        }
+                        // Accept prefixed variants like "rbc:" for label cells.
+                        if (itemToken.indexOf(token) === 0 && (itemToken.length - token.length) <= 2) {
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    function itemRect(item) {
+                        var tx = item.transform || [];
+                        if (tx.length < 6) {
+                            return null;
+                        }
+                        var ix0 = Number(tx[4]);
+                        var iy0 = Number(tx[5]);
+                        var iw = Number(item.width) || 0;
+                        var ih = Math.abs(Number(tx[3])) || Number(item.height) || 10;
+                        if (!isFinite(ix0) || !isFinite(iy0) || iw <= 0 || ih <= 0) {
+                            return null;
+                        }
+                        return toViewportRectFromPdfRect([ix0, iy0, ix0 + iw, iy0 + ih]);
+                    }
+
+                    function unionRect(a, b) {
+                        if (!a || !b) {
+                            return null;
+                        }
+                        var x0 = Math.min(a.x, b.x);
+                        var y0 = Math.min(a.y, b.y);
+                        var x1 = Math.max(a.r, b.r);
+                        var y1 = Math.max(a.b, b.b);
+                        return {
+                            x: x0,
+                            y: y0,
+                            w: Math.max(0, x1 - x0),
+                            h: Math.max(0, y1 - y0),
+                            r: x1,
+                            b: y1
+                        };
+                    }
+
+                    function isNumericToken(token) {
+                        return /^[0-9]+(?:\.[0-9]+)?$/.test(token);
+                    }
+
+                    // Build searchable item index once.
+                    var indexed = [];
+                    for (var ix = 0; ix < textContent.items.length; ix++) {
+                        var it = textContent.items[ix];
+                        var itToken = normalizeToken(it && it.str);
+                        if (!itToken) {
+                            continue;
+                        }
+                        var rect = itemRect(it);
+                        if (!rect || rect.w <= 0 || rect.h <= 0) {
+                            continue;
+                        }
+                        indexed.push({ token: itToken, rect: rect });
+                    }
+
+                    // Prefer pair match: field token + numeric token that are on same row and near each other.
+                    var primaryField = fieldId ? normalizeToken(fieldId) : '';
+                    var bestNumeric = '';
+                    for (var nt = 0; nt < uniqueTokens.length; nt++) {
+                        if (isNumericToken(uniqueTokens[nt])) {
+                            bestNumeric = uniqueTokens[nt];
+                            break;
+                        }
+                    }
+                    var bestPair = null;
+                    var bestPairScore = Infinity;
+                    if (primaryField && bestNumeric) {
+                        for (var ai = 0; ai < indexed.length; ai++) {
+                            if (!tokenMatches(indexed[ai].token, primaryField)) {
+                                continue;
+                            }
+                            for (var bi = 0; bi < indexed.length; bi++) {
+                                if (!tokenMatches(indexed[bi].token, bestNumeric)) {
+                                    continue;
+                                }
+                                var dy = Math.abs(indexed[ai].rect.y - indexed[bi].rect.y);
+                                var dx = Math.abs(indexed[ai].rect.x - indexed[bi].rect.x);
+                                // Strongly prefer same-line tokens; then nearest horizontal distance.
+                                var score = (dy * 1000) + dx;
+                                if (score < bestPairScore) {
+                                    bestPairScore = score;
+                                    bestPair = unionRect(indexed[ai].rect, indexed[bi].rect);
+                                }
+                            }
+                        }
+                    }
+                    if (bestPair && bestPair.w > 0 && bestPair.h > 0) {
+                        bestPair.x = Math.max(0, bestPair.x - 3);
+                        bestPair.y = Math.max(0, bestPair.y - 2);
+                        bestPair.w = bestPair.w + 6;
+                        bestPair.h = bestPair.h + 4;
+                        return bestPair;
+                    }
+
                     // Prefer precise numeric tokens (e.g. 5.4, 3.78, 11.1).
-                    tokens.sort(function (a, b) {
+                    uniqueTokens.sort(function (a, b) {
                         var aNum = /^[0-9]+(?:\.[0-9]+)?$/.test(a) ? 1 : 0;
                         var bNum = /^[0-9]+(?:\.[0-9]+)?$/.test(b) ? 1 : 0;
                         if (aNum !== bNum) {
@@ -138,29 +254,14 @@
                         return b.length - a.length;
                     });
 
-                    for (var ti = 0; ti < tokens.length; ti++) {
-                        var token = tokens[ti];
-                        for (var ii = 0; ii < textContent.items.length; ii++) {
-                            var item = textContent.items[ii];
-                            var itemToken = normalizeToken(item && item.str);
-                            if (!itemToken) {
+                    for (var ti = 0; ti < uniqueTokens.length; ti++) {
+                        var token = uniqueTokens[ti];
+                        for (var ii = 0; ii < indexed.length; ii++) {
+                            var matchItem = indexed[ii];
+                            if (!tokenMatches(matchItem.token, token)) {
                                 continue;
                             }
-                            if (itemToken !== token) {
-                                continue;
-                            }
-                            var tx = item.transform || [];
-                            if (tx.length < 6) {
-                                continue;
-                            }
-                            var ix0 = Number(tx[4]);
-                            var iy0 = Number(tx[5]);
-                            var iw = Number(item.width) || 0;
-                            var ih = Math.abs(Number(tx[3])) || Number(item.height) || 10;
-                            if (!isFinite(ix0) || !isFinite(iy0) || iw <= 0 || ih <= 0) {
-                                continue;
-                            }
-                            var rect = toViewportRectFromPdfRect([ix0, iy0, ix0 + iw, iy0 + ih]);
+                            var rect = matchItem.rect;
                             if (rect && rect.w > 0 && rect.h > 0) {
                                 // Add slight padding for visibility.
                                 rect.x = Math.max(0, rect.x - 2);
