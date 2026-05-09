@@ -35,7 +35,7 @@
      * @param {number} pageNumber - 1-indexed page to render
      * @param {number[]} bbox - [x0, y0, x1, y1] in PDF points, origin top-left
      */
-    function renderBboxOverlay(blobUrl, pageNumber, bbox, bboxStats, coordMeta) {
+    function renderBboxOverlay(blobUrl, pageNumber, bbox, bboxStats, coordMeta, quoteOrValue, fieldId) {
         var panel = document.getElementById('ccp-pdf-overlay-panel');
         var canvas = document.getElementById('ccp-pdf-canvas');
         if (!panel || !canvas || !blobUrl) {
@@ -61,8 +61,9 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             return page.render({ canvasContext: ctx, viewport: viewport }).promise
-                .then(function () { return { viewport: viewport, naturalViewport: naturalViewport }; });
+                .then(function () { return { page: page, viewport: viewport, naturalViewport: naturalViewport }; });
         }).then(function (payload) {
+            var page = payload.page;
             var viewport = payload.viewport;
             var naturalViewport = payload.naturalViewport;
             if (!Array.isArray(bbox) || bbox.length < 4) {
@@ -91,6 +92,89 @@
 
             function toViewportRectFromPdfRect(pdfRect) {
                 return normalizeRect(viewport.convertToViewportRectangle(pdfRect));
+            }
+
+            function drawRect(rect) {
+                if (!rect || rect.w <= 0 || rect.h <= 0) {
+                    return false;
+                }
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 180, 0, 1)';
+                ctx.fillStyle = 'rgba(255, 220, 0, 0.28)';
+                ctx.lineWidth = 2.5;
+                ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+                ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+                ctx.restore();
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                return true;
+            }
+
+            function normalizeToken(token) {
+                return String(token || '').toLowerCase().replace(/[^a-z0-9.%/-]/g, '');
+            }
+
+            function findTextRectFromQuote() {
+                if (!page || !quoteOrValue || typeof quoteOrValue !== 'string') {
+                    return Promise.resolve(null);
+                }
+                return page.getTextContent().then(function (textContent) {
+                    if (!textContent || !Array.isArray(textContent.items) || textContent.items.length === 0) {
+                        return null;
+                    }
+                    var tokens = quoteOrValue.split(/\s+/).map(normalizeToken).filter(function (t) { return t.length > 0; });
+                    if (fieldId) {
+                        var fieldToken = normalizeToken(fieldId);
+                        if (fieldToken) {
+                            tokens.unshift(fieldToken);
+                        }
+                    }
+                    // Prefer precise numeric tokens (e.g. 5.4, 3.78, 11.1).
+                    tokens.sort(function (a, b) {
+                        var aNum = /^[0-9]+(?:\.[0-9]+)?$/.test(a) ? 1 : 0;
+                        var bNum = /^[0-9]+(?:\.[0-9]+)?$/.test(b) ? 1 : 0;
+                        if (aNum !== bNum) {
+                            return bNum - aNum;
+                        }
+                        return b.length - a.length;
+                    });
+
+                    for (var ti = 0; ti < tokens.length; ti++) {
+                        var token = tokens[ti];
+                        for (var ii = 0; ii < textContent.items.length; ii++) {
+                            var item = textContent.items[ii];
+                            var itemToken = normalizeToken(item && item.str);
+                            if (!itemToken) {
+                                continue;
+                            }
+                            if (itemToken !== token) {
+                                continue;
+                            }
+                            var tx = item.transform || [];
+                            if (tx.length < 6) {
+                                continue;
+                            }
+                            var ix0 = Number(tx[4]);
+                            var iy0 = Number(tx[5]);
+                            var iw = Number(item.width) || 0;
+                            var ih = Math.abs(Number(tx[3])) || Number(item.height) || 10;
+                            if (!isFinite(ix0) || !isFinite(iy0) || iw <= 0 || ih <= 0) {
+                                continue;
+                            }
+                            var rect = toViewportRectFromPdfRect([ix0, iy0, ix0 + iw, iy0 + ih]);
+                            if (rect && rect.w > 0 && rect.h > 0) {
+                                // Add slight padding for visibility.
+                                rect.x = Math.max(0, rect.x - 2);
+                                rect.y = Math.max(0, rect.y - 2);
+                                rect.w = rect.w + 4;
+                                rect.h = rect.h + 4;
+                                return rect;
+                            }
+                        }
+                    }
+                    return null;
+                }).catch(function () {
+                    return null;
+                });
             }
 
             var pageHeightPts = Math.abs(naturalViewport.viewBox[3] - naturalViewport.viewBox[1]);
@@ -128,7 +212,13 @@
                 && Number(coordMeta.crop_width_pts) > 0
                 && Number(coordMeta.crop_height_pts) > 0;
 
-            if (hasCropMeta) {
+            var textRectPromise = findTextRectFromQuote();
+            textRectPromise.then(function (textRect) {
+                if (drawRect(textRect)) {
+                    return;
+                }
+
+                if (hasCropMeta) {
                 var srcW = Number(coordMeta.source_image_width);
                 var srcH = Number(coordMeta.source_image_height);
                 var cropX = Number(coordMeta.crop_origin_x);
@@ -163,14 +253,7 @@
 
                 var rectFromMeta = toViewportRectFromPdfRect([pdfX0, pdfY0, pdfX1, pdfY1]);
                 if (rectFromMeta && rectFromMeta.w > 0 && rectFromMeta.h > 0) {
-                    ctx.save();
-                    ctx.strokeStyle = 'rgba(255, 180, 0, 1)';
-                    ctx.fillStyle = 'rgba(255, 220, 0, 0.28)';
-                    ctx.lineWidth = 2.5;
-                    ctx.strokeRect(rectFromMeta.x, rectFromMeta.y, rectFromMeta.w, rectFromMeta.h);
-                    ctx.fillRect(rectFromMeta.x, rectFromMeta.y, rectFromMeta.w, rectFromMeta.h);
-                    ctx.restore();
-                    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    drawRect(rectFromMeta);
                     return;
                 }
             }
@@ -205,16 +288,8 @@
             if (!bestRect || bestRect.w <= 0 || bestRect.h <= 0) {
                 return;
             }
-
-            ctx.save();
-            ctx.strokeStyle = 'rgba(255, 180, 0, 1)';
-            ctx.fillStyle = 'rgba(255, 220, 0, 0.28)';
-            ctx.lineWidth = 2.5;
-            ctx.strokeRect(bestRect.x, bestRect.y, bestRect.w, bestRect.h);
-            ctx.fillRect(bestRect.x, bestRect.y, bestRect.w, bestRect.h);
-            ctx.restore();
-
-            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                drawRect(bestRect);
+            });
         }).catch(function (err) {
             console.warn('[ClinicalCopilot] citation overlay error:', err);
         });

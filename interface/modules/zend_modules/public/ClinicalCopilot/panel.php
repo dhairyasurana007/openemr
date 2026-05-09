@@ -563,13 +563,13 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         var coordMeta = (cit.pdf_coordinates && typeof cit.pdf_coordinates === 'object') ? cit.pdf_coordinates : null;
                         badge.setAttribute('data-has-bbox', 'true');
                         badge.title = (badge.title ? badge.title + ' ' : '') + <?php echo json_encode('(' . xl('click to view in PDF') . ')'); ?>;
-                        (function (url, pn, bx, stats, meta) {
+                        (function (url, pn, bx, stats, meta, quote, fieldId) {
                             badge.addEventListener('click', function () {
                                 if (window.ClinicalCopilotCitationOverlay) {
-                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx, stats, meta);
+                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx, stats, meta, quote, fieldId);
                                 }
                             });
-                        })(blobUrl, cit.page_number, cit.bbox, pageStats, coordMeta);
+                        })(blobUrl, cit.page_number, cit.bbox, pageStats, coordMeta, normalizeCitationValue(cit.quote_or_value), normalizeCitationValue(cit.field_or_chunk_id));
                     }
                     bubble.appendChild(badge);
                 }
