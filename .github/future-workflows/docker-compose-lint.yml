@@ -57,9 +57,35 @@ jobs:
     - name: Run dclint on changed files
       if: steps.files-to-check.outputs.mode == 'files'
       run: |
-        docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ${{ steps.files-to-check.outputs.files }} --exclude .github
+        set +e
+        output="$(docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ${{ steps.files-to-check.outputs.files }} --exclude .github 2>&1)"
+        status=$?
+        set -e
+        printf '%s\n' "$output"
+
+        if grep -Eq 'problems \([1-9][0-9]* errors?,' <<<"$output"; then
+          exit 1
+        fi
+
+        if [[ $status -ne 0 ]] && ! grep -Eq 'problems \([0-9]+ errors?,' <<<"$output"; then
+          echo "dclint failed without a parsable lint summary."
+          exit "$status"
+        fi
 
     - name: Run dclint recursively
       if: steps.files-to-check.outputs.mode == 'recursive'
       run: |
-        docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ci/ docker/ --recursive --exclude .github
+        set +e
+        output="$(docker run --rm --volume "$PWD:$PWD" --workdir "$PWD" zavoloklom/dclint:3.1.0 ci/ docker/ --recursive --exclude .github 2>&1)"
+        status=$?
+        set -e
+        printf '%s\n' "$output"
+
+        if grep -Eq 'problems \([1-9][0-9]* errors?,' <<<"$output"; then
+          exit 1
+        fi
+
+        if [[ $status -ne 0 ]] && ! grep -Eq 'problems \([0-9]+ errors?,' <<<"$output"; then
+          echo "dclint failed without a parsable lint summary."
+          exit "$status"
+        fi

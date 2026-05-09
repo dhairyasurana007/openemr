@@ -83,7 +83,6 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: openemr-clinical-copilot:local
     expose:
       - '80'
       - '443'
