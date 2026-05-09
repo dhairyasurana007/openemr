@@ -238,6 +238,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
             var pendingIdentityCollection = false;
             var pendingIdentityMissingFields = [];
             var pdfBlobMap = {};
+            var currentExtractPreviewBlobUrl = null;
             var pdfOverlayPanel = document.getElementById('ccp-pdf-overlay-panel');
             var pdfOverlayClose = document.getElementById('ccp-pdf-overlay-close');
             if (!btn || !input || !messagesEl) {
@@ -376,6 +377,48 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     return value.trim();
                 }
                 return '';
+            }
+
+            function sourceIdVariants(sourceId) {
+                var raw = normalizeCitationValue(sourceId);
+                if (!raw) {
+                    return [];
+                }
+                var variants = {};
+                variants[raw] = true;
+                variants[raw.toLowerCase()] = true;
+                // Also match common URL/path style IDs that differ only by basename.
+                var parts = raw.split(/[\\/]/);
+                var baseName = parts.length > 0 ? parts[parts.length - 1] : '';
+                if (baseName) {
+                    variants[baseName] = true;
+                    variants[baseName.toLowerCase()] = true;
+                }
+                return Object.keys(variants);
+            }
+
+            function registerSourceBlob(sourceId, blobUrl) {
+                if (!blobUrl) {
+                    return;
+                }
+                var keys = sourceIdVariants(sourceId);
+                if (keys.length === 0) {
+                    return;
+                }
+                for (var i = 0; i < keys.length; i++) {
+                    pdfBlobMap[keys[i]] = blobUrl;
+                }
+            }
+
+            function getBlobUrlForCitationSource(sourceId) {
+                var keys = sourceIdVariants(sourceId);
+                for (var i = 0; i < keys.length; i++) {
+                    if (pdfBlobMap[keys[i]]) {
+                        return pdfBlobMap[keys[i]];
+                    }
+                }
+                // Fallback for non-PDF originals where extractor source IDs do not round-trip.
+                return currentExtractPreviewBlobUrl;
             }
 
             function formatCitations(citations) {
@@ -557,7 +600,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var hasBbox = Array.isArray(cit.bbox) && cit.bbox.length >= 4;
                     var hasPage = (typeof cit.page_number === 'number' && cit.page_number >= 1);
                     var sid = normalizeCitationValue(cit.source_id);
-                    var blobUrl = (sid && pdfBlobMap[sid]) ? pdfBlobMap[sid] : null;
+                    var blobUrl = getBlobUrlForCitationSource(sid);
                     var statsKey = (sid || 'unknown') + '|' + String(hasPage ? cit.page_number : 1);
                     var pageStats = bboxStatsBySourcePage[statsKey] || null;
 
@@ -1165,14 +1208,17 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                             extractedFacts = res.data.extracted;
                             var extr = res.data.extracted;
                             var blobUrl = URL.createObjectURL(res.previewBlob || file);
+                            currentExtractPreviewBlobUrl = blobUrl;
                             if (extr && Array.isArray(extr.results)) {
                                 for (var ri = 0; ri < extr.results.length; ri++) {
                                     var rc = extr.results[ri] && extr.results[ri].citation;
-                                    if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
+                                    if (rc && rc.source_id) {
+                                        registerSourceBlob(rc.source_id, blobUrl);
+                                    }
                                 }
                             }
                             if (extr && extr.citation && extr.citation.source_id) {
-                                pdfBlobMap[extr.citation.source_id] = blobUrl;
+                                registerSourceBlob(extr.citation.source_id, blobUrl);
                             }
                             pendingExtractDocType = res.data.doc_type || 'lab';
                             pendingExtractFileName = file.name || 'uploaded-document';
