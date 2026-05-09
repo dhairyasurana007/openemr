@@ -35,7 +35,7 @@
      * @param {number} pageNumber - 1-indexed page to render
      * @param {number[]} bbox - [x0, y0, x1, y1] in PDF points, origin top-left
      */
-    function renderBboxOverlay(blobUrl, pageNumber, bbox) {
+    function renderBboxOverlay(blobUrl, pageNumber, bbox, bboxStats) {
         var panel = document.getElementById('ccp-pdf-overlay-panel');
         var canvas = document.getElementById('ccp-pdf-canvas');
         if (!panel || !canvas || !blobUrl) {
@@ -93,54 +93,29 @@
                 return normalizeRect(viewport.convertToViewportRectangle(pdfRect));
             }
 
-            function scoreRect(rect) {
-                if (!rect || rect.w <= 0 || rect.h <= 0) {
-                    return -Infinity;
-                }
-                var vx0 = Math.max(0, rect.x);
-                var vy0 = Math.max(0, rect.y);
-                var vx1 = Math.min(canvas.width, rect.r);
-                var vy1 = Math.min(canvas.height, rect.b);
-                var visibleW = Math.max(0, vx1 - vx0);
-                var visibleH = Math.max(0, vy1 - vy0);
-                var visibleArea = visibleW * visibleH;
-                var area = rect.w * rect.h;
-                if (area <= 0) {
-                    return -Infinity;
-                }
-                var coverage = visibleArea / area;
-                var canvasShare = visibleArea / (canvas.width * canvas.height || 1);
-                // Prefer mostly visible rectangles that are not absurdly large relative to page.
-                return coverage - Math.max(0, canvasShare - 0.5);
-            }
-
-            // Candidate A: bbox already in PDF coordinates (origin bottom-left).
-            var rectPdf = toViewportRectFromPdfRect([x0, y0, x1, y1]);
-
-            // Candidate B: bbox in top-left coordinates but same point units as PDF.
             var pageHeightPts = Math.abs(naturalViewport.viewBox[3] - naturalViewport.viewBox[1]);
-            var rectTopLeftPts = toViewportRectFromPdfRect([x0, pageHeightPts - y0, x1, pageHeightPts - y1]);
-
-            // Candidate C: bbox in top-left raster pixels at extraction scale; normalize to page points.
             var pageWidthPts = Math.abs(naturalViewport.viewBox[2] - naturalViewport.viewBox[0]);
-            var sx = Math.max(x0, x1) > 0 ? (pageWidthPts / Math.max(x0, x1)) : 1;
-            var sy = Math.max(y0, y1) > 0 ? (pageHeightPts / Math.max(y0, y1)) : 1;
-            var rx0 = x0 * sx;
-            var ry0 = y0 * sy;
-            var rx1 = x1 * sx;
-            var ry1 = y1 * sy;
-            var rectTopLeftScaled = toViewportRectFromPdfRect([rx0, pageHeightPts - ry0, rx1, pageHeightPts - ry1]);
+            var statsMaxX = bboxStats && isFinite(Number(bboxStats.maxX)) ? Number(bboxStats.maxX) : Math.max(x0, x1);
+            var statsMaxY = bboxStats && isFinite(Number(bboxStats.maxY)) ? Number(bboxStats.maxY) : Math.max(y0, y1);
 
-            var candidates = [rectPdf, rectTopLeftPts, rectTopLeftScaled];
-            var bestRect = null;
-            var bestScore = -Infinity;
-            for (var i = 0; i < candidates.length; i++) {
-                var currentScore = scoreRect(candidates[i]);
-                if (currentScore > bestScore) {
-                    bestScore = currentScore;
-                    bestRect = candidates[i];
-                }
+            // If bbox extents exceed page points, treat incoming values as top-left raster-like coords
+            // and scale by per-page citation maxima.
+            var needsScale = (Math.max(x0, x1) > pageWidthPts * 1.1) || (Math.max(y0, y1) > pageHeightPts * 1.1);
+            var px0 = x0;
+            var py0 = y0;
+            var px1 = x1;
+            var py1 = y1;
+            if (needsScale) {
+                var sx = statsMaxX > 0 ? (pageWidthPts / statsMaxX) : 1;
+                var sy = statsMaxY > 0 ? (pageHeightPts / statsMaxY) : 1;
+                px0 = x0 * sx;
+                py0 = y0 * sy;
+                px1 = x1 * sx;
+                py1 = y1 * sy;
             }
+
+            // Extractor coordinates are top-left; convert to PDF bottom-left coordinates before viewport conversion.
+            var bestRect = toViewportRectFromPdfRect([px0, pageHeightPts - py0, px1, pageHeightPts - py1]);
             if (!bestRect || bestRect.w <= 0 || bestRect.h <= 0) {
                 return;
             }

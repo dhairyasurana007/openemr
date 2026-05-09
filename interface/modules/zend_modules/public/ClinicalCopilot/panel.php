@@ -496,6 +496,35 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 if (!Array.isArray(citations) || citations.length === 0) {
                     return;
                 }
+                var bboxStatsBySourcePage = {};
+                for (var ci = 0; ci < citations.length; ci++) {
+                    var scanCit = citations[ci];
+                    if (!scanCit || typeof scanCit !== 'object') {
+                        continue;
+                    }
+                    if (!Array.isArray(scanCit.bbox) || scanCit.bbox.length < 4) {
+                        continue;
+                    }
+                    var scanSid = normalizeCitationValue(scanCit.source_id) || 'unknown';
+                    var scanPage = (typeof scanCit.page_number === 'number' && scanCit.page_number >= 1) ? scanCit.page_number : 1;
+                    var scanKey = scanSid + '|' + String(scanPage);
+                    var sx0 = Number(scanCit.bbox[0]);
+                    var sy0 = Number(scanCit.bbox[1]);
+                    var sx1 = Number(scanCit.bbox[2]);
+                    var sy1 = Number(scanCit.bbox[3]);
+                    if (!isFinite(sx0) || !isFinite(sy0) || !isFinite(sx1) || !isFinite(sy1)) {
+                        continue;
+                    }
+                    var maxX = Math.max(sx0, sx1);
+                    var maxY = Math.max(sy0, sy1);
+                    if (!bboxStatsBySourcePage[scanKey]) {
+                        bboxStatsBySourcePage[scanKey] = { maxX: maxX, maxY: maxY };
+                    } else {
+                        bboxStatsBySourcePage[scanKey].maxX = Math.max(bboxStatsBySourcePage[scanKey].maxX, maxX);
+                        bboxStatsBySourcePage[scanKey].maxY = Math.max(bboxStatsBySourcePage[scanKey].maxY, maxY);
+                    }
+                }
+
                 var row = document.createElement('div');
                 row.className = 'clinical-copilot-msg mb-2 clinical-copilot-msg-assistant';
                 var bubble = document.createElement('div');
@@ -527,17 +556,19 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     var hasPage = (typeof cit.page_number === 'number' && cit.page_number >= 1);
                     var sid = normalizeCitationValue(cit.source_id);
                     var blobUrl = (sid && pdfBlobMap[sid]) ? pdfBlobMap[sid] : null;
+                    var statsKey = (sid || 'unknown') + '|' + String(hasPage ? cit.page_number : 1);
+                    var pageStats = bboxStatsBySourcePage[statsKey] || null;
 
                     if (hasBbox && hasPage && blobUrl) {
                         badge.setAttribute('data-has-bbox', 'true');
                         badge.title = (badge.title ? badge.title + ' ' : '') + <?php echo json_encode('(' . xl('click to view in PDF') . ')'); ?>;
-                        (function (url, pn, bx) {
+                        (function (url, pn, bx, stats) {
                             badge.addEventListener('click', function () {
                                 if (window.ClinicalCopilotCitationOverlay) {
-                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx);
+                                    window.ClinicalCopilotCitationOverlay.renderBboxOverlay(url, pn, bx, stats);
                                 }
                             });
-                        })(blobUrl, cit.page_number, cit.bbox);
+                        })(blobUrl, cit.page_number, cit.bbox, pageStats);
                     }
                     bubble.appendChild(badge);
                 }
