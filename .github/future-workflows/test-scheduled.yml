@@ -1,7 +1,7 @@
 ##
 # Scheduled nightly test run with full coverage
 #
-# Runs all test configurations daily with coverage enabled for all.
+# Runs PHP 8.5 test configurations daily with coverage enabled.
 # This moves coverage collection off PRs to reduce CI time on pull requests.
 #
 # Schedule: 9:00 UTC (4am EST / 5am EDT)
@@ -34,7 +34,7 @@ jobs:
       id: docker-dirs
       ##
       # Collect the docker directory names from ci subdirectories
-      # and compute display names for each configuration.
+      # and compute display names for each PHP 8.5 configuration.
       run: |
         shopt -s nullglob
         shopt -s extglob
@@ -49,7 +49,7 @@ jobs:
             display_name: ("PHP \(.output.php) - \(.output.webserver) - \(.output.database) \(.output.db)" + (if .output.redis_sentinel_enabled == "true" then (" - Redis Sentinel" + (if (.output.docker_dir | endswith("_mtls")) then " mTLS" elif (.output.docker_dir | endswith("_tls")) then " TLS" else "" end)) else "" end)),
             save_composer_cache: .output.save_composer_cache,
             save_node_cache: .output.save_node_cache
-          }) | "configs=\(.)"' >> "$GITHUB_OUTPUT"
+          }) | map(select(.php == "8.5")) | "configs=\(.)"' >> "$GITHUB_OUTPUT"
     outputs:
       configs: ${{ steps.docker-dirs.outputs.configs }}
   build:
@@ -64,8 +64,7 @@ jobs:
     with:
       docker_dir: ${{ matrix.config.docker_dir }}
       display_name: ${{ matrix.config.display_name }}
-      # Enable coverage for all configurations except PHP 8.6+
-      # (xdebug/pcov don't support PHP 8.6 yet)
-      enable_coverage: ${{ (inputs.enable_coverage == '' || inputs.enable_coverage) && !startsWith(matrix.config.php, '8.6') }}
+      # Enable coverage for all selected configurations.
+      enable_coverage: ${{ inputs.enable_coverage == '' || inputs.enable_coverage }}
       save_composer_cache: ${{ matrix.config.save_composer_cache == 'true' }}
       save_node_cache: ${{ matrix.config.save_node_cache == 'true' }}

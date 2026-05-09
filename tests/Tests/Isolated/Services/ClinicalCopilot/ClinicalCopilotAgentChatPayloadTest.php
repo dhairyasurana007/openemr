@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 class ClinicalCopilotAgentChatPayloadTest extends TestCase
 {
-    public function testToAgentJsonIncludesSurfaceAndCallerContext(): void
+    public function testToAgentJsonIncludesSurfaceAndPatientId(): void
     {
         $p = new ClinicalCopilotAgentChatPayload(
             message: 'hello',
@@ -28,13 +28,11 @@ class ClinicalCopilotAgentChatPayloadTest extends TestCase
         $json = $p->toAgentJsonArray();
         $this->assertSame('hello', $json['message']);
         $this->assertSame('encounter', $json['surface']);
-        $this->assertIsArray($json['caller_context']);
-        $this->assertSame('UC2', $json['caller_context']['use_case']);
-        $this->assertSame('p-uuid-1', $json['caller_context']['patient_uuid']);
-        $this->assertSame('42', $json['caller_context']['encounter_id']);
+        $this->assertSame('p-uuid-1', $json['patient_id']);
+        $this->assertArrayNotHasKey('caller_context', $json);
     }
 
-    public function testSchedulePayloadIncludesSlotIds(): void
+    public function testSchedulePayloadDoesNotIncludeCallerContext(): void
     {
         $p = new ClinicalCopilotAgentChatPayload(
             message: 'day',
@@ -44,6 +42,6 @@ class ClinicalCopilotAgentChatPayloadTest extends TestCase
         );
         $json = $p->toAgentJsonArray();
         $this->assertSame('schedule_day', $json['surface']);
-        $this->assertSame(['10', '11'], $json['caller_context']['authorized_slot_ids']);
+        $this->assertArrayNotHasKey('caller_context', $json);
     }
 }

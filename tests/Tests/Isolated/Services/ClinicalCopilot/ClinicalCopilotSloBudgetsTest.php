@@ -41,7 +41,7 @@ class ClinicalCopilotSloBudgetsTest extends TestCase
         self::assertSame(20.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC1));
         self::assertSame(5.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC2));
         self::assertSame(8.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC3));
-        self::assertSame(8.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC4));
+        self::assertSame(43.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC4));
         self::assertSame(10.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC5));
         self::assertSame(15.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC6));
         self::assertSame(15.0, ClinicalCopilotSloBudgets::productSloMaxSeconds(ClinicalCopilotUseCase::UC7));

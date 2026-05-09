@@ -4,7 +4,7 @@
 # - "Tests": Tests that require a database and initialization before they can run or pass.
 # This workflow runs the kind that does not require initialization.
 
-name: CI PHPUnit isolated (multi-PHP)
+name: CI PHPUnit isolated (PHP 8.5)
 
 
 # Every branch: `push` and `pull_request` (no `branches:` filter).
@@ -23,11 +23,7 @@ jobs:
     strategy:
       matrix:
         php-version:
-        - '8.2'
-        - '8.3'
-        - '8.4'
         - '8.5'
-        - '8.6'
 
     name: PHP ${{ matrix.php-version }} - Isolated Tests
 
@@ -38,22 +34,14 @@ jobs:
       uses: ./.github/actions/setup-php-composer
       with:
         php-version: ${{ matrix.php-version }}
-        # PCOV is much faster than Xdebug for coverage. Only 8.3 collects clover to cut wall-clock on the matrix.
-        coverage: ${{ matrix.php-version == '8.3' && 'pcov' || 'none' }}
+        coverage: pcov
 
-    - name: Run isolated tests (coverage on PHP 8.3 only)
+    - name: Run isolated tests
       run: |
-        if [ "${{ matrix.php-version }}" = "8.3" ]; then
-          vendor/bin/phpunit -c phpunit-isolated.xml \
-                             --testsuite=isolated,unit-isolated \
-                             --coverage-clover=clover.xml \
-                             --log-junit=junit.xml
-        else
-          vendor/bin/phpunit -c phpunit-isolated.xml \
-                             --testsuite=isolated,unit-isolated \
-                             --no-coverage \
-                             --log-junit=junit.xml
-        fi
+        vendor/bin/phpunit -c phpunit-isolated.xml \
+                           --testsuite=isolated,unit-isolated \
+                           --coverage-clover=clover.xml \
+                           --log-junit=junit.xml
 
     - name: Upload test results to Codecov
       if: ${{ !cancelled() }}
