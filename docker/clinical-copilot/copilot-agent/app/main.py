@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, Request
@@ -28,6 +29,21 @@ _SETTINGS = Settings.load()
 apply_langchain_runtime_env(_SETTINGS)
 
 
+def _probe_retrieval_backend(backend: Any, settings: Settings) -> tuple[bool, str]:
+    """Run a lightweight retrieval preflight to surface transport/config problems early."""
+    if not settings.use_openemr_retrieval:
+        return True, "disabled"
+    if not isinstance(backend, OpenEmrRetrievalBackend):
+        return False, "retrieval backend mismatch while COPILOT_USE_OPENEMR_RETRIEVAL=true"
+    payload = backend.list_schedule_slots(date.today().isoformat())
+    status = payload.get("retrieval_status")
+    if isinstance(status, dict) and status.get("ok") is False:
+        code = str(status.get("code", "unknown"))
+        detail = str(status.get("detail", ""))
+        return False, f"{code}: {detail}".strip(": ")
+    return True, "ok"
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = OpenEmrHttpPool(_SETTINGS)
@@ -35,6 +51,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.openemr_pool = pool
     retrieval_backend = retrieval_backend_for_runtime(_SETTINGS)
     app.state.retrieval_backend = retrieval_backend
+    retrieval_ok, retrieval_detail = _probe_retrieval_backend(retrieval_backend, _SETTINGS)
+    app.state.retrieval_preflight_ok = retrieval_ok
+    app.state.retrieval_preflight_detail = retrieval_detail
+    if retrieval_ok:
+        _LOG.info("retrieval_preflight_ready detail=%s", retrieval_detail)
+    else:
+        _LOG.error("retrieval_preflight_failed detail=%s", retrieval_detail)
 
     try:
         from app.rag_retriever import HybridRetriever
@@ -97,6 +120,18 @@ async def readyz(request: Request) -> JSONResponse:
     pool: OpenEmrHttpPool = request.app.state.openemr_pool
 
     checks: dict[str, Any] = {"process": True}
+    if settings.use_openemr_retrieval:
+        retrieval_ok = bool(getattr(request.app.state, "retrieval_preflight_ok", False))
+        checks["openemr_retrieval"] = retrieval_ok
+        if not retrieval_ok:
+            detail = str(getattr(request.app.state, "retrieval_preflight_detail", ""))
+            body: dict[str, Any] = {
+                "status": "not_ready",
+                "checks": checks,
+            }
+            if detail:
+                body["detail"] = detail
+            return JSONResponse(body, status_code=503)
 
     if settings.readyz_probe_openemr:
         ok, detail = await pool.probe_livez()
