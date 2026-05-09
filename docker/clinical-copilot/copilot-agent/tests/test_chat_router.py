@@ -113,6 +113,29 @@ def _make_lab_result() -> "LabExtractionResult":
     )
 
 
+def _make_intake_result() -> "IntakeFormResult":
+    from app.schemas.extraction import ExtractionCitation, IntakeFormResult, PatientDemographics
+    return IntakeFormResult(
+        demographics=PatientDemographics(
+            name="Alex Chen",
+            dob="1990-05-05",
+            sex="M",
+            address="123 Main St",
+        ),
+        chief_concern="Follow-up",
+        current_medications=["Lisinopril 10mg"],
+        allergies=["Penicillin"],
+        family_history=["HTN"],
+        citation=ExtractionCitation(
+            source_type="intake_form",
+            source_id="sha256:intake001",
+            page_or_section="page 1",
+            field_or_chunk_id="intake_form_summary",
+            quote_or_value="Alex Chen",
+        ),
+    )
+
+
 class TestChatRouter(unittest.TestCase):
     def tearDown(self) -> None:
         import app.main as main_mod
@@ -294,3 +317,79 @@ class TestExtractEndpoint(unittest.TestCase):
         # Every lab result citation must point at the FHIR DocumentReference id
         for lab in body["extracted"]["results"]:
             self.assertEqual(lab["citation"]["source_id"], "fhir-doc-ref-xyz")
+
+    def test_extract_endpoint_accepts_supported_upload_types_for_lab(self) -> None:
+        import app.main as main_mod
+        from app.openemr_persistence import PersistResult
+
+        mock_result = _make_lab_result()
+        mock_persist = PersistResult(
+            source_id="doc-ref-lab-types",
+            document_reference_id="doc-ref-lab-types",
+            observation_ids=["obs-001"],
+            deduplicated=False,
+        )
+        supported_lab_uploads = [
+            ("sample.pdf", b"%PDF-1.4", "application/pdf"),
+            ("sample.png", b"\x89PNG\r\n\x1a\n", "image/png"),
+            ("sample.tiff", b"II*\x00", "image/tiff"),
+            ("sample.docx", b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            ("sample.xlsx", b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("sample.hl7", b"MSH|^~\\&|", "application/hl7-v2"),
+            ("sample.txt", b"Plain text payload", "text/plain"),
+        ]
+
+        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)):
+            with TestClient(main_mod.app) as client:
+                main_mod.app.state.settings = _settings_with_openrouter()
+                for filename, file_bytes, mime in supported_lab_uploads:
+                    with self.subTest(filename=filename, mime=mime):
+                        response = client.post(
+                            "/v1/extract",
+                            data={"doc_type": "lab", "patient_id": "demo-001"},
+                            files={"file": (filename, file_bytes, mime)},
+                        )
+                        self.assertEqual(response.status_code, 200)
+                        body = response.json()
+                        self.assertEqual(body["doc_type"], "lab")
+                        self.assertIn("extracted", body)
+                        self.assertEqual(body["source_id"], "doc-ref-lab-types")
+
+    def test_extract_endpoint_accepts_supported_upload_types_for_intake_form(self) -> None:
+        import app.main as main_mod
+        from app.openemr_persistence import PersistResult
+
+        mock_result = _make_intake_result()
+        mock_persist = PersistResult(
+            source_id="doc-ref-intake-types",
+            document_reference_id="doc-ref-intake-types",
+            observation_ids=[],
+            deduplicated=False,
+        )
+        supported_intake_uploads = [
+            ("sample.pdf", b"%PDF-1.4", "application/pdf"),
+            ("sample.png", b"\x89PNG\r\n\x1a\n", "image/png"),
+            ("sample.tiff", b"II*\x00", "image/tiff"),
+            ("sample.docx", b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            ("sample.xlsx", b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("sample.hl7", b"MSH|^~\\&|", "application/hl7-v2"),
+            ("sample.txt", b"Plain text payload", "text/plain"),
+        ]
+
+        with patch("app.chat.extract_document", new=AsyncMock(return_value=(mock_result, {}, 100))), \
+             patch("app.chat.persist_extraction", new=AsyncMock(return_value=mock_persist)):
+            with TestClient(main_mod.app) as client:
+                main_mod.app.state.settings = _settings_with_openrouter()
+                for filename, file_bytes, mime in supported_intake_uploads:
+                    with self.subTest(filename=filename, mime=mime):
+                        response = client.post(
+                            "/v1/extract",
+                            data={"doc_type": "intake_form", "patient_id": "demo-001"},
+                            files={"file": (filename, file_bytes, mime)},
+                        )
+                        self.assertEqual(response.status_code, 200)
+                        body = response.json()
+                        self.assertEqual(body["doc_type"], "intake_form")
+                        self.assertIn("extracted", body)
+                        self.assertEqual(body["source_id"], "doc-ref-intake-types")

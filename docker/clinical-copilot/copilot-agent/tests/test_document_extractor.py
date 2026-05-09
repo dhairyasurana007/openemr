@@ -361,7 +361,10 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
 
         assert isinstance(result, LabExtractionResult)
         assert result.results == []
-        assert len(result.extraction_warnings) == 1
+        assert len(result.extraction_warnings) >= 1
+        assert result.extraction_warnings[0].startswith("E_SCHEMA_VALIDATION_FAILED:")
+        if len(result.extraction_warnings) > 1:
+            assert result.extraction_warnings[1].startswith("E_REPAIR_FAILED:")
 
     async def test_markdown_fences_stripped_before_parse(self) -> None:
         settings = _settings()
@@ -407,6 +410,49 @@ class TestExtractDocument(unittest.IsolatedAsyncioTestCase):
 
         assert isinstance(result, IntakeFormResult)
         assert result.doc_type == "intake_form"
+
+    async def test_intake_alias_fields_normalized_into_demographics(self) -> None:
+        settings = _settings()
+        alias_only_intake = json.dumps({
+            "schema_version": "1.0.0",
+            "doc_type": "intake_form",
+            "demographics": {"name": "", "dob": "", "sex": "", "address": ""},
+            "full_name": "Jane Alias",
+            "date_of_birth": "1988-01-02",
+            "gender": "F",
+            "street_address": "42 Alias Ln",
+            "chief_concern": "headache",
+            "current_medications": [],
+            "allergies": [],
+            "family_history": [],
+            "extraction_warnings": [],
+            "citation": {
+                "source_type": "intake_form",
+                "source_id": "PLACEHOLDER",
+                "page_or_section": "page 1",
+                "field_or_chunk_id": "intake_form_summary",
+                "quote_or_value": "Jane Alias",
+            },
+        })
+
+        with patch("app.document_extractor.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = self._mock_post(alias_only_intake)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result, _, _ = await extract_document(
+                file_bytes=b"img",
+                mime_type="image/png",
+                doc_type="intake_form",
+                settings=settings,
+            )
+
+        assert isinstance(result, IntakeFormResult)
+        assert result.demographics.name == "Jane Alias"
+        assert result.demographics.dob == "1988-01-02"
+        assert result.demographics.sex == "F"
+        assert result.demographics.address == "42 Alias Ln"
 
 
 # ---------------------------------------------------------------------------

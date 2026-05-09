@@ -420,6 +420,55 @@ def _fallback_parsed_for_doc_type(doc_type: str, warning: str) -> dict[str, Any]
     }
 
 
+def _fallback_warning(message: str) -> str:
+    return f"E_SCHEMA_VALIDATION_FAILED: {message}"
+
+
+def _repair_failed_warning(message: str) -> str:
+    return f"E_REPAIR_FAILED: {message}"
+
+
+def _first_validation_error_compact(exc: ValidationError) -> str:
+    first = exc.errors()[0] if exc.errors() else None
+    if not first:
+        return "unknown validation error"
+    loc = ".".join(str(part) for part in first.get("loc", []))
+    msg = str(first.get("msg", "validation error"))
+    if loc:
+        return f"{loc}: {msg}"
+    return msg
+
+
+def _normalize_intake_aliases(parsed: dict[str, Any]) -> None:
+    if parsed.get("doc_type") != "intake_form":
+        return
+
+    demographics = parsed.get("demographics")
+    if not isinstance(demographics, dict):
+        demographics = {}
+        parsed["demographics"] = demographics
+
+    alias_map = {
+        "name": ("name", "full_name", "patient_name"),
+        "dob": ("dob", "date_of_birth", "birth_date"),
+        "sex": ("sex", "gender"),
+        "address": ("address", "street_address"),
+    }
+    for canonical_key, aliases in alias_map.items():
+        existing = demographics.get(canonical_key)
+        if isinstance(existing, str) and existing.strip() != "":
+            continue
+        for alias in aliases:
+            top_value = parsed.get(alias)
+            if isinstance(top_value, str) and top_value.strip() != "":
+                demographics[canonical_key] = top_value.strip()
+                break
+            alias_value = demographics.get(alias)
+            if isinstance(alias_value, str) and alias_value.strip() != "":
+                demographics[canonical_key] = alias_value.strip()
+                break
+
+
 async def _call_openrouter_completion(
     client: httpx.AsyncClient,
     *,
@@ -760,9 +809,10 @@ async def extract_document(
             )
             parsed = _fallback_parsed_for_doc_type(
                 doc_type,
-                "Document was difficult to parse; returning safe partial structured result.",
+                _repair_failed_warning("unable to parse model output as JSON"),
             )
 
+    _normalize_intake_aliases(parsed)
     _inject_source_id(parsed, sid)
 
     result: LabExtractionResult | IntakeFormResult
@@ -772,21 +822,64 @@ async def extract_document(
         else:
             result = IntakeFormResult.model_validate(parsed)
     except ValidationError as exc:
-        _LOG.warning(
-            "document_extractor_schema_validation_error doc_type=%s model=%s error=%s",
-            doc_type,
-            model,
-            str(exc).replace("\n", " ")[:2000],
-        )
-        fallback = _fallback_parsed_for_doc_type(
-            doc_type,
-            "Extracted content did not match schema strictly; returning safe partial structured result.",
-        )
-        _inject_source_id(fallback, sid)
-        if doc_type == "lab":
-            result = LabExtractionResult.model_validate(fallback)
+        validation_summary = _first_validation_error_compact(exc)
+        repaired_after_validation: dict[str, Any] | None = None
+        repair_usage_after_validation: dict[str, Any] = {}
+        async with httpx.AsyncClient(timeout=settings.openrouter_http_timeout_s) as client:
+            repaired_after_validation, repair_usage_after_validation = await _repair_json_once(
+                client,
+                settings=settings,
+                model=model,
+                doc_type=doc_type,
+                raw_content=json.dumps(parsed),
+            )
+        token_usage = _merge_usage(token_usage, repair_usage_after_validation)
+        if repaired_after_validation is not None:
+            _normalize_intake_aliases(repaired_after_validation)
+            _inject_source_id(repaired_after_validation, sid)
+            try:
+                if doc_type == "lab":
+                    result = LabExtractionResult.model_validate(repaired_after_validation)
+                else:
+                    result = IntakeFormResult.model_validate(repaired_after_validation)
+            except ValidationError as post_repair_exc:
+                _LOG.warning(
+                    "document_extractor_schema_validation_error_after_repair doc_type=%s model=%s error=%s",
+                    doc_type,
+                    model,
+                    str(post_repair_exc).replace("\n", " ")[:2000],
+                )
+                fallback = _fallback_parsed_for_doc_type(
+                    doc_type,
+                    _fallback_warning(validation_summary),
+                )
+                fallback["extraction_warnings"].append(
+                    _repair_failed_warning(_first_validation_error_compact(post_repair_exc))
+                )
+                _inject_source_id(fallback, sid)
+                if doc_type == "lab":
+                    result = LabExtractionResult.model_validate(fallback)
+                else:
+                    result = IntakeFormResult.model_validate(fallback)
         else:
-            result = IntakeFormResult.model_validate(fallback)
+            _LOG.warning(
+                "document_extractor_schema_validation_error doc_type=%s model=%s error=%s",
+                doc_type,
+                model,
+                str(exc).replace("\n", " ")[:2000],
+            )
+            fallback = _fallback_parsed_for_doc_type(
+                doc_type,
+                _fallback_warning(validation_summary),
+            )
+            fallback["extraction_warnings"].append(
+                _repair_failed_warning("validator-guided repair returned no JSON")
+            )
+            _inject_source_id(fallback, sid)
+            if doc_type == "lab":
+                result = LabExtractionResult.model_validate(fallback)
+            else:
+                result = IntakeFormResult.model_validate(fallback)
 
     latency_ms = int((time.perf_counter() - req_start) * 1000.0)
     _LOG.info(
