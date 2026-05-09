@@ -33,6 +33,7 @@ $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $copilotCsrfToken = CsrfUtils::collectCsrfToken($session);
 $chatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/chat.php';
 $extractUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/extract.php';
+$docxToPdfUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/docx_to_pdf.php';
 $saveExtractedUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/save_extracted.php';
 $multimodalChatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/multimodal_chat.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
@@ -219,6 +220,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
         (function () {
             var chatUrl = <?php echo json_encode($chatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var extractUrl = <?php echo json_encode($extractUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var docxToPdfUrl = <?php echo json_encode($docxToPdfUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var saveExtractedUrl = <?php echo json_encode($saveExtractedUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var multimodalChatUrl = <?php echo json_encode($multimodalChatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -975,6 +977,42 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 return fileName.endsWith('.pdf') ? 'lab' : 'intake_form';
             }
 
+            function isDocxFile(file) {
+                if (!file || !file.name) {
+                    return false;
+                }
+                var fileName = String(file.name).toLowerCase();
+                return fileName.endsWith('.docx');
+            }
+
+            function convertDocxToPdfBlob(file) {
+                if (!isDocxFile(file)) {
+                    return Promise.resolve(file);
+                }
+                var formData = new FormData();
+                formData.append('file', file);
+                formData.append('csrf_token_form', csrfToken);
+                return fetch(docxToPdfUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                }).then(function (r) {
+                    if (!r.ok) {
+                        return Promise.resolve(file);
+                    }
+                    return r.blob().then(function (b) {
+                        if (!b || b.size === 0) {
+                            return file;
+                        }
+                        return b;
+                    }).catch(function () {
+                        return file;
+                    });
+                }).catch(function () {
+                    return file;
+                });
+            }
+
             function handleExtractConfirmationReply(messageText) {
                 if (!pendingExtractConfirmation) {
                     return false;
@@ -1082,6 +1120,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                     );
 
                     uploadBtn.disabled = true;
+                    var previewBlobPromise = convertDocxToPdfBlob(file);
 
                     var formData = new FormData();
                     formData.append('file', file);
@@ -1105,17 +1144,19 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         if (res.ok && res.data && res.data.extracted) {
                             res.data.extracted = enrichExtractedWithPdfCoordinates(res.data.extracted);
                             extractedFacts = res.data.extracted;
-                            var blobUrl = URL.createObjectURL(file);
                             var extr = res.data.extracted;
-                            if (extr && Array.isArray(extr.results)) {
-                                for (var ri = 0; ri < extr.results.length; ri++) {
-                                    var rc = extr.results[ri] && extr.results[ri].citation;
-                                    if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
+                            previewBlobPromise.then(function (previewBlob) {
+                                var blobUrl = URL.createObjectURL(previewBlob || file);
+                                if (extr && Array.isArray(extr.results)) {
+                                    for (var ri = 0; ri < extr.results.length; ri++) {
+                                        var rc = extr.results[ri] && extr.results[ri].citation;
+                                        if (rc && rc.source_id) { pdfBlobMap[rc.source_id] = blobUrl; }
+                                    }
                                 }
-                            }
-                            if (extr && extr.citation && extr.citation.source_id) {
-                                pdfBlobMap[extr.citation.source_id] = blobUrl;
-                            }
+                                if (extr && extr.citation && extr.citation.source_id) {
+                                    pdfBlobMap[extr.citation.source_id] = blobUrl;
+                                }
+                            });
                             pendingExtractDocType = res.data.doc_type || 'lab';
                             pendingExtractFileName = file.name || 'uploaded-document';
                             appendBubble('assistant', JSON.stringify(res.data.extracted, null, 2), false, <?php echo json_encode(xl('Extraction result')); ?>);
