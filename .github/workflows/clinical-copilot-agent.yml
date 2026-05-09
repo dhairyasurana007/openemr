@@ -1,4 +1,4 @@
-##
+## test 
 # Clinical co-pilot FastAPI agent: Python tests + Docker image build (offline §11-style gates in pytest).
 # Kept separate from PHP isolated tests so agent changes stay visible in Actions without coupling to the PHP matrix.
 
