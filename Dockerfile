@@ -1,8 +1,9 @@
-FROM composer:2 AS composer-bin
-
 # Keep base image pinned for reproducible/faster deploys.
 # Update this ARG value intentionally when you want a newer OpenEMR base.
 ARG OPENEMR_BASE_IMAGE=openemr/openemr:latest@sha256:1d8073d3acfc15b53e771f264b84c0be41a0f0c998f413af39811e1c2e5d8061
+
+FROM composer:2 AS composer-bin
+
 FROM ${OPENEMR_BASE_IMAGE}
 
 WORKDIR /var/www/localhost/htdocs/openemr
