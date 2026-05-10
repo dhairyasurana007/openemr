@@ -3,6 +3,7 @@ import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
 export type DashboardBootstrap = {
   webRoot: string;
   moduleWebPath: string;
+  pid: string;
   patientId: string;
   csrfToken: string;
   apiBase: string;

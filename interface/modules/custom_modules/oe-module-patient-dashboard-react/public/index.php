@@ -15,13 +15,22 @@ require_once dirname(__FILE__, 5) . '/globals.php';
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
+use OpenEMR\Common\Uuid\UuidRegistry;
 use OpenEMR\Core\Header;
 use OpenEMR\Core\OEGlobalsBag;
+use OpenEMR\Services\PatientService;
 
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
 $isAuthorized = AclMain::aclCheckCore('patients', 'demo');
 $pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? ($session->get('pid') ?? 0));
 $webRoot = OEGlobalsBag::getInstance()->getWebRoot();
+$patientUuid = '';
+if ($pid > 0) {
+    $patientUuidRaw = (new PatientService())->getUuid((string)$pid);
+    if ($patientUuidRaw !== false) {
+        $patientUuid = UuidRegistry::uuidToString($patientUuidRaw);
+    }
+}
 $moduleWebPath = $webRoot . '/interface/modules/custom_modules/oe-module-patient-dashboard-react';
 $legacyDashboardUrl = $webRoot . '/interface/patient_file/summary/demographics.php';
 $oidcIssuer = (string) (getenv('OEMR_DASHBOARD_OIDC_ISSUER') ?: '');
@@ -52,7 +61,7 @@ Header::setupHeader();
         <?php } else { ?>
             <p><?php echo xlt('Loading dashboard application...'); ?></p>
         <?php } ?>
-        <?php if ($isAuthorized && $pid <= 0) { ?>
+        <?php if ($isAuthorized && ($pid <= 0 || $patientUuid === '')) { ?>
             <p class="text-danger"><?php echo xlt('No active patient context was detected.'); ?></p>
         <?php } ?>
     </main>
@@ -62,7 +71,8 @@ Header::setupHeader();
 window.OEMR_DASHBOARD_BOOTSTRAP = {
     webRoot: <?php echo js_escape($webRoot); ?>,
     moduleWebPath: <?php echo js_escape($moduleWebPath); ?>,
-    patientId: <?php echo js_escape((string)$pid); ?>,
+    pid: <?php echo js_escape((string)$pid); ?>,
+    patientId: <?php echo js_escape($patientUuid); ?>,
     csrfToken: <?php echo js_escape(CsrfUtils::collectCsrfToken($session, 'api')); ?>,
     apiBase: <?php echo js_escape($webRoot . '/apis/default'); ?>,
     timezone: <?php echo js_escape(date_default_timezone_get()); ?>,
