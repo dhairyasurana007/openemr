@@ -18,11 +18,8 @@ use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Core\Header;
 use OpenEMR\Core\OEGlobalsBag;
 
-if (!AclMain::aclCheckCore('patients', 'demo')) {
-    die(xlt('Not authorized'));
-}
-
 $session = SessionWrapperFactory::getInstance()->getActiveSession();
+$isAuthorized = AclMain::aclCheckCore('patients', 'demo');
 $pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? ($session->get('pid') ?? 0));
 $webRoot = OEGlobalsBag::getInstance()->getWebRoot();
 $moduleWebPath = $webRoot . '/interface/modules/custom_modules/oe-module-patient-dashboard-react';
@@ -56,12 +53,17 @@ Header::setupHeader();
 <div id="patient-dashboard-react-root">
     <main class="container py-3">
         <h1><?php echo xlt('Modern Patient Dashboard'); ?></h1>
-        <p><?php echo xlt('Loading dashboard application...'); ?></p>
-        <?php if ($pid <= 0) { ?>
+        <?php if (!$isAuthorized) { ?>
+            <p class="text-danger"><?php echo xlt('Not authorized to access this dashboard view.'); ?></p>
+        <?php } else { ?>
+            <p><?php echo xlt('Loading dashboard application...'); ?></p>
+        <?php } ?>
+        <?php if ($isAuthorized && $pid <= 0) { ?>
             <p class="text-danger"><?php echo xlt('No active patient context was detected.'); ?></p>
         <?php } ?>
     </main>
 </div>
+<?php if ($isAuthorized) { ?>
 <script>
 window.OEMR_DASHBOARD_BOOTSTRAP = {
     webRoot: <?php echo js_escape($webRoot); ?>,
@@ -73,5 +75,6 @@ window.OEMR_DASHBOARD_BOOTSTRAP = {
 };
 </script>
 <script type="module" src="<?php echo attr($moduleWebPath); ?>/public/assets/dashboard.js"></script>
+<?php } ?>
 </body>
 </html>

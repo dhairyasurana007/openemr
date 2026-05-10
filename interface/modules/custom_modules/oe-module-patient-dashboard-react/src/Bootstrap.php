@@ -12,8 +12,8 @@
 
 namespace OpenEMR\Modules\PatientDashboardReact;
 
-use OpenEMR\Events\UserInterface\PageHeadingRenderEvent;
 use OpenEMR\Menu\MenuEvent;
+use OpenEMR\Menu\PatientMenuEvent;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -28,7 +28,7 @@ class Bootstrap
     public function subscribeToEvents(): void
     {
         $this->eventDispatcher->addListener(MenuEvent::MENU_UPDATE, $this->addMenuItem(...));
-        $this->eventDispatcher->addListener(PageHeadingRenderEvent::EVENT_PAGE_HEADING_RENDER, $this->addDashboardShortcut(...), 5);
+        $this->eventDispatcher->addListener(PatientMenuEvent::MENU_UPDATE, $this->addPatientTab(...));
     }
 
     public function addMenuItem(MenuEvent $event): MenuEvent
@@ -56,20 +56,36 @@ class Bootstrap
         return $event;
     }
 
-    public function addDashboardShortcut(PageHeadingRenderEvent $event): PageHeadingRenderEvent
+    public function addPatientTab(PatientMenuEvent $event): PatientMenuEvent
     {
-        if ($event->getPageId() !== 'core.mrd') {
-            return $event;
+        $menu = $event->getMenu();
+
+        $tab = new stdClass();
+        $tab->label = xlt('Modern Dashboard');
+        $tab->menu_id = 'modern_dashboard';
+        $tab->target = 'main';
+        $tab->on_click = 'top.restoreSession()';
+        $tab->url = self::MODULE_INSTALLATION_PATH . '/public/index.php?pid=';
+        $tab->pid = 'true';
+        $tab->children = [];
+        $tab->requirement = 0;
+        $tab->acl_req = ['patients', 'demo'];
+        $tab->global_req = [];
+
+        $inserted = false;
+        foreach ($menu as $index => $item) {
+            if (($item->menu_id ?? '') === 'dashboard') {
+                array_splice($menu, $index + 1, 0, [$tab]);
+                $inserted = true;
+                break;
+            }
         }
 
-        $pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? 0);
-        $url = self::MODULE_INSTALLATION_PATH . '/public/index.php';
-        if ($pid > 0) {
-            $url .= '?pid=' . rawurlencode((string)$pid);
+        if (!$inserted) {
+            $menu[] = $tab;
         }
 
-        $button = '<a class="btn btn-outline-primary btn-sm ml-2" href="' . attr($url) . '">' . xlt('Open Modern Dashboard') . '</a>';
-        $event->appendTitleNavContent($button);
+        $event->setMenu($menu);
 
         return $event;
     }

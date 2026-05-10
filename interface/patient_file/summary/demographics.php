@@ -1071,19 +1071,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
         if ($thisauth) :
             OEGlobalsBag::getInstance()->getKernel()->getEventDispatcher()->dispatch(new RenderEvent($pid), RenderEvent::EVENT_SECTION_LIST_RENDER_TOP);
             require_once("$include_root/patient_file/summary/dashboard_header.php");
-            $modernDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=' . attr_url($pid);
-            ?>
-            <div class="d-flex justify-content-end mb-2">
-                <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
-                    <button type="button" class="btn btn-secondary active" aria-pressed="true" disabled>
-                        <?php echo xlt('Legacy'); ?>
-                    </button>
-                    <a class="btn btn-outline-primary" href="<?php echo attr($modernDashboardUrl); ?>" onclick="top.restoreSession()">
-                        <?php echo xlt('Modern'); ?>
-                    </a>
-                </div>
-            </div>
-            <?php
         endif;
 
         $list_id = "dashboard"; // to indicate nav item is active, count and give correct id
