@@ -864,9 +864,10 @@ class HttpRestRequest extends Request implements Stringable
     /**
      * Returns the required endpoint scope necessary for the current request to be authorized.  This can be useful
      * to do additional access checks based on the scope required for the request.
-     * @return ScopeEntity The required endpoint scope necessary for the current request to be authorized
+     * Returns null when no scope was set (e.g. local API requests that bypass OAuth2 authorization).
+     * @return ?ScopeEntity The required endpoint scope necessary for the current request to be authorized
      */
-    public function getRequestRequiredScope(): ScopeEntity {
-        return $this->requiredEndpointScope;
+    public function getRequestRequiredScope(): ?ScopeEntity {
+        return $this->requiredEndpointScope ?? null;
     }
 }
