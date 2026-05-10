@@ -25,6 +25,10 @@ if (!AclMain::aclCheckCore('patients', 'demo')) {
 $pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? 0);
 $webRoot = OEGlobalsBag::getInstance()->getWebRoot();
 $moduleWebPath = $webRoot . '/interface/modules/custom_modules/oe-module-patient-dashboard-react';
+$legacyDashboardUrl = $webRoot . '/interface/patient_file/summary/demographics.php';
+if ($pid > 0) {
+    $legacyDashboardUrl .= '?set_pid=' . rawurlencode((string)$pid);
+}
 
 Header::setupHeader();
 ?>
@@ -37,6 +41,11 @@ Header::setupHeader();
     <link rel="stylesheet" href="<?php echo attr($moduleWebPath); ?>/public/assets/dashboard.css">
 </head>
 <body class="bg-light">
+<div class="container-fluid mt-2">
+    <a class="btn btn-outline-secondary btn-sm" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()">
+        <?php echo xlt('Back to Legacy Dashboard'); ?>
+    </a>
+</div>
 <div id="patient-dashboard-react-root"></div>
 <script>
 window.OEMR_DASHBOARD_BOOTSTRAP = {
