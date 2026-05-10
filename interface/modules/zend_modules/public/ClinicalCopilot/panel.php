@@ -1457,26 +1457,19 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 loadingRow.appendChild(loadingBubble);
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
-                var useMultimodal = extractedFacts !== null;
                 var clientRequestId = 'ccp_mm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
-                var stopChatStatus = useMultimodal
-                    ? startWorkerLiveStatus('clinical-copilot-loading-row', clientRequestId, 900)
-                    : startLiveStatus(
-                        'clinical-copilot-loading-row',
-                        [
-                            <?php echo json_encode(xl('Sending request to co-pilot') . '...'); ?>,
-                            <?php echo json_encode(xl('Retrieving context and sources') . '...'); ?>,
-                            <?php echo json_encode(xl('Generating response') . '...'); ?>,
-                        ],
-                        1800
-                    );
+                var useMultimodal = true;
+                var stopChatStatus = startWorkerLiveStatus('clinical-copilot-loading-row', clientRequestId, 900);
 
-                var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
-                var requestBody = {message: msg, csrf_token_form: csrfToken};
-                if (useMultimodal) {
-                    requestBody.request_id = clientRequestId;
+                var targetUrl = multimodalChatUrl;
+                var requestBody = {
+                    message: msg,
+                    csrf_token_form: csrfToken,
+                    request_id: clientRequestId,
+                    use_rag: true
+                };
+                if (extractedFacts !== null) {
                     requestBody.extracted_facts = extractedFacts;
-                    requestBody.use_rag = true;
                 }
 
                 fetch(targetUrl, {
