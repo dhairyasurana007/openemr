@@ -50,6 +50,12 @@ try {
         echo json_encode(['error' => 'Invalid JSON body']);
         exit;
     }
+    if (isset($payload['request_id']) && is_string($payload['request_id'])) {
+        $candidateRequestId = trim($payload['request_id']);
+        if ($candidateRequestId !== '' && preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $candidateRequestId)) {
+            $requestId = $candidateRequestId;
+        }
+    }
 
     $token = $payload['csrf_token_form'] ?? '';
     if (!is_string($token) || !CsrfUtils::verifyCsrfToken($token, $session, 'default')) {

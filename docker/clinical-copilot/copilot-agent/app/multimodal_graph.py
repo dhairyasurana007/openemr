@@ -263,8 +263,10 @@ def _build_composer_brief(state: CopilotState) -> dict[str, Any]:
     }
 
 
-def _make_supervisor(llm: Any):
+def _make_supervisor(llm: Any, progress_callback: Any = None):
     def supervisor(state: CopilotState) -> dict:
+        if callable(progress_callback):
+            progress_callback("supervisor", "routing", {})
         if len(state.get("routing_log") or []) >= _MAX_ROUTING_STEPS:
             entry = {
                 "node": "supervisor",
@@ -396,9 +398,11 @@ def _make_supervisor(llm: Any):
     return supervisor
 
 
-def _make_intake_extractor(llm: Any):
+def _make_intake_extractor(llm: Any, progress_callback: Any = None):
     def intake_extractor(state: CopilotState) -> dict:
         _t0 = time.perf_counter()
+        if callable(progress_callback):
+            progress_callback("intake_extractor", "running", {})
         _LOG.info("worker_start node=intake_extractor")
         facts = state.get("extracted_facts") or {}
         user_prompt = f"Extracted document facts:\n{json.dumps(facts, indent=2)[:3000]}"
@@ -433,9 +437,11 @@ def _make_intake_extractor(llm: Any):
     return intake_extractor
 
 
-def _make_chart_retriever(settings: Any, backend: Any):
+def _make_chart_retriever(settings: Any, backend: Any, progress_callback: Any = None):
     def chart_retriever(state: CopilotState) -> dict:
         _t0 = time.perf_counter()
+        if callable(progress_callback):
+            progress_callback("chart_retriever", "running", {})
         _LOG.info("worker_start node=chart_retriever")
         query = _last_message_text(state)
         if state.get("patient_id"):
@@ -446,7 +452,15 @@ def _make_chart_retriever(settings: Any, backend: Any):
                 + query
             )
         try:
-            reply, diagnostics = run_chat_with_tools(query, settings, backend)
+            def _tool_progress(event_name: str, payload: dict[str, Any]) -> None:
+                if callable(progress_callback):
+                    progress_callback("chart_retriever", event_name, payload)
+            reply, diagnostics = run_chat_with_tools(
+                query,
+                settings,
+                backend,
+                progress_callback=_tool_progress,
+            )
             payloads = list(diagnostics.get("tool_payloads") or [])
             tools_used = list(diagnostics.get("tools_used") or [])
         except Exception:
@@ -473,15 +487,20 @@ def _make_chart_retriever(settings: Any, backend: Any):
     return chart_retriever
 
 
-def _make_evidence_retriever(rag_retriever: Any):
+def _make_evidence_retriever(rag_retriever: Any, progress_callback: Any = None):
     def evidence_retriever(state: CopilotState) -> dict:
         _t0 = time.perf_counter()
+        if callable(progress_callback):
+            progress_callback("evidence_retriever", "running", {})
         _LOG.info("worker_start node=evidence_retriever")
         query = _last_message_text(state)
         snippets: list[dict] = []
         if rag_retriever is not None and query:
             try:
-                snippets = rag_retriever.retrieve(query, top_k=5)
+                def _source_progress(event_name: str, payload: dict[str, Any]) -> None:
+                    if callable(progress_callback):
+                        progress_callback("evidence_retriever", event_name, payload)
+                snippets = rag_retriever.retrieve(query, top_k=5, progress_callback=_source_progress)
             except Exception:
                 _LOG.exception("evidence_retriever_rag_failed")
         citations = [
@@ -515,9 +534,11 @@ def _make_evidence_retriever(rag_retriever: Any):
     return evidence_retriever
 
 
-def _make_answer_composer(llm: Any):
+def _make_answer_composer(llm: Any, progress_callback: Any = None):
     def answer_composer(state: CopilotState) -> dict:
         _t0 = time.perf_counter()
+        if callable(progress_callback):
+            progress_callback("answer_composer", "running", {})
         _LOG.info("worker_start node=answer_composer")
         query = _last_message_text(state)
         brief = state.get("composer_brief") or _build_composer_brief(state)
@@ -574,7 +595,13 @@ def _route_from_supervisor(state: CopilotState) -> str:
     return state.get("_next_node") or "answer_composer"
 
 
-def build_graph(settings: Any, backend: Any, rag_retriever: Any = None, _llm: Any = None) -> Any:
+def build_graph(
+    settings: Any,
+    backend: Any,
+    rag_retriever: Any = None,
+    _llm: Any = None,
+    progress_callback: Any = None,
+) -> Any:
     from langgraph.graph import END, StateGraph
 
     if _llm is None:
@@ -593,11 +620,11 @@ def build_graph(settings: Any, backend: Any, rag_retriever: Any = None, _llm: An
         )
 
     workflow: StateGraph = StateGraph(CopilotState)
-    workflow.add_node("supervisor", _make_supervisor(_llm))
-    workflow.add_node("intake_extractor", _make_intake_extractor(_llm))
-    workflow.add_node("chart_retriever", _make_chart_retriever(settings, backend))
-    workflow.add_node("evidence_retriever", _make_evidence_retriever(rag_retriever))
-    workflow.add_node("answer_composer", _make_answer_composer(_llm))
+    workflow.add_node("supervisor", _make_supervisor(_llm, progress_callback))
+    workflow.add_node("intake_extractor", _make_intake_extractor(_llm, progress_callback))
+    workflow.add_node("chart_retriever", _make_chart_retriever(settings, backend, progress_callback))
+    workflow.add_node("evidence_retriever", _make_evidence_retriever(rag_retriever, progress_callback))
+    workflow.add_node("answer_composer", _make_answer_composer(_llm, progress_callback))
     workflow.set_entry_point("supervisor")
     workflow.add_conditional_edges(
         "supervisor",
@@ -624,8 +651,15 @@ def run_multimodal_graph(
     patient_id: str | None = None,
     extracted_facts: dict | None = None,
     _llm: Any = None,
+    progress_callback: Any = None,
 ) -> dict[str, Any]:
-    graph = build_graph(settings, backend, rag_retriever=rag_retriever, _llm=_llm)
+    graph = build_graph(
+        settings,
+        backend,
+        rag_retriever=rag_retriever,
+        _llm=_llm,
+        progress_callback=progress_callback,
+    )
     initial: CopilotState = {
         "messages": [{"role": "user", "content": message}],
         "patient_id": patient_id,

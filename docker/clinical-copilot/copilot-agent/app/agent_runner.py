@@ -138,6 +138,7 @@ def run_chat_with_tools(
     llm_factory: Callable[[Settings], BaseChatModel] | None = None,
     max_tool_rounds: int = 4,
     use_case: str | None = None,
+    progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Force at least one tool call on the first turn, then answer **only** from retrieved JSON.
 
@@ -284,6 +285,14 @@ def run_chat_with_tools(
             pending.append((idx, tool_name, tool_call_id, args, tool))
 
         if pending:
+            if callable(progress_callback):
+                progress_callback(
+                    "tools_scheduled",
+                    {
+                        "tools": [tool_name for _idx, tool_name, _tcid, _args, _tool in pending],
+                        "round": rounds,
+                    },
+                )
             max_workers = min(
                 len(pending),
                 max(1, int(getattr(settings, "openemr_max_concurrent_requests", 8))),
@@ -302,6 +311,15 @@ def run_chat_with_tools(
                 for idx in sorted(future_map.keys()):
                     ok, payload_or_error = future_map[idx].result()
                     tool_name, tool_call_id, args = call_meta[idx]
+                    if callable(progress_callback):
+                        progress_callback(
+                            "tool_finished",
+                            {
+                                "tool": tool_name,
+                                "ok": bool(ok),
+                                "round": rounds,
+                            },
+                        )
                     if not ok:
                         tools_used.append(
                             {

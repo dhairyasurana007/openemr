@@ -36,6 +36,7 @@ $extractUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilo
 $docxToPdfUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/docx_to_pdf.php';
 $saveExtractedUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/save_extracted.php';
 $multimodalChatUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/multimodal_chat.php';
+$requestStatusUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/request_status.php';
 $loginAppointmentAutosummaryUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/login_appointment_autosummary.php';
 $agentReady = $handoff->isConfigured();
 $citationOverlayCssUrl = $web_root . '/interface/modules/zend_modules/public/ClinicalCopilot/assets/citation_overlay.css';
@@ -228,6 +229,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
             var docxToPdfUrl = <?php echo json_encode($docxToPdfUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var saveExtractedUrl = <?php echo json_encode($saveExtractedUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var multimodalChatUrl = <?php echo json_encode($multimodalChatUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            var requestStatusUrl = <?php echo json_encode($requestStatusUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var loginAppointmentAutosummaryUrl = <?php echo json_encode($loginAppointmentAutosummaryUrl, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var csrfToken = <?php echo json_encode($copilotCsrfToken, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             var agentReady = <?php echo $agentReady ? 'true' : 'false'; ?>;
@@ -374,6 +376,91 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 renderPhase();
                 timer = window.setInterval(renderPhase, tickMs);
                 return function stopLiveStatus() {
+                    if (timer !== null) {
+                        window.clearInterval(timer);
+                    }
+                };
+            }
+
+            function prettyLiveWorker(worker) {
+                var map = {
+                    supervisor: <?php echo json_encode(xl('Supervisor')); ?>,
+                    intake_extractor: <?php echo json_encode(xl('Intake Extractor Worker')); ?>,
+                    chart_retriever: <?php echo json_encode(xl('Chart Retriever Worker')); ?>,
+                    evidence_retriever: <?php echo json_encode(xl('Evidence Retriever Worker')); ?>,
+                    answer_composer: <?php echo json_encode(xl('Answer Composer Worker')); ?>
+                };
+                return map[worker] || '';
+            }
+
+            function startWorkerLiveStatus(rowId, requestId, tickMs) {
+                var timer = null;
+                var startedAtMs = Date.now();
+                var lastLine = <?php echo json_encode(xl('Starting request') . '...'); ?>;
+
+                function render(lineText) {
+                    var row = document.getElementById(rowId);
+                    if (!row) {
+                        return;
+                    }
+                    var bubble = row.querySelector('.clinical-copilot-bubble');
+                    if (!bubble) {
+                        return;
+                    }
+                    var elapsedSeconds = Math.max(1, Math.floor((Date.now() - startedAtMs) / 1000));
+                    var spinnerHtml = '<span class="clinical-copilot-spinner" aria-hidden="true"></span>';
+                    bubble.innerHTML = '<span class="clinical-copilot-loading">' + spinnerHtml
+                        + '<span>' + escapeHtml((lineText || lastLine) + ' (' + elapsedSeconds + 's)') + '</span></span>';
+                }
+
+                function poll() {
+                    fetch(requestStatusUrl + '?request_id=' + encodeURIComponent(requestId), {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    }).then(function (r) {
+                        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+                    }).then(function (res) {
+                        if (!res.ok || !res.data || res.data.known !== true) {
+                            render(lastLine);
+                            return;
+                        }
+                        var workerName = prettyLiveWorker(normalizeCitationValue(res.data.worker));
+                        var phase = normalizeCitationValue(res.data.phase);
+                        var detail = normalizeCitationValue(res.data.detail);
+                        var meta = (res.data.meta && typeof res.data.meta === 'object') ? res.data.meta : null;
+                        if (workerName) {
+                            lastLine = workerName;
+                            if (phase) {
+                                lastLine += ' | ' + phase;
+                            }
+                            if (detail) {
+                                lastLine += ' | ' + detail;
+                            }
+                            if (meta && Array.isArray(meta.tools) && meta.tools.length > 0) {
+                                lastLine += ' | ' + <?php echo json_encode(xl('tools')); ?> + ': ' + meta.tools.join(', ');
+                            }
+                            if (meta && typeof meta.tool === 'string' && meta.tool.trim() !== '') {
+                                lastLine += ' | ' + <?php echo json_encode(xl('tool')); ?> + ': ' + meta.tool.trim();
+                            }
+                            if (meta && Array.isArray(meta.sources) && meta.sources.length > 0) {
+                                lastLine += ' | ' + <?php echo json_encode(xl('sources')); ?> + ': ' + meta.sources.join(', ');
+                            }
+                        } else if (phase) {
+                            lastLine = phase;
+                            if (detail) {
+                                lastLine += ' | ' + detail;
+                            }
+                        }
+                        render(lastLine);
+                    }).catch(function () {
+                        render(lastLine);
+                    });
+                }
+
+                render(lastLine);
+                poll();
+                timer = window.setInterval(poll, tickMs);
+                return function stopWorkerLiveStatus() {
                     if (timer !== null) {
                         window.clearInterval(timer);
                     }
@@ -1370,20 +1457,24 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 loadingRow.appendChild(loadingBubble);
                 messagesEl.appendChild(loadingRow);
                 scrollToBottom();
-                var stopChatStatus = startLiveStatus(
-                    'clinical-copilot-loading-row',
-                    [
-                        <?php echo json_encode(xl('Sending request to co-pilot') . '…'); ?>,
-                        <?php echo json_encode(xl('Retrieving context and sources') . '…'); ?>,
-                        <?php echo json_encode(xl('Generating response') . '…'); ?>,
-                    ],
-                    1800
-                );
-
                 var useMultimodal = extractedFacts !== null;
+                var clientRequestId = 'ccp_mm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+                var stopChatStatus = useMultimodal
+                    ? startWorkerLiveStatus('clinical-copilot-loading-row', clientRequestId, 900)
+                    : startLiveStatus(
+                        'clinical-copilot-loading-row',
+                        [
+                            <?php echo json_encode(xl('Sending request to co-pilot') . '...'); ?>,
+                            <?php echo json_encode(xl('Retrieving context and sources') . '...'); ?>,
+                            <?php echo json_encode(xl('Generating response') . '...'); ?>,
+                        ],
+                        1800
+                    );
+
                 var targetUrl = useMultimodal ? multimodalChatUrl : chatUrl;
                 var requestBody = {message: msg, csrf_token_form: csrfToken};
                 if (useMultimodal) {
+                    requestBody.request_id = clientRequestId;
                     requestBody.extracted_facts = extractedFacts;
                     requestBody.use_rag = true;
                 }

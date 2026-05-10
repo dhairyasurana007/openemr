@@ -194,7 +194,12 @@ class HybridRetriever:
                 chunks.append(chunk)
         return chunks
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    ) -> list[dict[str, Any]]:
         """Return up to *top_k* guideline chunks most relevant to *query*."""
         if not self._chunks or self._bm25 is None:
             return []
@@ -219,6 +224,16 @@ class HybridRetriever:
             merged = bm25_top[:top_k]
 
         candidates = [self._chunks[i] for i in merged]
+        if callable(progress_callback):
+            source_ids: list[str] = []
+            for candidate in candidates:
+                sid = str(candidate.get("source", "")).strip()
+                if sid != "" and sid not in source_ids:
+                    source_ids.append(sid)
+            progress_callback(
+                "sources_ranked",
+                {"sources": source_ids},
+            )
 
         if self._cohere_api_key and len(candidates) > 1:
             return self._cohere_rerank(query, candidates, top_k)

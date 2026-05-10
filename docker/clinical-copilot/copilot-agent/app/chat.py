@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.document_extractor import estimate_cost_usd, extract_document
 from app.encounter_trace import EncounterTrace, emit_trace
 from app.openemr_persistence import persist_extraction
+from app.request_progress import get_progress, set_progress
 from app.retrieval_backends import RetrievalBackend
 from app.schemas.extraction import LabExtractionResult
 from app.settings import Settings
@@ -33,6 +34,22 @@ def _verify_internal_secret(settings: Settings, header_value: str | None) -> Non
         ok = False
     if not ok:
         raise HTTPException(status_code=403, detail="Clinical co-pilot internal authentication failed")
+
+
+@router.get("/request-status/{request_id}")
+async def request_status(
+    request_id: str,
+    request: Request,
+    x_clinical_copilot_internal_secret: Annotated[
+        str | None, Header(alias="X-Clinical-Copilot-Internal-Secret")
+    ] = None,
+) -> dict[str, Any]:
+    settings: Settings = request.app.state.settings
+    _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
+    item = get_progress(request_id)
+    if item is None:
+        return {"request_id": request_id, "known": False}
+    return {"known": True, **item}
 
 
 class MultimodalChatRequestBody(BaseModel):
@@ -81,6 +98,11 @@ async def multimodal_chat(
 
     from app.multimodal_graph import run_multimodal_graph
 
+    set_progress(request_id, phase="started", worker="supervisor", detail="routing")
+
+    def _on_progress(worker: str, phase: str, meta: dict[str, Any] | None = None) -> None:
+        set_progress(request_id, phase=phase, worker=worker, meta=meta)
+
     try:
         result = await asyncio.to_thread(
             run_multimodal_graph,
@@ -90,8 +112,11 @@ async def multimodal_chat(
             rag_retriever,
             body.patient_id,
             body.extracted_facts,
+            None,
+            _on_progress,
         )
     except HTTPException:
+        set_progress(request_id, phase="error", worker="", detail="http_exception")
         raise
     except Exception as exc:
         _LOG.exception(
@@ -101,6 +126,7 @@ async def multimodal_chat(
             rag_active,
             int((time.perf_counter() - req_start) * 1000.0),
         )
+        set_progress(request_id, phase="error", worker="", detail="upstream_failure")
         raise HTTPException(status_code=502, detail="Upstream multimodal chat request failed.") from exc
 
     latency_ms = int((time.perf_counter() - req_start) * 1000.0)
@@ -137,8 +163,10 @@ async def multimodal_chat(
         ),
         _LOG,
     )
+    set_progress(request_id, phase="complete", worker="answer_composer", detail="done")
 
     return {
+        "request_id": request_id,
         "reply": result["reply"],
         "citations": result.get("citations", []),
         "routing_log": result.get("routing_log", []),
