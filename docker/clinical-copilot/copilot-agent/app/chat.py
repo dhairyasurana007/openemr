@@ -192,6 +192,7 @@ async def _extract_handler(
         request_id = f"extract-{int(time.time() * 1000)}"
     settings: Settings = request.app.state.settings
     _verify_internal_secret(settings, x_clinical_copilot_internal_secret)
+    set_progress(request_id, phase="started", worker="intake_extractor", detail="upload_received")
 
     if settings.openrouter_api_key == "":
         raise HTTPException(
@@ -207,6 +208,7 @@ async def _extract_handler(
     mime_type = file.content_type or "application/octet-stream"
 
     try:
+        set_progress(request_id, phase="running", worker="intake_extractor", detail="extracting_fields")
         result, token_usage, latency_ms = await extract_document(
             file_bytes=file_bytes,
             mime_type=mime_type,
@@ -214,6 +216,7 @@ async def _extract_handler(
             settings=settings,
         )
     except ValueError as exc:
+        set_progress(request_id, phase="error", worker="intake_extractor", detail="parse_error")
         _LOG.warning(
             "clinical_copilot_extract_parse_error request_id=%s doc_type=%s",
             request_id,
@@ -221,6 +224,7 @@ async def _extract_handler(
         )
         raise HTTPException(status_code=422, detail="VLM returned unparseable output.") from exc
     except Exception as exc:
+        set_progress(request_id, phase="error", worker="intake_extractor", detail="upstream_failure")
         _LOG.exception(
             "clinical_copilot_extract_failed",
             extra={"request_id": request_id, "doc_type": doc_type,
@@ -233,6 +237,7 @@ async def _extract_handler(
     # Persist to FHIR; non-fatal if the OpenEMR stack is unavailable
     persist_result = None
     try:
+        set_progress(request_id, phase="running", worker="intake_extractor", detail="persisting_results")
         persist_result = await persist_extraction(
             patient_id=patient_id,
             file_bytes=file_bytes,
@@ -307,6 +312,8 @@ async def _extract_handler(
         response["source_id"] = persist_result.source_id
         response["observation_ids"] = persist_result.observation_ids
         response["deduplicated"] = persist_result.deduplicated
+
+    set_progress(request_id, phase="complete", worker="intake_extractor", detail="done")
 
     return response
 

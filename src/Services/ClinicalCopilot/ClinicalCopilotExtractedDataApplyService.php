@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace OpenEMR\Services\ClinicalCopilot;
 
 use OpenEMR\Common\Database\QueryUtils;
+use OpenEMR\Common\Database\SqlQueryException;
 use OpenEMR\Services\VitalsService;
 
 final class ClinicalCopilotExtractedDataApplyService
@@ -148,9 +149,7 @@ final class ClinicalCopilotExtractedDataApplyService
             . 'Clinician-confirmed extraction imported:' . "\n"
             . json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
-        $sql = 'INSERT INTO pnotes (date, body, pid, user, groupname, authorized, activity, title, assigned_to, message_status, update_by, update_date)'
-            . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
-        $id = QueryUtils::sqlInsert($sql, [
+        $bind = [
             date('Y-m-d H:i:s'),
             $body,
             $pid,
@@ -162,7 +161,17 @@ final class ClinicalCopilotExtractedDataApplyService
             '',
             'New',
             $authUserId,
-        ]);
+        ];
+        $sql = 'INSERT INTO pnotes (date, body, pid, user, groupname, authorized, activity, title, assigned_to, message_status, update_by, update_date)'
+            . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
+        try {
+            $id = QueryUtils::sqlInsert($sql, $bind);
+        } catch (SqlQueryException $exception) {
+            // Compatibility fallback for databases missing update_by/update_date columns.
+            $fallbackSql = 'INSERT INTO pnotes (date, body, pid, user, groupname, authorized, activity, title, assigned_to, message_status)'
+                . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $id = QueryUtils::sqlInsert($fallbackSql, array_slice($bind, 0, 10));
+        }
         return (int) $id;
     }
 

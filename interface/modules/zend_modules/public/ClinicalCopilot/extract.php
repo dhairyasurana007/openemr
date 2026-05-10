@@ -116,6 +116,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 try {
     $session = SessionWrapperFactory::getInstance()->getActiveSession();
+    $candidateRequestId = isset($_POST['request_id']) ? trim((string) $_POST['request_id']) : '';
+    if ($candidateRequestId !== '' && preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $candidateRequestId)) {
+        $requestId = $candidateRequestId;
+    }
 
     // CSRF token arrives as a POST field (multipart body, not JSON).
     $token = $_POST['csrf_token_form'] ?? '';

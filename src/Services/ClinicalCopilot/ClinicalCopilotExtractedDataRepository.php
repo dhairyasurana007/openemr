@@ -20,6 +20,7 @@ use OpenEMR\Common\Database\SqlQueryException;
 final class ClinicalCopilotExtractedDataRepository
 {
     private const TABLE = 'clinical_copilot_extracted_data';
+    private ?bool $auditTableExists = null;
 
     /**
      * @param array<string, mixed> $extractedFacts
@@ -34,6 +35,10 @@ final class ClinicalCopilotExtractedDataRepository
         int $confirmedByUserId,
         array $extractedFacts
     ): void {
+        if (!$this->isAuditTableAvailable()) {
+            return;
+        }
+
         $json = json_encode($extractedFacts, JSON_THROW_ON_ERROR);
         $hash = hash('sha256', $json);
         $confirmedAt = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
@@ -51,5 +56,19 @@ final class ClinicalCopilotExtractedDataRepository
             $confirmedByUserId,
             $confirmedAt,
         ]);
+    }
+
+    private function isAuditTableAvailable(): bool
+    {
+        if ($this->auditTableExists !== null) {
+            return $this->auditTableExists;
+        }
+
+        $row = QueryUtils::querySingleRow(
+            'SELECT 1 AS present FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1',
+            [self::TABLE]
+        );
+        $this->auditTableExists = is_array($row) && !empty($row['present']);
+        return $this->auditTableExists;
     }
 }

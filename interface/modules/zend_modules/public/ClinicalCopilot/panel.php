@@ -397,6 +397,8 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 var timer = null;
                 var startedAtMs = Date.now();
                 var lastLine = <?php echo json_encode(xl('Starting request') . '...'); ?>;
+                var knownStatusSeen = false;
+                var consecutiveUnknownPolls = 0;
 
                 function render(lineText) {
                     var row = document.getElementById(rowId);
@@ -421,9 +423,16 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         return r.json().then(function (data) { return { ok: r.ok, data: data }; });
                     }).then(function (res) {
                         if (!res.ok || !res.data || res.data.known !== true) {
+                            consecutiveUnknownPolls++;
+                            if (!knownStatusSeen && consecutiveUnknownPolls >= 3) {
+                                lastLine = <?php echo json_encode(xl('Waiting for live worker status') . '...'); ?>
+                                    + ' [' + requestId + ']';
+                            }
                             render(lastLine);
                             return;
                         }
+                        knownStatusSeen = true;
+                        consecutiveUnknownPolls = 0;
                         var workerName = prettyLiveWorker(normalizeCitationValue(res.data.worker));
                         var phase = normalizeCitationValue(res.data.phase);
                         var detail = normalizeCitationValue(res.data.detail);
@@ -1332,6 +1341,9 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         ],
                         1800
                     );
+                    var extractRequestId = 'ccp_ext_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+                    stopExtractStatus();
+                    stopExtractStatus = startWorkerLiveStatus('ccp-extract-loading-row', extractRequestId, 900);
 
                     uploadBtn.disabled = true;
                     convertToPdfPreviewBlob(file).then(function (previewBlob) {
@@ -1350,6 +1362,7 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         }
                         formData.append('csrf_token_form', csrfToken);
                         formData.append('doc_type', selectedUploadDocType);
+                        formData.append('request_id', extractRequestId);
 
                         return fetch(extractUrl, {
                             method: 'POST',
