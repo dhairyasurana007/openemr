@@ -71,6 +71,7 @@ function App(): React.JSX.Element {
   const [medications, setMedications] = useState<CardState>(emptyCardState());
   const [prescriptions, setPrescriptions] = useState<CardState>(emptyCardState());
   const [careTeam, setCareTeam] = useState<CardState>(emptyCardState());
+  const [vitals, setVitals] = useState<CardState>(emptyCardState());
 
   useEffect(() => {
     if (!config) {
@@ -84,7 +85,7 @@ function App(): React.JSX.Element {
   }, [config]);
 
   useEffect(() => {
-    const cardSetters = [setAllergies, setProblemList, setMedications, setPrescriptions, setCareTeam];
+    const cardSetters = [setAllergies, setProblemList, setMedications, setPrescriptions, setCareTeam, setVitals];
 
     if (!config) {
       return;
@@ -115,6 +116,7 @@ function App(): React.JSX.Element {
     setMedications(emptyCardState());
     setPrescriptions(emptyCardState());
     setCareTeam(emptyCardState());
+    setVitals(emptyCardState());
     setHeader(null);
     setHeaderError(null);
 
@@ -126,6 +128,7 @@ function App(): React.JSX.Element {
         setMedications(evaluateCardState(data.medications));
         setPrescriptions(evaluateCardState(data.prescriptions));
         setCareTeam(evaluateCardState(data.careTeam));
+        setVitals(evaluateCardState(data.vitals));
       })
       .catch((error: unknown) => {
         const reason = error instanceof Error ? error.message : "Failed to load dashboard data";
@@ -190,6 +193,7 @@ function App(): React.JSX.Element {
         <FhirCard title="Medications" state={medications} />
         <FhirCard title="Prescriptions" state={prescriptions} />
         <FhirCard title="Care Team" state={careTeam} />
+        <FhirCard title="Vitals" state={vitals} />
       </div>
     </main>
   );

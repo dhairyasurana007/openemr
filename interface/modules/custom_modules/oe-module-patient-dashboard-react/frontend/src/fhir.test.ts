@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { patientDisplayName, patientMrn, resourceLabel } from "./fhir";
+import { parseFhirDate, patientDisplayName, patientMrn, resourceLabel } from "./fhir";
 
 describe("fhir helpers", () => {
   it("prefers resource text for labels", () => {
@@ -27,5 +27,13 @@ describe("fhir helpers", () => {
         ],
       })
     ).toBe("MRN-12345");
+  });
+
+  it("parses a valid FHIR timestamp", () => {
+    expect(parseFhirDate("2026-05-01T10:30:00Z")).toBeGreaterThan(0);
+  });
+
+  it("returns zero for invalid FHIR timestamp", () => {
+    expect(parseFhirDate("not-a-date")).toBe(0);
   });
 });

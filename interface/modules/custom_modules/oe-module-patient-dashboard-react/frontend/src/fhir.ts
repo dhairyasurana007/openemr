@@ -49,6 +49,16 @@ type CareTeamResource = {
   }>;
 };
 
+type ObservationResource = {
+  code?: { text?: string; coding?: Array<{ display?: string }> };
+  valueQuantity?: {
+    value?: number;
+    unit?: string;
+  };
+  effectiveDateTime?: string;
+  issued?: string;
+};
+
 type FhirBundle<T> = {
   entry?: Array<{ resource?: T }>;
 };
@@ -73,6 +83,7 @@ export type DashboardData = {
   medications: DashboardItem[];
   prescriptions: DashboardItem[];
   careTeam: DashboardItem[];
+  vitals: DashboardItem[];
 };
 
 function fetchJson<T>(url: string, token: string | null, csrfToken: string): Promise<T> {
@@ -179,17 +190,45 @@ function mapCareTeam(resources: CareTeamResource[]): DashboardItem[] {
   }));
 }
 
+export function parseFhirDate(value?: string): number {
+  if (!value) {
+    return 0;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function mapVitals(resources: ObservationResource[]): DashboardItem[] {
+  return resources
+    .filter((resource) => typeof resource.valueQuantity?.value === "number")
+    .sort((a, b) => {
+      const aDate = parseFhirDate(a.effectiveDateTime ?? a.issued);
+      const bDate = parseFhirDate(b.effectiveDateTime ?? b.issued);
+      return bDate - aDate;
+    })
+    .map((resource) => {
+      const value = resource.valueQuantity?.value;
+      const unit = resource.valueQuantity?.unit;
+      const effective = resource.effectiveDateTime ?? resource.issued;
+      return {
+        primary: resourceLabel(resource.code?.text, resource.code?.coding),
+        secondary: `${value}${unit ? ` ${unit}` : ""}${effective ? ` (${effective})` : ""}`,
+      };
+    });
+}
+
 export async function fetchDashboardData(config: DashboardBootstrap, token: string | null): Promise<DashboardData> {
   const patientId = encode(config.patientId);
   const csrfToken = config.csrfToken;
   const patient = await fetchJson<PatientResource>(`${config.apiBase}/fhir/Patient/${patientId}`, token, csrfToken);
 
-  const [allergiesBundle, conditionsBundle, medicationsBundle, prescriptionsBundle, careTeamBundle] = await Promise.all([
+  const [allergiesBundle, conditionsBundle, medicationsBundle, prescriptionsBundle, careTeamBundle, vitalsBundle] = await Promise.all([
     fetchJson<FhirBundle<AllergyIntoleranceResource>>(`${config.apiBase}/fhir/AllergyIntolerance?patient=${patientId}`, token, csrfToken),
     fetchJson<FhirBundle<ConditionResource>>(`${config.apiBase}/fhir/Condition?patient=${patientId}`, token, csrfToken),
     fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}&status=active`, token, csrfToken),
     fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}`, token, csrfToken),
     fetchJson<FhirBundle<CareTeamResource>>(`${config.apiBase}/fhir/CareTeam?patient=${patientId}`, token, csrfToken),
+    fetchJson<FhirBundle<ObservationResource>>(`${config.apiBase}/fhir/Observation?patient=${patientId}&category=vital-signs`, token, csrfToken),
   ]);
 
   return {
@@ -199,5 +238,6 @@ export async function fetchDashboardData(config: DashboardBootstrap, token: stri
     medications: mapMedicationRequests(bundleResources(medicationsBundle)),
     prescriptions: mapPrescriptions(bundleResources(prescriptionsBundle)),
     careTeam: mapCareTeam(bundleResources(careTeamBundle)),
+    vitals: mapVitals(bundleResources(vitalsBundle)),
   };
 }
