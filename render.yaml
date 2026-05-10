@@ -36,6 +36,9 @@
 #   agent directly (PHP→agent uses private mesh via `CLINICAL_COPILOT_AGENT_PRIVATE_HOSTPORT` / derived
 #   `CLINICAL_COPILOT_AGENT_BASE_URL` from `contrib/render/render-openemr-bootstrap.sh`).
 # - **openemr-web:** `OE_PASS`, `OPENEMR_SETTING_site_addr_oath` as needed (see envVars below).
+# - **openemr-web:** modern dashboard OIDC vars:
+#   `OEMR_DASHBOARD_OIDC_ISSUER`, `OEMR_DASHBOARD_OIDC_CLIENT_ID` (required for bearer auth),
+#   `OEMR_DASHBOARD_OIDC_SCOPE`, `OEMR_DASHBOARD_OIDC_REDIRECT_PATH` (optional overrides).
 #
 # ## Names and regions
 #
@@ -142,6 +145,15 @@ services:
         sync: false
       # Set in Dashboard after first deploy if you need a fixed public OAuth URL.
       - key: OPENEMR_SETTING_site_addr_oath
+        sync: false
+      # Modern patient dashboard OIDC (required to send Authorization bearer token to FHIR).
+      - key: OEMR_DASHBOARD_OIDC_ISSUER
+        sync: false
+      - key: OEMR_DASHBOARD_OIDC_CLIENT_ID
+        sync: false
+      - key: OEMR_DASHBOARD_OIDC_SCOPE
+        sync: false
+      - key: OEMR_DASHBOARD_OIDC_REDIRECT_PATH
         sync: false
 
   # Optional cost/complexity tradeoff: remove this block + fix `REDIS_URL` on `copilot-agent` for MVP (see header).
