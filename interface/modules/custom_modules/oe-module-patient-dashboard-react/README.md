@@ -44,3 +44,35 @@ Set these environment variables in your OpenEMR runtime for the React dashboard 
 Behavior:
 - If required OIDC values are missing, the dashboard remains in auth-disabled mode.
 - If access token is missing/expired, the frontend attempts silent renew and falls back to login redirect.
+
+## Frontend Contract and Smoke Verification (Commit 6)
+
+### Automated Frontend Tests
+
+Run from:
+- `interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend`
+
+Command:
+- `npm run test`
+
+Coverage focus:
+- OIDC auth helper behavior (enabled/disabled bootstrap, redirect URI handling).
+- Dashboard integration states:
+  - required card headings render (Allergies, Problem List, Medications, Prescriptions, Care Team, Vitals)
+  - populated-data rendering
+  - empty-resource rendering (`No data available.`)
+  - expired/missing token relogin state
+- FHIR contract requests:
+  - `APICSRFTOKEN` and `Authorization: Bearer <token>` headers for auth-gated calls
+  - non-OK FHIR responses fail fast with explicit errors.
+
+### Manual Smoke Flow
+
+1. Start OpenEMR and sign in as a clinician user.
+2. Open a patient chart with a known `pid`.
+3. Navigate to `Modules -> Modern Patient Dashboard`.
+4. Verify patient header fields render: Name, DOB, Sex, MRN, Status.
+5. Verify cards render: Allergies, Problem List, Medications, Prescriptions, Care Team, Vitals.
+6. Verify Vitals ordering is most-recent first using effective/issued timestamps.
+7. Expired-token scenario: invalidate/expire the OIDC session and refresh the page; verify relogin redirect/retry path triggers and no stale protected data renders.
+8. Missing-data scenario: use a patient with sparse data and verify card empty states show `No data available.` without page-level crashes.

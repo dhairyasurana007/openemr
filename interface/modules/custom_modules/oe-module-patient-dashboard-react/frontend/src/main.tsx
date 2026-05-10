@@ -56,7 +56,7 @@ function FhirCard({ title, state }: { title: string; state: CardState }): React.
   );
 }
 
-function App(): React.JSX.Element {
+export function App(): React.JSX.Element {
   const config = window.OEMR_DASHBOARD_BOOTSTRAP;
   const legacyDashboardUrl = config ? `${config.webRoot}/interface/patient_file/summary/demographics.php?pid=${encodeURIComponent(config.pid)}` : "#";
   const modernDashboardUrl = config ? `${config.webRoot}/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=${encodeURIComponent(config.pid)}` : "#";
