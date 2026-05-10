@@ -341,3 +341,29 @@ Intake form demographics and medications are not yet synced to `Patient` /
 `MedicationStatement` FHIR resources — only a `DocumentReference` is created.
 Full sync requires matching the patient record by MRN and handling create-vs-update
 logic, which is deferred to post-submission.
+
+## Implementation Status Snapshot (2026-05-10)
+
+Week 2 architecture is currently implemented across two coordinated tracks in the
+same OpenEMR codebase:
+
+1. Clinical Co-Pilot multimodal extraction/chat flow under `docker/clinical-copilot/copilot-agent/`.
+2. Modern patient dashboard frontend under `interface/modules/custom_modules/oe-module-patient-dashboard-react/`.
+
+The dashboard track is presentation-layer modernization only and consumes existing
+OpenEMR/FHIR/auth contracts; it does not replace backend APIs or backend auth.
+
+### Validation Commands (Current)
+
+```bash
+# Clinical Co-Pilot test suite
+cd docker/clinical-copilot/copilot-agent
+python -m pytest tests -v
+
+# Offline eval gate
+python evals/run_evals.py
+
+# Dashboard frontend tests
+cd ../../../interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend
+npm run test
+```

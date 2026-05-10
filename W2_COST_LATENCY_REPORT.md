@@ -139,3 +139,23 @@ at p95.
 | Multi-page PDF extraction | Parallelise per-page VLM calls (current impl sends all pages in one request). Render pages → dispatch N concurrent API calls → merge results. Limits: OpenRouter rate limits; cost unchanged. |
 | `chart_retriever` + `evidence_retriever` serial | These two workers are sequenced by the supervisor. When both are needed, run them concurrently using `asyncio.gather` and merge results before `answer_composer`. Estimated p95 improvement: −3 s on multi-worker paths. |
 | FHIR persist overhead | Move `persist_extraction` to a background task (fire-and-forget with a queue) so the `/v1/attach-and-extract` response is returned immediately. Accept that `source_id` arrives asynchronously. |
+
+## Refresh Notes (2026-05-10)
+
+This report remains focused on the Clinical Co-Pilot service cost/latency profile.
+Week 2 final verification now includes the dashboard frontend track, but dashboard
+UI tests (`npm run test`) are local and do not materially change the Co-Pilot API
+cost figures in this report.
+
+### Current Reproduction Commands
+
+```bash
+# Co-Pilot tests and evals
+cd docker/clinical-copilot/copilot-agent
+python -m pytest tests -v
+python evals/run_evals.py
+
+# Dashboard frontend verification (separate track)
+cd ../../../interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend
+npm run test
+```

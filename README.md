@@ -135,3 +135,30 @@ sequence, and observability schema.
 
 See [W2_COST_LATENCY_REPORT.md](W2_COST_LATENCY_REPORT.md) for cost/latency
 measurements, projected production costs, and bottleneck analysis.
+
+### Final Demo Runbook (Week 2 + Dashboard)
+
+Run these steps from a clean shell to verify both required tracks:
+
+```bash
+# 1) Start services
+cd docker/development-easy
+docker compose up --detach --wait
+
+# 2) Verify Clinical Co-Pilot tests + eval gate
+cd ../clinical-copilot/copilot-agent
+python -m pytest tests -v
+python evals/run_evals.py
+
+# 3) Verify modern dashboard frontend tests
+cd ../../../interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend
+npm install
+npm run test
+
+# 4) Manual dashboard smoke (authenticated OpenEMR session)
+# Open: /interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=<PATIENT_ID>
+# Confirm: Header(Name, DOB, Sex, MRN, Status) + cards(Allergies, Problem List,
+# Medications, Prescriptions, Care Team, Vitals) with loading/empty/error behavior.
+```
+
+This runbook intentionally preserves existing backend API and auth behavior.
