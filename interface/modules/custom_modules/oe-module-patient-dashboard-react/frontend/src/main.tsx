@@ -26,6 +26,15 @@ function evaluateCardState(items: DashboardItem[]): CardState {
   return { status: "ready", items };
 }
 
+function setAllCardsError(
+  reason: string,
+  setters: Array<(state: CardState) => void>
+): void {
+  setters.forEach((setState) => {
+    setState({ status: "error", items: [], reason });
+  });
+}
+
 function FhirCard({ title, state }: { title: string; state: CardState }): React.JSX.Element {
   return (
     <section style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "1rem 1.25rem" }}>
@@ -75,15 +84,29 @@ function App(): React.JSX.Element {
   }, [config]);
 
   useEffect(() => {
+    const cardSetters = [setAllergies, setProblemList, setMedications, setPrescriptions, setCareTeam];
+
     if (!config) {
       return;
     }
 
-    if (authState.status !== "ready") {
+    if (authState.status === "error") {
+      const reason = authState.reason ?? "Authentication failed";
+      setHeader(null);
+      setHeaderError(reason);
+      setAllCardsError(reason, cardSetters);
       return;
     }
 
-    if (!authState.accessToken && config.auth?.issuer) {
+    if (authState.status !== "ready" && authState.status !== "disabled") {
+      return;
+    }
+
+    if (authState.status === "ready" && config.auth?.issuer && !authState.accessToken) {
+      const reason = authState.reason ?? "Waiting for sign-in...";
+      setHeader(null);
+      setHeaderError(reason);
+      setAllCardsError(reason, cardSetters);
       return;
     }
 
@@ -107,11 +130,7 @@ function App(): React.JSX.Element {
       .catch((error: unknown) => {
         const reason = error instanceof Error ? error.message : "Failed to load dashboard data";
         setHeaderError(reason);
-        setAllergies({ status: "error", items: [], reason });
-        setProblemList({ status: "error", items: [], reason });
-        setMedications({ status: "error", items: [], reason });
-        setPrescriptions({ status: "error", items: [], reason });
-        setCareTeam({ status: "error", items: [], reason });
+        setAllCardsError(reason, cardSetters);
       });
   }, [authState, config]);
 
