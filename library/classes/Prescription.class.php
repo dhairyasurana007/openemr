@@ -83,6 +83,9 @@
 
 
 require_once(__DIR__ . "/../lists.inc.php");
+require_once(__DIR__ . "/PrescriptionPatient.class.php");
+require_once(__DIR__ . "/Pharmacy.class.php");
+require_once(__DIR__ . "/Provider.class.php");
 
 
 /**

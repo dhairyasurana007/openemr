@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "napa && gulp -i",
     "build": "gulp -b",
+    "build:modules": "cd interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend && npm install && npm run build",
     "dev-build": "npm run gulp-build",
     "dev": "gulp --dev && gulp watch",
     "gulp-build": "gulp -b --dev",

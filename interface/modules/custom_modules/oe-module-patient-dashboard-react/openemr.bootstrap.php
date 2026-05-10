@@ -10,12 +10,12 @@
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
 
-use OpenEMR\Core\ModulesClassLoader;
 use OpenEMR\Core\OEGlobalsBag;
 use OpenEMR\Modules\PatientDashboardReact\Bootstrap;
 
-$file = OEGlobalsBag::getInstance()->getProjectDir();
-$classLoader = new ModulesClassLoader($file);
+/**
+ * @global \OpenEMR\Core\ModulesClassLoader $classLoader Injected by the OpenEMR module loader.
+ */
 $classLoader->registerNamespaceIfNotExists('OpenEMR\\Modules\\PatientDashboardReact\\', __DIR__ . DIRECTORY_SEPARATOR . 'src');
 
 $eventDispatcher = OEGlobalsBag::getInstance()->getKernel()->getEventDispatcher();

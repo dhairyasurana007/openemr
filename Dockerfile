@@ -50,6 +50,18 @@ RUN if command -v npm >/dev/null 2>&1 && [ -f ccdaservice/package.json ]; then \
 # so regular source changes do not invalidate dependency cache.
 COPY . .
 
+# Build the React+TS patient dashboard module frontend.
+# Uses the same npm guard as the ccdaservice layer above in case the base image ever ships without Node.
+RUN if command -v npm >/dev/null 2>&1; then \
+    cd interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend \
+    && npm install \
+    && npm run build \
+    && rm -rf node_modules \
+    && cd /var/www/localhost/htdocs/openemr; \
+    else \
+      echo "npm not found; skipping patient-dashboard-react frontend build" >&2; \
+    fi
+
 # OpenEMR installer expects this file to be writable during first-time setup.
 RUN mkdir -p sites/default \
     && printf '<?php\n// Placeholder — openemr-auto-install.php writes the real config at runtime.\n$config = 0;\n' > sites/default/sqlconf.php \
