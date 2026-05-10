@@ -97,6 +97,11 @@ def main(argv: list[str] | None = None) -> int:
         default=1.5,
         help="Seconds to wait between requests (be polite).",
     )
+    parser.add_argument(
+        "--fail-on-errors",
+        action="store_true",
+        help="Exit non-zero if any source fails (default is warning-only).",
+    )
     args = parser.parse_args(argv)
 
     sources_path = Path(args.sources)
@@ -142,7 +147,9 @@ def main(argv: list[str] | None = None) -> int:
             time.sleep(args.delay)
 
     print(f"\nDone — {ok} fetched, {failed} failed.")
-    return 0 if failed == 0 else 1
+    if failed > 0:
+        print("WARNING: one or more guideline sources failed; continuing with partial corpus.", file=sys.stderr)
+    return 1 if (args.fail_on_errors and failed > 0) else 0
 
 
 if __name__ == "__main__":
