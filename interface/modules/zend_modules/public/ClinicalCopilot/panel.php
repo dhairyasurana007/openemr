@@ -479,22 +479,89 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                 var hasDetail = false;
 
                 if (useMultimodal && Array.isArray(data.routing_log)) {
+                    function prettyWorkerName(node) {
+                        var map = {
+                            supervisor: <?php echo json_encode(xl('Supervisor')); ?>,
+                            intake_extractor: <?php echo json_encode(xl('Intake Extractor Worker')); ?>,
+                            chart_retriever: <?php echo json_encode(xl('Chart Retriever Worker')); ?>,
+                            evidence_retriever: <?php echo json_encode(xl('Evidence Retriever Worker')); ?>,
+                            answer_composer: <?php echo json_encode(xl('Answer Composer Worker')); ?>
+                        };
+                        return map[node] || node || 'step';
+                    }
+
+                    function describeWorkerAction(node) {
+                        if (node === 'intake_extractor') {
+                            return <?php echo json_encode(xl('summarizing uploaded extraction facts')); ?>;
+                        }
+                        if (node === 'chart_retriever') {
+                            return <?php echo json_encode(xl('retrieving chart and scheduling context')); ?>;
+                        }
+                        if (node === 'evidence_retriever') {
+                            return <?php echo json_encode(xl('searching guideline evidence (RAG)')); ?>;
+                        }
+                        if (node === 'answer_composer') {
+                            return <?php echo json_encode(xl('composing final grounded answer')); ?>;
+                        }
+                        return '';
+                    }
+
                     for (var i = 0; i < data.routing_log.length; i++) {
                         var step = data.routing_log[i];
                         if (!step || typeof step !== 'object') {
                             continue;
                         }
-                        var node = normalizeCitationValue(step.node) || 'step';
+                        var node = normalizeCitationValue(step.node) || '';
                         var decision = normalizeCitationValue(step.decision);
                         var reason = normalizeCitationValue(step.reason);
-                        var summary = node;
-                        if (decision) {
-                            summary += ' | ' + decision;
+                        var summary = prettyWorkerName(node);
+
+                        if (node === 'supervisor') {
+                            var routedTo = decision;
+                            if (routedTo === 'answer') {
+                                routedTo = 'answer_composer';
+                            }
+                            var routeLabel = prettyWorkerName(routedTo);
+                            if (routeLabel) {
+                                summary += ' | ' + <?php echo json_encode(xl('routing to')); ?> + ' ' + routeLabel;
+                            }
+                            if (reason) {
+                                summary += ' | ' + reason;
+                            }
+                        } else {
+                            var action = describeWorkerAction(node);
+                            if (action) {
+                                summary += ' | ' + action;
+                            }
+                            if (decision) {
+                                summary += ' | ' + decision;
+                            }
+                            if (reason) {
+                                summary += ' | ' + reason;
+                            }
+                            var latencyMap = (data.step_latency_ms && typeof data.step_latency_ms === 'object')
+                                ? data.step_latency_ms
+                                : null;
+                            if (latencyMap && isFinite(Number(latencyMap[node]))) {
+                                summary += ' | ' + <?php echo json_encode(xl('latency')); ?> + ': ' + String(Number(latencyMap[node])) + ' ms';
+                            }
                         }
-                        if (reason) {
-                            summary += ' | ' + reason;
-                        }
+
                         lines.push('- ' + summary);
+                        hasDetail = true;
+                    }
+
+                    if (isFinite(Number(data.chart_tool_payload_count))) {
+                        lines.push('- ' + <?php echo json_encode(xl('Chart Retriever Worker output')); ?> + ' | '
+                            + String(Number(data.chart_tool_payload_count)) + ' '
+                            + <?php echo json_encode(xl('payload(s)')); ?>);
+                        hasDetail = true;
+                    }
+
+                    if (Array.isArray(data.guideline_evidence)) {
+                        lines.push('- ' + <?php echo json_encode(xl('Evidence Retriever Worker output')); ?> + ' | '
+                            + String(data.guideline_evidence.length) + ' '
+                            + <?php echo json_encode(xl('snippet(s)')); ?>);
                         hasDetail = true;
                     }
                 }
