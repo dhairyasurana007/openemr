@@ -44,9 +44,14 @@ Header::setupHeader();
 </head>
 <body class="bg-light">
 <div class="container-fluid mt-2">
-    <a class="btn btn-outline-secondary btn-sm" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()">
-        <?php echo xlt('Back to Legacy Dashboard'); ?>
-    </a>
+    <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
+        <a class="btn btn-outline-secondary" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()">
+            <?php echo xlt('Legacy'); ?>
+        </a>
+        <button type="button" class="btn btn-primary active" aria-pressed="true" disabled>
+            <?php echo xlt('Modern'); ?>
+        </button>
+    </div>
 </div>
 <div id="patient-dashboard-react-root"></div>
 <script>

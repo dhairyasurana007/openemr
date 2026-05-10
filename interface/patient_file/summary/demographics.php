@@ -1074,9 +1074,14 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             $modernDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=' . attr_url($pid);
             ?>
             <div class="d-flex justify-content-end mb-2">
-                <a class="btn btn-primary btn-sm" href="<?php echo attr($modernDashboardUrl); ?>" onclick="top.restoreSession()">
-                    <?php echo xlt('Switch to Modern Dashboard'); ?>
-                </a>
+                <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
+                    <button type="button" class="btn btn-secondary active" aria-pressed="true" disabled>
+                        <?php echo xlt('Legacy'); ?>
+                    </button>
+                    <a class="btn btn-outline-primary" href="<?php echo attr($modernDashboardUrl); ?>" onclick="top.restoreSession()">
+                        <?php echo xlt('Modern'); ?>
+                    </a>
+                </div>
             </div>
             <?php
         endif;
