@@ -14,6 +14,7 @@ require_once dirname(__FILE__, 4) . '/globals.php';
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
+use OpenEMR\Common\Session\SessionWrapperFactory;
 use OpenEMR\Common\Session\SessionUtil;
 use OpenEMR\Core\Header;
 use OpenEMR\Core\OEGlobalsBag;
@@ -22,7 +23,8 @@ if (!AclMain::aclCheckCore('patients', 'demo')) {
     die(xlt('Not authorized'));
 }
 
-$pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? 0);
+$session = SessionWrapperFactory::getInstance()->getActiveSession();
+$pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? ($session->get('pid') ?? 0));
 $webRoot = OEGlobalsBag::getInstance()->getWebRoot();
 $moduleWebPath = $webRoot . '/interface/modules/custom_modules/oe-module-patient-dashboard-react';
 $legacyDashboardUrl = $webRoot . '/interface/patient_file/summary/demographics.php';
