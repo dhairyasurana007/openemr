@@ -168,7 +168,6 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
     <div id="clinical-copilot-shell" class="px-0">
         <div class="px-3 py-2 border-bottom bg-light flex-shrink-0">
             <h4 class="mb-1"><?php echo xlt('Clinical Co-Pilot'); ?></h4>
-            <small class="text-muted d-block"><?php echo text($statusText); ?></small>
         </div>
 
         <div id="clinical-copilot-messages" class="px-2 py-2" role="log" aria-live="polite" aria-relevant="additions">
@@ -202,7 +201,6 @@ $citationOverlayJsUrl  = $web_root . '/interface/modules/zend_modules/public/Cli
                         </button>
                     </div>
                 </div>
-                <small id="clinical-copilot-compose-help" class="form-text text-muted"><?php echo xlt('Requires OPENROUTER_API_KEY on the agent. Override model with OPENROUTER_MODEL.'); ?></small>
             </div>
             <div class="form-group mb-0 mt-2 d-flex align-items-center flex-wrap gap-2">
                 <div class="dropdown">
