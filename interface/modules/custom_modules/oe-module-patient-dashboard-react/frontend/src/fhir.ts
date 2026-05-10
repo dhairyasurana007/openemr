@@ -75,9 +75,10 @@ export type DashboardData = {
   careTeam: DashboardItem[];
 };
 
-function fetchJson<T>(url: string, token: string | null): Promise<T> {
+function fetchJson<T>(url: string, token: string | null, csrfToken: string): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/fhir+json",
+    APICSRFTOKEN: csrfToken,
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -180,14 +181,15 @@ function mapCareTeam(resources: CareTeamResource[]): DashboardItem[] {
 
 export async function fetchDashboardData(config: DashboardBootstrap, token: string | null): Promise<DashboardData> {
   const patientId = encode(config.patientId);
-  const patient = await fetchJson<PatientResource>(`${config.apiBase}/fhir/Patient/${patientId}`, token);
+  const csrfToken = config.csrfToken;
+  const patient = await fetchJson<PatientResource>(`${config.apiBase}/fhir/Patient/${patientId}`, token, csrfToken);
 
   const [allergiesBundle, conditionsBundle, medicationsBundle, prescriptionsBundle, careTeamBundle] = await Promise.all([
-    fetchJson<FhirBundle<AllergyIntoleranceResource>>(`${config.apiBase}/fhir/AllergyIntolerance?patient=${patientId}`, token),
-    fetchJson<FhirBundle<ConditionResource>>(`${config.apiBase}/fhir/Condition?patient=${patientId}`, token),
-    fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}&status=active`, token),
-    fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}`, token),
-    fetchJson<FhirBundle<CareTeamResource>>(`${config.apiBase}/fhir/CareTeam?patient=${patientId}`, token),
+    fetchJson<FhirBundle<AllergyIntoleranceResource>>(`${config.apiBase}/fhir/AllergyIntolerance?patient=${patientId}`, token, csrfToken),
+    fetchJson<FhirBundle<ConditionResource>>(`${config.apiBase}/fhir/Condition?patient=${patientId}`, token, csrfToken),
+    fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}&status=active`, token, csrfToken),
+    fetchJson<FhirBundle<MedicationRequestResource>>(`${config.apiBase}/fhir/MedicationRequest?patient=${patientId}`, token, csrfToken),
+    fetchJson<FhirBundle<CareTeamResource>>(`${config.apiBase}/fhir/CareTeam?patient=${patientId}`, token, csrfToken),
   ]);
 
   return {
