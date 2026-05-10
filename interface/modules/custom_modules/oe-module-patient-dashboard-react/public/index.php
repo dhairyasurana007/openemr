@@ -73,7 +73,7 @@ window.OEMR_DASHBOARD_BOOTSTRAP = {
     webRoot: <?php echo js_escape($webRoot); ?>,
     moduleWebPath: <?php echo js_escape($moduleWebPath); ?>,
     patientId: <?php echo js_escape((string)$pid); ?>,
-    csrfToken: <?php echo js_escape(CsrfUtils::collectCsrfToken()); ?>,
+    csrfToken: <?php echo js_escape(CsrfUtils::collectCsrfToken($session)); ?>,
     apiBase: <?php echo js_escape($webRoot . '/apis/default'); ?>,
     timezone: <?php echo js_escape(date_default_timezone_get()); ?>,
     auth: {
