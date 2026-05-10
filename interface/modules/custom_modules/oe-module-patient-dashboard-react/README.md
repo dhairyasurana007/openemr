@@ -20,6 +20,7 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm run test
 ```
 
 Build output is written to:
@@ -30,3 +31,16 @@ Build output is written to:
 
 - This page is single-stack frontend mount (`#patient-dashboard-react-root`) with no legacy dashboard widgets embedded.
 - Backend auth and API contracts are unchanged.
+
+## OAuth2/OIDC Configuration
+
+Set these environment variables in your OpenEMR runtime for the React dashboard route:
+
+- `OEMR_DASHBOARD_OIDC_ISSUER` (required for auth): OIDC issuer/authority URL
+- `OEMR_DASHBOARD_OIDC_CLIENT_ID` (required for auth): OAuth client ID
+- `OEMR_DASHBOARD_OIDC_SCOPE` (optional): default `openid profile fhirUser`
+- `OEMR_DASHBOARD_OIDC_REDIRECT_PATH` (optional): default `/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php`
+
+Behavior:
+- If required OIDC values are missing, the dashboard remains in auth-disabled mode.
+- If access token is missing/expired, the frontend attempts silent renew and falls back to login redirect.

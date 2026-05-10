@@ -24,6 +24,10 @@ $pid = (int)($_GET['pid'] ?? $_GET['set_pid'] ?? ($session->get('pid') ?? 0));
 $webRoot = OEGlobalsBag::getInstance()->getWebRoot();
 $moduleWebPath = $webRoot . '/interface/modules/custom_modules/oe-module-patient-dashboard-react';
 $legacyDashboardUrl = $webRoot . '/interface/patient_file/summary/demographics.php';
+$oidcIssuer = (string) (getenv('OEMR_DASHBOARD_OIDC_ISSUER') ?: '');
+$oidcClientId = (string) (getenv('OEMR_DASHBOARD_OIDC_CLIENT_ID') ?: '');
+$oidcScope = (string) (getenv('OEMR_DASHBOARD_OIDC_SCOPE') ?: 'openid profile fhirUser');
+$oidcRedirectPath = (string) (getenv('OEMR_DASHBOARD_OIDC_REDIRECT_PATH') ?: '/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php');
 if ($pid > 0) {
     $legacyDashboardUrl .= '?set_pid=' . rawurlencode((string)$pid);
 }
@@ -72,6 +76,12 @@ window.OEMR_DASHBOARD_BOOTSTRAP = {
     csrfToken: <?php echo js_escape(CsrfUtils::collectCsrfToken()); ?>,
     apiBase: <?php echo js_escape($webRoot . '/apis/default'); ?>,
     timezone: <?php echo js_escape(date_default_timezone_get()); ?>,
+    auth: {
+      issuer: <?php echo js_escape($oidcIssuer); ?>,
+      clientId: <?php echo js_escape($oidcClientId); ?>,
+      scope: <?php echo js_escape($oidcScope); ?>,
+      redirectPath: <?php echo js_escape($oidcRedirectPath); ?>,
+    },
 };
 </script>
 <script type="module" src="<?php echo attr($moduleWebPath); ?>/public/assets/dashboard.js"></script>

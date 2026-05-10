@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+  },
   build: {
     outDir: "../public/assets",
     emptyOutDir: false,
