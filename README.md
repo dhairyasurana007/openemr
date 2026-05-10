@@ -149,6 +149,7 @@ docker compose up --detach --wait
 cd ../clinical-copilot/copilot-agent
 python -m pytest tests -v
 python evals/run_evals.py
+node scripts/verify_citation_overlay.js
 
 # 3) Verify modern dashboard frontend tests
 cd ../../../interface/modules/custom_modules/oe-module-patient-dashboard-react/frontend
