@@ -15,7 +15,6 @@ require_once dirname(__FILE__, 5) . '/globals.php';
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Common\Session\SessionWrapperFactory;
-use OpenEMR\Common\Session\SessionUtil;
 use OpenEMR\Core\Header;
 use OpenEMR\Core\OEGlobalsBag;
 
@@ -43,6 +42,7 @@ Header::setupHeader();
     <link rel="stylesheet" href="<?php echo attr($moduleWebPath); ?>/public/assets/dashboard.css">
 </head>
 <body class="bg-light">
+<div class="title d-none"><?php echo xlt('Modern Patient Dashboard'); ?></div>
 <div class="container-fluid mt-2">
     <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
         <a class="btn btn-outline-secondary" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()">
@@ -53,7 +53,15 @@ Header::setupHeader();
         </button>
     </div>
 </div>
-<div id="patient-dashboard-react-root"></div>
+<div id="patient-dashboard-react-root">
+    <main class="container py-3">
+        <h1><?php echo xlt('Modern Patient Dashboard'); ?></h1>
+        <p><?php echo xlt('Loading dashboard application...'); ?></p>
+        <?php if ($pid <= 0) { ?>
+            <p class="text-danger"><?php echo xlt('No active patient context was detected.'); ?></p>
+        <?php } ?>
+    </main>
+</div>
 <script>
 window.OEMR_DASHBOARD_BOOTSTRAP = {
     webRoot: <?php echo js_escape($webRoot); ?>,
