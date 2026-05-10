@@ -10,7 +10,7 @@
     "description": "USPSTF: Type 2 Diabetes in Adults - Screening Recommendation"
   },
   {
-    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-for-the-primary-prevention-of-cardiovascular-events-in-adults-preventive-medication",
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-in-adults-preventive-medication",
     "filename": "uspstf_statin_lipid_screening.txt",
     "description": "USPSTF: Statin Use for Primary Prevention of CVD - Lipid Screening Recommendation"
   },
@@ -50,7 +50,7 @@
     "description": "NICE: Guidelines Overview"
   },
   {
-    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation-topics/uspstf-and-b-recommendations",
+    "url": "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation-topics/uspstf-a-and-b-recommendations",
     "filename": "uspstf_a_b_recommendations.txt",
     "description": "USPSTF: A and B Recommendations"
   },
@@ -70,7 +70,7 @@
     "description": "WHO: Fact Sheets Index"
   },
   {
-    "url": "https://www.fda.gov/drugs/drug-approvals-and-databases/drugsfda-database",
+    "url": "https://www.fda.gov/drugs/development-approval-process-drugs/drug-approvals-and-databases",
     "filename": "fda_drugsfda_overview.txt",
     "description": "FDA: Drugs@FDA Overview"
   },
@@ -90,7 +90,7 @@
     "description": "NLM/NIH: MedlinePlus Cough Topic"
   },
   {
-    "url": "https://www.idsociety.org/practice-guideline/clinical-practice-guidelines-development-training-and-resources/",
+    "url": "https://www.idsociety.org/clinical-practice-guidelines-development-training-and-resources/",
     "filename": "idsa_guideline_development_overview.txt",
     "description": "IDSA: Clinical Practice Guidelines Development"
   }

@@ -2,7 +2,8 @@
 
 Pipeline:
   1. BM25 sparse search (rank_bm25) over 300-token chunks with 50-token overlap.
-  2. Dense vector search (sentence-transformers all-MiniLM-L6-v2 by default).
+  2. Dense vector search via Cohere embed API (embed-english-v3.0 by default).
+     Skipped (BM25-only) when COHERE_API_KEY is not set.
   3. Reciprocal Rank Fusion to merge candidate sets.
   4. Optional Cohere Rerank if COHERE_API_KEY is configured; otherwise top-k from RRF.
 """
@@ -61,15 +62,38 @@ def _rrf_merge(ranked_lists: list[list[int]], rrf_k: int = 60) -> list[int]:
 # Embedding loader
 # ---------------------------------------------------------------------------
 
-def _load_sentence_transformer(model_name: str) -> EmbedFn:
-    from sentence_transformers import SentenceTransformer  # lazy — heavy import
+_COHERE_EMBED_BATCH = 96  # Cohere embed API max texts per call
 
-    model = SentenceTransformer(model_name)
 
-    def _embed(texts: list[str]) -> list[list[float]]:
-        return model.encode(texts, normalize_embeddings=True).tolist()
+def _build_cohere_embed_fns(api_key: str, model: str) -> tuple[EmbedFn, EmbedFn]:
+    """Return (doc_embed_fn, query_embed_fn) backed by Cohere's hosted embed API.
 
-    return _embed
+    Uses distinct input_type values so Cohere can apply the appropriate
+    asymmetric embedding for indexing vs. querying.
+    """
+    import cohere  # lazy — network dep, already in requirements
+
+    client = cohere.Client(api_key)
+
+    def _embed_batched(texts: list[str], input_type: str) -> list[list[float]]:
+        results: list[list[float]] = []
+        for i in range(0, len(texts), _COHERE_EMBED_BATCH):
+            resp = client.embed(
+                texts=texts[i : i + _COHERE_EMBED_BATCH],
+                model=model,
+                input_type=input_type,
+            )
+            batch: list[list[float]] = resp.embeddings  # type: ignore[assignment]
+            results.extend(batch)
+        return results
+
+    def _doc_embed(texts: list[str]) -> list[list[float]]:
+        return _embed_batched(texts, "search_document")
+
+    def _query_embed(texts: list[str]) -> list[list[float]]:
+        return _embed_batched(texts, "search_query")
+
+    return _doc_embed, _query_embed
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +109,7 @@ class HybridRetriever:
         embedding_model_name: str,
         cohere_api_key: str = "",
         _embed_fn: EmbedFn | None = None,
+        _query_embed_fn: EmbedFn | None = None,
     ) -> None:
         self._cohere_api_key = cohere_api_key
         self._chunks = self._load_corpus(corpus_dir)
@@ -93,6 +118,7 @@ class HybridRetriever:
             self._bm25: Any = None
             self._embeddings: np.ndarray | None = None
             self._embed_fn: EmbedFn | None = _embed_fn
+            self._query_embed_fn: EmbedFn | None = _query_embed_fn or _embed_fn
             _LOG.info("rag_retriever_indexed chunk_count=0 corpus_dir=%s", corpus_dir)
             return
 
@@ -102,17 +128,32 @@ class HybridRetriever:
         tokenized = [c["text"].split() for c in self._chunks]
         self._bm25 = BM25Okapi(tokenized)
 
-        self._embed_fn = _embed_fn or _load_sentence_transformer(embedding_model_name)
-        raw = self._embed_fn([c["text"] for c in self._chunks])
-        mat = np.array(raw, dtype=np.float32)
-        norms = np.linalg.norm(mat, axis=1, keepdims=True)
-        self._embeddings = mat / np.where(norms > 0, norms, 1.0)
+        if _embed_fn is not None:
+            # Test-injection path: caller supplies both fns directly.
+            self._embed_fn = _embed_fn
+            self._query_embed_fn = _query_embed_fn or _embed_fn
+        elif cohere_api_key:
+            doc_fn, query_fn = _build_cohere_embed_fns(cohere_api_key, embedding_model_name)
+            self._embed_fn = doc_fn
+            self._query_embed_fn = query_fn
+        else:
+            _LOG.warning("rag_retriever_no_embed_key dense_retrieval=disabled")
+            self._embed_fn = None
+            self._query_embed_fn = None
+
+        if self._embed_fn is not None:
+            raw = self._embed_fn([c["text"] for c in self._chunks])
+            mat = np.array(raw, dtype=np.float32)
+            norms = np.linalg.norm(mat, axis=1, keepdims=True)
+            self._embeddings = mat / np.where(norms > 0, norms, 1.0)
+        else:
+            self._embeddings = None
 
         _LOG.info(
-            "rag_retriever_indexed chunk_count=%d corpus_dir=%s embedding_dim=%d",
+            "rag_retriever_indexed chunk_count=%d corpus_dir=%s embedding_dim=%s",
             len(self._chunks),
             corpus_dir,
-            self._embeddings.shape[1],
+            self._embeddings.shape[1] if self._embeddings is not None else "none",
         )
 
     @property
@@ -155,7 +196,7 @@ class HybridRetriever:
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Return up to *top_k* guideline chunks most relevant to *query*."""
-        if not self._chunks or self._bm25 is None or self._embed_fn is None:
+        if not self._chunks or self._bm25 is None:
             return []
 
         candidate_k = min(top_k * 3, len(self._chunks))
@@ -164,17 +205,19 @@ class HybridRetriever:
         bm25_scores: np.ndarray = self._bm25.get_scores(query.split())
         bm25_top = list(np.argsort(bm25_scores)[::-1][:candidate_k])
 
-        # Dense cosine
-        assert self._embeddings is not None
-        q_raw = self._embed_fn([query])[0]
-        q_emb = np.array(q_raw, dtype=np.float32)
-        q_norm = float(np.linalg.norm(q_emb))
-        if q_norm > 0:
-            q_emb /= q_norm
-        sims: np.ndarray = self._embeddings @ q_emb
-        dense_top = list(np.argsort(sims)[::-1][:candidate_k])
+        # Dense cosine — skipped when no embed key is configured (BM25-only fallback)
+        if self._query_embed_fn is not None and self._embeddings is not None:
+            q_raw = self._query_embed_fn([query])[0]
+            q_emb = np.array(q_raw, dtype=np.float32)
+            q_norm = float(np.linalg.norm(q_emb))
+            if q_norm > 0:
+                q_emb /= q_norm
+            sims: np.ndarray = self._embeddings @ q_emb
+            dense_top = list(np.argsort(sims)[::-1][:candidate_k])
+            merged = _rrf_merge([bm25_top, dense_top])[:top_k]
+        else:
+            merged = bm25_top[:top_k]
 
-        merged = _rrf_merge([bm25_top, dense_top])[:top_k]
         candidates = [self._chunks[i] for i in merged]
 
         if self._cohere_api_key and len(candidates) > 1:

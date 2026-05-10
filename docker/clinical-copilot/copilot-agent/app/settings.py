@@ -101,7 +101,7 @@ class Settings:
     cohere_api_key: str
     """Cohere API key for optional reranking in the guideline RAG pipeline. Empty disables reranking."""
     embedding_model: str
-    """Sentence-transformers model name for dense guideline retrieval (e.g. ``all-MiniLM-L6-v2``)."""
+    """Cohere embed model name for dense guideline retrieval (e.g. ``embed-english-v3.0``)."""
     guidelines_corpus_dir: str
     """Directory containing fetched guideline plain-text files (e.g. ``app/guidelines``)."""
     langchain_api_key: str
@@ -165,7 +165,7 @@ class Settings:
             copilot_max_inflight=_int("COPILOT_MAX_INFLIGHT", 0),
             vlm_model=(os.environ.get("VLM_MODEL") or "anthropic/claude-sonnet-4.6").strip(),
             cohere_api_key=(os.environ.get("COHERE_API_KEY") or "").strip(),
-            embedding_model=(os.environ.get("EMBEDDING_MODEL") or "all-MiniLM-L6-v2").strip(),
+            embedding_model=(os.environ.get("EMBEDDING_MODEL") or "embed-english-v3.0").strip(),
             guidelines_corpus_dir=(os.environ.get("GUIDELINES_CORPUS_DIR") or "app/guidelines").strip(),
             langchain_api_key=api_key,
             langchain_tracing_v2=langchain_tracing_v2,
