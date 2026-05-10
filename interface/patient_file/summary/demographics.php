@@ -1071,26 +1071,30 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
         if ($thisauth) :
             OEGlobalsBag::getInstance()->getKernel()->getEventDispatcher()->dispatch(new RenderEvent($pid), RenderEvent::EVENT_SECTION_LIST_RENDER_TOP);
             require_once("$include_root/patient_file/summary/dashboard_header.php");
+            $legacyDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/patient_file/summary/demographics.php?pid=' . rawurlencode((string)$pid);
+            $modernDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=' . rawurlencode((string)$pid);
+        endif;
+        if ($thisauth) :
+            ?>
+            <div class="d-flex justify-content-end mb-2">
+                <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
+                    <a class="btn btn-primary active" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()"><?php echo xlt('Legacy'); ?></a>
+                    <a class="btn btn-outline-secondary" href="<?php echo attr($modernDashboardUrl); ?>" onclick="top.restoreSession()"><?php echo xlt('Modern'); ?></a>
+                </div>
+            </div>
+            <?php
         endif;
 
         $list_id = "dashboard"; // to indicate nav item is active, count and give correct id
         // Collect the patient menu then build it
         $menuPatient = new PatientMenuRole($twig);
         $menuPatient->displayHorizNavBarMenu();
-        $legacyDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/patient_file/summary/demographics.php?set_pid=' . rawurlencode((string)$pid);
-        $modernDashboardUrl = OEGlobalsBag::getInstance()->getWebRoot() . '/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=' . rawurlencode((string)$pid);
         // Get the document ID of the patient ID card if access to it is wanted here.
         $idcard_doc_id = false;
         if (OEGlobalsBag::getInstance()->getString('patient_id_category_name')) {
             $idcard_doc_id = get_document_by_catg($pid, OEGlobalsBag::getInstance()->getString('patient_id_category_name'), 3);
         }
         ?>
-        <div class="d-flex justify-content-end mb-2">
-            <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
-                <a class="btn btn-primary active" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()"><?php echo xlt('Legacy'); ?></a>
-                <a class="btn btn-outline-secondary" href="<?php echo attr($modernDashboardUrl); ?>" onclick="top.restoreSession()"><?php echo xlt('Modern'); ?></a>
-            </div>
-        </div>
         <div class="main mb-1">
             <!-- start main content div -->
             <div class="row">

@@ -49,6 +49,11 @@ function FhirCard({ title, state }: { title: string; state: CardState }): React.
 
 function App(): React.JSX.Element {
   const config = window.OEMR_DASHBOARD_BOOTSTRAP;
+  const legacyDashboardUrl = config ? `${config.webRoot}/interface/patient_file/summary/demographics.php?pid=${encodeURIComponent(config.patientId)}` : "#";
+  const modernDashboardUrl = config ? `${config.webRoot}/interface/modules/custom_modules/oe-module-patient-dashboard-react/public/index.php?pid=${encodeURIComponent(config.patientId)}` : "#";
+  const restoreSession = (): void => {
+    (window.top as Window & { restoreSession?: () => void })?.restoreSession?.();
+  };
   const [authState, setAuthState] = useState<AuthState>({ status: "disabled", accessToken: null });
   const [header, setHeader] = useState<DashboardData["header"] | null>(null);
   const [headerError, setHeaderError] = useState<string | null>(null);
@@ -112,6 +117,24 @@ function App(): React.JSX.Element {
 
   return (
     <main style={{ maxWidth: "1100px", margin: "2rem auto", padding: "0 1rem", fontFamily: "Segoe UI, sans-serif" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: ".75rem" }}>
+        <div style={{ display: "inline-flex", border: "1px solid #94a3b8", borderRadius: "6px", overflow: "hidden" }} role="group" aria-label="Dashboard View Toggle">
+          <a
+            href={legacyDashboardUrl}
+            onClick={restoreSession}
+            style={{ padding: ".4rem .75rem", textDecoration: "none", color: "#0f172a", background: "#fff", borderRight: "1px solid #94a3b8" }}
+          >
+            Legacy
+          </a>
+          <a
+            href={modernDashboardUrl}
+            onClick={restoreSession}
+            style={{ padding: ".4rem .75rem", textDecoration: "none", color: "#fff", background: "#3b82f6", fontWeight: 600 }}
+          >
+            Modern
+          </a>
+        </div>
+      </div>
       <section style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "1rem 1.25rem", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.5rem", margin: "0 0 .5rem" }}>Modern Patient Dashboard</h1>
         {headerError ? <p style={{ margin: 0, color: "#b91c1c" }}>{headerError}</p> : null}

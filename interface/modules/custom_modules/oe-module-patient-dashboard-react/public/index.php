@@ -44,16 +44,6 @@ Header::setupHeader();
 </head>
 <body class="bg-light">
 <div class="title d-none"><?php echo xlt('Modern Patient Dashboard'); ?></div>
-<div class="container-fluid mt-2">
-    <div class="btn-group btn-group-sm" role="group" aria-label="<?php echo attr(xla('Dashboard View Toggle')); ?>">
-        <a class="btn btn-outline-secondary" href="<?php echo attr($legacyDashboardUrl); ?>" onclick="top.restoreSession()">
-            <?php echo xlt('Legacy'); ?>
-        </a>
-        <button type="button" class="btn btn-primary active" aria-pressed="true" disabled>
-            <?php echo xlt('Modern'); ?>
-        </button>
-    </div>
-</div>
 <div id="patient-dashboard-react-root">
     <main class="container py-3">
         <h1><?php echo xlt('Modern Patient Dashboard'); ?></h1>
