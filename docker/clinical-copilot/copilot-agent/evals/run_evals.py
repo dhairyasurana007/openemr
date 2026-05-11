@@ -70,6 +70,7 @@ def _write_results_artifacts(
     rates: dict[str, float],
     baseline: dict[str, float],
     rubric_outcomes: dict[str, list[bool]],
+    case_results: list[dict[str, object]],
     min_absolute_rate: float,
     max_regression_delta: float,
     failed: bool,
@@ -77,7 +78,7 @@ def _write_results_artifacts(
     generated_at_utc = datetime.now(timezone.utc).isoformat()
     overall_status = "FAILED" if failed else "PASSED"
 
-    rows: list[dict[str, object]] = []
+    summary_rows: list[dict[str, object]] = []
     for rubric in sorted(rates):
         rate = rates[rubric]
         base = baseline.get(rubric, 0.0)
@@ -92,7 +93,7 @@ def _write_results_artifacts(
             min_absolute_rate=min_absolute_rate,
             max_regression_delta=max_regression_delta,
         )
-        rows.append(
+        summary_rows.append(
             {
                 "rubric": rubric,
                 "rate": rate,
@@ -104,6 +105,8 @@ def _write_results_artifacts(
             }
         )
 
+    all_rubrics = sorted(rates.keys())
+
     md_lines: list[str] = [
         "# Eval Gate Results",
         "",
@@ -112,13 +115,37 @@ def _write_results_artifacts(
         f"- Total cases: `{cases_count}`",
         f"- Gate config: `min_absolute_rate={min_absolute_rate:.0%}`, `max_regression_delta={max_regression_delta:.1%}`",
         "",
+        "## Summary",
+        "",
         "| rubric | rate | baseline | delta | status |",
         "|--------|------|----------|-------|--------|",
     ]
-    for row in rows:
+    for row in summary_rows:
         md_lines.append(
             f"| {row['rubric']} | {row['rate']:.1%} | {row['baseline']:.1%} | {row['delta']:+.1%} | {row['status']} |"
         )
+
+    md_lines += [
+        "",
+        "## Per-case Results",
+        "",
+        "| case | category | " + " | ".join(all_rubrics) + " |",
+        "|------|----------|" + "|".join("---" for _ in all_rubrics) + "|",
+    ]
+    for cr in case_results:
+        rubric_cells = []
+        for rubric in all_rubrics:
+            val = cr["rubrics"].get(rubric)  # type: ignore[index]
+            if val is None:
+                rubric_cells.append("—")
+            elif val:
+                rubric_cells.append("✅")
+            else:
+                rubric_cells.append("❌")
+        md_lines.append(
+            f"| {cr['id']} | {cr['category']} | " + " | ".join(rubric_cells) + " |"
+        )
+
     md_lines.append("")
     _RESULTS_MD.write_text("\n".join(md_lines), encoding="utf-8")
 
@@ -140,10 +167,16 @@ def main() -> int:
 
     # Accumulate per-rubric results across all cases.
     rubric_outcomes: dict[str, list[bool]] = {}
+    case_results: list[dict[str, object]] = []
 
     for case in cases:
-        case_results = evaluate_case(case)
-        for rubric, val in case_results.items():
+        rubric_results = evaluate_case(case)
+        case_results.append({
+            "id": case.get("id", "unknown"),
+            "category": case.get("category", ""),
+            "rubrics": rubric_results,
+        })
+        for rubric, val in rubric_results.items():
             if val is None:
                 continue
             rubric_outcomes.setdefault(rubric, []).append(val)
@@ -223,6 +256,7 @@ def main() -> int:
         rates=rates,
         baseline=baseline,
         rubric_outcomes=rubric_outcomes,
+        case_results=case_results,
         min_absolute_rate=min_absolute_rate,
         max_regression_delta=max_regression_delta,
         failed=failed,
