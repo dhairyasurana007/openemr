@@ -44,7 +44,7 @@ jobs:
       working-directory: docker/clinical-copilot/copilot-agent
       run: |
         set +e
-        python evals/run_evals.py
+        python evals/run_evals.py > ../../../EVAL_RESULTS.md 2>&1
         eval_exit_code=$?
         echo "exit_code=$eval_exit_code" >> "$GITHUB_OUTPUT"
         exit 0
