@@ -129,8 +129,8 @@ def _write_results_artifacts(
         "",
         "## Per-case Results",
         "",
-        "| case | category | " + " | ".join(all_rubrics) + " |",
-        "|------|----------|" + "|".join("---" for _ in all_rubrics) + "|",
+        "| case | category | input | " + " | ".join(all_rubrics) + " |",
+        "|------|----------|-------|" + "|".join("---" for _ in all_rubrics) + "|",
     ]
     for cr in case_results:
         rubric_cells = []
@@ -142,8 +142,9 @@ def _write_results_artifacts(
                 rubric_cells.append("✅")
             else:
                 rubric_cells.append("❌")
+        input_cell = str(cr["input"]).replace("|", "\\|")
         md_lines.append(
-            f"| {cr['id']} | {cr['category']} | " + " | ".join(rubric_cells) + " |"
+            f"| {cr['id']} | {cr['category']} | {input_cell} | " + " | ".join(rubric_cells) + " |"
         )
 
     md_lines.append("")
@@ -171,9 +172,16 @@ def main() -> int:
 
     for case in cases:
         rubric_results = evaluate_case(case)
+        inp = case.get("input", {})
+        if inp.get("message"):
+            input_summary = inp["message"]
+        else:
+            parts = [p for p in [inp.get("doc_type"), inp.get("fixture")] if p]
+            input_summary = " / ".join(parts) if parts else ""
         case_results.append({
             "id": case.get("id", "unknown"),
             "category": case.get("category", ""),
+            "input": input_summary,
             "rubrics": rubric_results,
         })
         for rubric, val in rubric_results.items():
