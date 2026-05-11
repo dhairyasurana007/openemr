@@ -259,6 +259,236 @@ ul.tabNav {
   }
 }
 
+/* ------------------------------------------------------------------
+ * Global modern UI pass for all themes
+ * ------------------------------------------------------------------ */
+@if $compact-theme == false {
+  :root {
+    --oe-modern-radius-sm: 0.375rem;
+    --oe-modern-radius-md: 0.625rem;
+    --oe-modern-radius-lg: 0.875rem;
+    --oe-modern-border: rgba(20, 35, 58, 0.14);
+    --oe-modern-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+    --oe-modern-shadow-md: 0 10px 26px rgba(15, 23, 42, 0.12);
+  }
+
+  body {
+    letter-spacing: 0.005em;
+  }
+
+  .navbar,
+  .navbar-light,
+  .navbar-dark,
+  #mainMenu,
+  #mainMenuCompact {
+    box-shadow: var(--oe-modern-shadow-md);
+  }
+
+  .card,
+  .panel,
+  .modal-content,
+  .dropdown-menu,
+  .list-group,
+  .jumbotron,
+  .well {
+    border: 1px solid var(--oe-modern-border);
+    border-radius: var(--oe-modern-radius-lg);
+    box-shadow: var(--oe-modern-shadow-sm);
+  }
+
+  .card-header,
+  .card-footer,
+  .modal-header,
+  .modal-footer,
+  .list-group-item,
+  .dropdown-divider {
+    border-color: var(--oe-modern-border);
+  }
+
+  .btn {
+    border-radius: var(--oe-modern-radius-md);
+    border-width: 1px;
+    box-shadow: var(--oe-modern-shadow-sm);
+    font-weight: 600;
+    transition: transform 0.12s ease, box-shadow 0.2s ease;
+  }
+
+  .btn:hover {
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+    transform: translateY(-1px);
+  }
+
+  .form-control,
+  .custom-select,
+  .input-group-text,
+  select,
+  textarea,
+  .select2-container--bootstrap4 .select2-selection {
+    border: 1px solid var(--oe-modern-border);
+    border-radius: var(--oe-modern-radius-md);
+    min-height: calc(1.5em + 0.85rem + 2px);
+  }
+
+  .form-control:focus,
+  .custom-select:focus,
+  .btn:focus,
+  .nav-link:focus,
+  .dropdown-item:focus,
+  .select2-container--bootstrap4.select2-container--focus .select2-selection {
+    border-color: rgba(15, 108, 189, 0.55);
+    box-shadow: 0 0 0 0.2rem rgba(15, 108, 189, 0.2);
+  }
+
+  .table {
+    border-radius: var(--oe-modern-radius-md);
+    overflow: hidden;
+  }
+
+  .table th {
+    font-weight: 700;
+  }
+
+  .badge {
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .alert {
+    border-width: 1px;
+    border-radius: var(--oe-modern-radius-md);
+  }
+
+  .nav-tabs .nav-link {
+    border-radius: var(--oe-modern-radius-md) var(--oe-modern-radius-md) 0 0;
+    font-weight: 600;
+  }
+
+  .body_main,
+  .body_main_widescreen {
+    background-color: rgba(255, 255, 255, 0.65);
+  }
+
+  .appMenu,
+  .menuEntries,
+  #menuContainer {
+    border-radius: var(--oe-modern-radius-md);
+  }
+
+  .menuEntries li .menuLabel,
+  .appMenu > span,
+  .appMenu li {
+    border-radius: 0.45rem;
+    transition: background-color 0.18s ease, color 0.18s ease;
+  }
+
+  .menuEntries li .menuLabel:hover,
+  .appMenu > span:hover,
+  .appMenu li:hover {
+    background-color: rgba(15, 108, 189, 0.12) !important;
+  }
+
+  ul.tabNav {
+    border-radius: var(--oe-modern-radius-md) var(--oe-modern-radius-md) 0 0;
+    box-shadow: var(--oe-modern-shadow-sm);
+    overflow: hidden;
+  }
+
+  ul.tabNav a {
+    font-weight: 600;
+  }
+}
+
+@if $compact-theme == true {
+  :root {
+    --oe-modern-compact-radius: 0.5rem;
+    --oe-modern-compact-border: rgba(20, 35, 58, 0.16);
+    --oe-modern-compact-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  }
+
+  .navbar,
+  .navbar-light,
+  .navbar-dark,
+  #mainMenu,
+  #mainMenuCompact {
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.16);
+  }
+
+  .card,
+  .panel,
+  .modal-content,
+  .dropdown-menu,
+  .list-group,
+  .well {
+    border: 1px solid var(--oe-modern-compact-border);
+    border-radius: var(--oe-modern-compact-radius);
+    box-shadow: var(--oe-modern-compact-shadow);
+  }
+
+  .btn {
+    border-radius: 0.45rem;
+    border-width: 1px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    font-weight: 600;
+  }
+
+  .form-control,
+  .custom-select,
+  .input-group-text,
+  select,
+  textarea,
+  .select2-container--bootstrap4 .select2-selection {
+    border: 1px solid var(--oe-modern-compact-border);
+    border-radius: 0.45rem;
+    min-height: calc(1.5em + 0.6rem + 2px);
+  }
+
+  .form-control:focus,
+  .custom-select:focus,
+  .btn:focus,
+  .nav-link:focus,
+  .dropdown-item:focus,
+  .select2-container--bootstrap4.select2-container--focus .select2-selection {
+    border-color: rgba(15, 108, 189, 0.6);
+    box-shadow: 0 0 0 0.18rem rgba(15, 108, 189, 0.18);
+  }
+
+  .table {
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .table th {
+    font-weight: 700;
+  }
+
+  .nav-tabs .nav-link {
+    border-radius: 0.45rem 0.45rem 0 0;
+    font-weight: 600;
+  }
+
+  .body_main,
+  .body_main_widescreen {
+    background-color: rgba(255, 255, 255, 0.55);
+  }
+
+  .menuEntries li .menuLabel,
+  .appMenu > span,
+  .appMenu li {
+    border-radius: 0.4rem;
+  }
+
+  .menuEntries li .menuLabel:hover,
+  .appMenu > span:hover,
+  .appMenu li:hover {
+    background-color: rgba(15, 108, 189, 0.1) !important;
+  }
+
+  ul.tabNav {
+    border-radius: 0.45rem 0.45rem 0 0;
+    overflow: hidden;
+  }
+}
+
 .alert-danger-custom {
   background-color: lighten($danger, 20%) !important;
   color: $white !important;
