@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 _EVALS_DIR = Path(__file__).parent
+_REPO_ROOT = _EVALS_DIR.parents[3]
+_RESULTS_MD = _REPO_ROOT / "EVAL_RESULTS.md"
 
 _DEFAULT_GATE_CONFIG = {
     "min_absolute_rate": 0.80,
@@ -59,6 +62,65 @@ def _compute_status(
     if delta < -max_regression_delta:
         return (f"FAIL regression {delta:+.1%} ({pass_count}/{total_count})", True)
     return (f"PASS ({pass_count}/{total_count})", False)
+
+
+def _write_results_artifacts(
+    *,
+    cases_count: int,
+    rates: dict[str, float],
+    baseline: dict[str, float],
+    rubric_outcomes: dict[str, list[bool]],
+    min_absolute_rate: float,
+    max_regression_delta: float,
+    failed: bool,
+) -> None:
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
+    overall_status = "FAILED" if failed else "PASSED"
+
+    rows: list[dict[str, object]] = []
+    for rubric in sorted(rates):
+        rate = rates[rubric]
+        base = baseline.get(rubric, 0.0)
+        delta = rate - base
+        n_cases = len(rubric_outcomes[rubric])
+        n_pass = sum(rubric_outcomes[rubric])
+        status, _ = _compute_status(
+            rate=rate,
+            baseline=base,
+            pass_count=n_pass,
+            total_count=n_cases,
+            min_absolute_rate=min_absolute_rate,
+            max_regression_delta=max_regression_delta,
+        )
+        rows.append(
+            {
+                "rubric": rubric,
+                "rate": rate,
+                "baseline": base,
+                "delta": delta,
+                "pass_count": n_pass,
+                "total_count": n_cases,
+                "status": status,
+            }
+        )
+
+    md_lines: list[str] = [
+        "# Eval Gate Results",
+        "",
+        f"- Generated (UTC): `{generated_at_utc}`",
+        f"- Overall status: **{overall_status}**",
+        f"- Total cases: `{cases_count}`",
+        f"- Gate config: `min_absolute_rate={min_absolute_rate:.0%}`, `max_regression_delta={max_regression_delta:.1%}`",
+        "",
+        "| rubric | rate | baseline | delta | status |",
+        "|--------|------|----------|-------|--------|",
+    ]
+    for row in rows:
+        md_lines.append(
+            f"| {row['rubric']} | {row['rate']:.1%} | {row['baseline']:.1%} | {row['delta']:+.1%} | {row['status']} |"
+        )
+    md_lines.append("")
+    _RESULTS_MD.write_text("\n".join(md_lines), encoding="utf-8")
 
 
 def main() -> int:
@@ -154,6 +216,18 @@ def main() -> int:
         f"min_absolute_rate={min_absolute_rate:.0%}, "
         f"max_regression_delta={max_regression_delta:.1%}"
     )
+    print()
+
+    _write_results_artifacts(
+        cases_count=len(cases),
+        rates=rates,
+        baseline=baseline,
+        rubric_outcomes=rubric_outcomes,
+        min_absolute_rate=min_absolute_rate,
+        max_regression_delta=max_regression_delta,
+        failed=failed,
+    )
+    print(f"Wrote {_RESULTS_MD}")
     print()
 
     if failed:

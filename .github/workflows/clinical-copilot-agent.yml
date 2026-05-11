@@ -1,5 +1,5 @@
 ## test 
-# Clinical co-pilot FastAPI agent: Python tests + Docker image build (offline §11-style gates in pytest).
+# Clinical co-pilot FastAPI agent: Python tests + Docker image build (offline gates in pytest).
 # Kept separate from PHP isolated tests so agent changes stay visible in Actions without coupling to the PHP matrix.
 
 name: Clinical Copilot Agent
@@ -39,9 +39,39 @@ jobs:
       working-directory: docker/clinical-copilot/copilot-agent
       run: python -m pytest tests -v
 
-    - name: Run eval gate (50-case golden suite, ≥80% per rubric)
+    - name: Run eval gate (50-case golden suite, >=80% per rubric)
+      id: eval_gate
       working-directory: docker/clinical-copilot/copilot-agent
-      run: python evals/run_evals.py
+      run: |
+        set +e
+        python evals/run_evals.py
+        eval_exit_code=$?
+        echo "exit_code=$eval_exit_code" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Upload eval gate artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clinical-copilot-eval-results
+        path: |
+          EVAL_RESULTS.md
+
+    - name: Publish eval summary in GitHub run
+      if: always()
+      run: |
+        if [ -f EVAL_RESULTS.md ]; then
+          cat EVAL_RESULTS.md >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "EVAL_RESULTS.md was not generated." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Enforce eval gate status
+      run: |
+        if [ "${{ steps.eval_gate.outputs.exit_code }}" -ne 0 ]; then
+          echo "Eval gate failed with exit code ${{ steps.eval_gate.outputs.exit_code }}"
+          exit 1
+        fi
 
     - name: Build copilot-agent Docker image (context matches Render)
       run: docker build -t openemr-copilot-agent:ci -f docker/clinical-copilot/copilot-agent/Dockerfile docker/clinical-copilot/copilot-agent
